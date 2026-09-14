@@ -1,6 +1,6 @@
 [versions]
-kotlin = "2.3.10"
-kotlinx-io = "0.8.2"
+kotlin = "2.3.21"
+kotlinx-io = "0.9.1"
 clikt = "5.1.0"
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

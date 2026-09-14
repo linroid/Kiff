@@ -27,14 +27,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run JVM tests
         run: ./gradlew jvmTest
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-jvm
           path: '**/build/test-results/**/TEST-*.xml'
@@ -50,14 +50,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run iOS simulator tests
         run: ./gradlew iosSimulatorArm64Test
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-ios
           path: '**/build/test-results/**/TEST-*.xml'
@@ -73,14 +73,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run JS Node tests
         run: ./gradlew jsNodeTest
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-js
           path: '**/build/test-results/**/TEST-*.xml'
@@ -96,14 +96,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run Linux native tests
         run: ./gradlew linuxX64Test
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-linux
           path: '**/build/test-results/**/TEST-*.xml'
@@ -119,14 +119,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Run macOS native tests
         run: ./gradlew macosArm64Test
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-macos
           path: '**/build/test-results/**/TEST-*.xml'
@@ -138,7 +138,7 @@ jobs:
     if: always()
     steps:
       - name: Download test results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: test-results-*
           merge-multiple: true
