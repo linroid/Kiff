@@ -71,6 +71,12 @@ class DiffCommand : CliktCommand(name = "diff") {
 
 fun main(args: Array<String>) {
   KiffCommand()
-    .subcommands(DiffCommand(), CreateCommand(), ApplyCommand(), InfoCommand())
+    .subcommands(
+      DiffCommand(),
+      CreateCommand(),
+      ApplyCommand(),
+      InfoCommand(),
+      ChangesCommand()
+    )
     .main(args)
 }

@@ -8,6 +8,7 @@ file byte for byte from the first one plus that patch.
 | Algorithm | `AlgorithmId` | Best for |
 | --- | --- | --- |
 | `binary` | `BINARY` | Any pair of files, treated as opaque byte streams |
+| `zip` | `ZIP` | Zip archives, compared entry by entry |
 
 Every algorithm implements the same [`PatchAlgorithm`](library/src/commonMain/kotlin/com/linroid/kiff/PatchAlgorithm.kt)
 contract, writes the same self-describing patch container, and restores the target exactly:
@@ -41,6 +42,21 @@ Created foo.patch with the binary algorithm
 
 $ ./example/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
 $ ./example/build/install/kiff/bin/kiff info foo.patch
+```
+
+`kiff changes foo-1.0.apk foo-1.1.apk` lists what differs entry by entry, without building a
+patch:
+
+```console
+$ kiff changes foo-1.0.apk foo-1.1.apk
+18.4 MiB -> 19.1 MiB
+unchanged=412  metadata_changed=3  modified=11  added=2  removed=1
+
+  M lib/arm64-v8a/libfoo.so (6.1 MiB -> 6.7 MiB)
+  M classes2.dex (2.6 MiB -> 2.7 MiB)
+  ~ res/bar.webp
+  - res/baz.png (14.2 KiB)
+  + META-INF/services/qux (26 B)
 ```
 
 `kiff diff foo.txt bar.txt` prints a line-based (Myers) diff instead, for text files.
@@ -79,6 +95,27 @@ The `binary` algorithm finds copies with a rolling hash over 16-byte blocks of t
 every 4-16 bytes depending on file size, which keeps the index small enough to diff APK-sized files
 in a couple of seconds. Between copies it tracks the source offset the target is running parallel
 to, and emits `DIFF` while the aligned bytes still mostly agree.
+
+## Zip archives
+
+`ZipDiff` reads both archives' layouts and describes the target region by region, pairing each
+target entry with the source entry it came from - by name, or by content fingerprint when an entry
+was renamed. An unchanged entry then costs a single copy instruction no matter how far it moved, and
+a changed entry is indexed against its counterpart alone rather than against the whole archive,
+which buys a finer sampling stride and far fewer hash collisions.
+
+Regions the format does not name are described too - the preamble, alignment padding, an APK signing
+block, the central directory - which is what makes the restored archive identical to the last byte.
+If either input turns out not to be a readable zip, the algorithm falls back to a whole-file byte
+scan, so it always produces a working patch.
+
+`ZipDiff.analyze(source, target)` reports the same pairing as data, without building a patch.
+
+**Entry data is never recompressed.** That is what makes a restore byte-exact - re-deflating would
+have to reproduce the original compressor's output bit for bit - but it also means a patch for a
+*deflated* entry can only be as small as the change in its compressed bytes. Modern APKs store
+their `.so`, `.dex` and `resources.arsc` entries uncompressed, so in practice the interesting
+content is compared directly.
 
 ## Targets
 

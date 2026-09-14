@@ -8,7 +8,9 @@ object Kiff {
 
   val binary: PatchAlgorithm = BinaryDiff()
 
-  val algorithms: List<PatchAlgorithm> = listOf(binary)
+  val zip: ZipDiff = ZipDiff()
+
+  val algorithms: List<PatchAlgorithm> = listOf(binary, zip)
 
   fun algorithm(id: AlgorithmId): PatchAlgorithm = algorithms.first { it.id == id }
 
