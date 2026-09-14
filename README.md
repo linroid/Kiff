@@ -163,6 +163,12 @@ access on every target that has a file system (browser JS does not). Checksums a
 off a source, a chunk at a time, so a file is never read whole for them. The `ByteArray` overloads
 on `Patcher` are conveniences over `ByteArraySource`.
 
+File access is [okio](https://square.github.io/okio/), whose `FileHandle` gives 64-bit random
+access from common code on every target Kiff builds for. Paths are plain `String` throughout the
+public API and okio is an implementation detail: no okio type appears in a public signature, and it
+is not on a consumer's compile classpath. Only reaching a `FileSystem` is per-platform, because on
+JS it ships in a separate artifact.
+
 **Current limit:** the bundled `RollingHashAlgorithm` still indexes a `ByteArray`, so a patcher
 materializes both inputs once before encoding and refuses an input above 2 GB with
 `KiffException.UnsupportedInput`. The format and the algorithm contract address more than that; a
