@@ -54,8 +54,8 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
     return value.toInt()
   }
 
-  fun readSignedVarInt(): Int {
-    val zigzag = readVarLong().toInt()
+  fun readSignedVarLong(): Long {
+    val zigzag = readVarLong()
     return (zigzag ushr 1) xor -(zigzag and 1)
   }
 

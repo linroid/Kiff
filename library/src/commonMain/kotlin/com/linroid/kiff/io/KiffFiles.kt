@@ -6,10 +6,10 @@ import kotlinx.io.files.SystemFileSystem
 import kotlinx.io.readByteArray
 
 /**
- * Whole-file reads and writes.
+ * Whole-file reads and writes, for the patch itself and for restored output.
  *
- * The patchers need random access to both files, so they work on byte arrays rather than streams;
- * peak memory is roughly source + target + patch.
+ * The inputs to a diff are not read this way: they are opened as a [SeekableSource], because a
+ * delta addresses its source rather than consuming it in order.
  */
 object KiffFiles {
 

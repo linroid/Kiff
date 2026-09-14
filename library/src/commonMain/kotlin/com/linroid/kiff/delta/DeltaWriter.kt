@@ -2,68 +2,66 @@ package com.linroid.kiff.delta
 
 import com.linroid.kiff.internal.ByteWriter
 import com.linroid.kiff.internal.Lzss
+import com.linroid.kiff.internal.toIntIndex
 
 /**
- * Builds a delta: an instruction stream plus a literal stream.
+ * The bundled [DeltaSink]: builds an instruction stream plus a literal stream.
  *
  * Literals live in their own stream so they stay contiguous and compress well, and so adjacent
  * [add] calls collapse into a single ADD instruction.
+ *
+ * Instruction lengths and source offsets are written as 64-bit varints, so the format addresses
+ * inputs beyond 2 GB. For anything in `Int` range the bytes are identical to what the 32-bit
+ * encoding produced, which is why a v1 patch still reads correctly.
  */
-internal class DeltaWriter(estimatedTargetSize: Int = 1024) {
+internal class DeltaWriter(
+  private val source: ByteArray,
+  estimatedTargetSize: Long = 1024
+) : DeltaSink {
 
   private val instructions = ByteWriter(64)
-  private val literals = ByteWriter((estimatedTargetSize / 8).coerceIn(64, 1 shl 20))
+  private val literals = ByteWriter(
+    (estimatedTargetSize / 8).coerceIn(64, 1L shl 20).toInt()
+  )
 
-  private var pendingAdd = 0
-  private var sourceCursor = 0
-  private var targetSize = 0
+  private var pendingAdd = 0L
+  private var sourceCursor = 0L
+  private var targetSize = 0L
 
   /** Number of target bytes described so far. */
-  val length: Int get() = targetSize
+  val length: Long get() = targetSize
 
-  fun add(data: ByteArray, from: Int, to: Int) {
+  override fun add(bytes: ByteArray, from: Int, to: Int) {
     if (to <= from) return
-    literals.writeBytes(data, from, to)
+    literals.writeBytes(bytes, from, to)
     pendingAdd += to - from
     targetSize += to - from
   }
 
-  fun copy(sourceOffset: Int, length: Int) {
+  override fun copy(sourceOffset: Long, length: Long) {
     if (length <= 0) return
     flushAdd()
     writeTag(length, DeltaOp.COPY)
-    instructions.writeSignedVarInt(sourceOffset - sourceCursor)
+    instructions.writeSignedVarLong(sourceOffset - sourceCursor)
     sourceCursor = sourceOffset + length
     targetSize += length
   }
 
-  /**
-   * Describes `target[targetFrom, targetFrom + length)` as the byte-wise difference from
-   * `source[sourceOffset, sourceOffset + length)`.
-   *
-   * This is what keeps a patch small when a region is *almost* a copy - recompiled code whose
-   * embedded offsets shifted, say. The difference bytes are mostly zero, so they collapse in the
-   * literal stream, whereas the same region emitted as literals would not compress at all.
-   */
-  fun diff(
-    source: ByteArray,
-    sourceOffset: Int,
-    target: ByteArray,
-    targetFrom: Int,
-    length: Int
-  ) {
+  override fun diff(sourceOffset: Long, target: ByteArray, from: Int, to: Int) {
+    val length = (to - from).toLong()
     if (length <= 0) return
     flushAdd()
     writeTag(length, DeltaOp.DIFF)
-    instructions.writeSignedVarInt(sourceOffset - sourceCursor)
-    sourceCursor = sourceOffset + length
-    for (i in 0 until length) {
-      literals.writeByte(target[targetFrom + i] - source[sourceOffset + i])
+    instructions.writeSignedVarLong(sourceOffset - sourceCursor)
+    val base = sourceOffset.toIntIndex("Source offset")
+    for (i in 0 until (to - from)) {
+      literals.writeByte(target[from + i] - source[base + i])
     }
+    sourceCursor = sourceOffset + length
     targetSize += length
   }
 
-  fun run(value: Byte, length: Int) {
+  override fun run(value: Byte, length: Long) {
     if (length <= 0) return
     flushAdd()
     writeTag(length, DeltaOp.RUN)
@@ -92,12 +90,12 @@ internal class DeltaWriter(estimatedTargetSize: Int = 1024) {
   }
 
   private fun flushAdd() {
-    if (pendingAdd == 0) return
+    if (pendingAdd == 0L) return
     writeTag(pendingAdd, DeltaOp.ADD)
     pendingAdd = 0
   }
 
-  private fun writeTag(length: Int, opcode: Int) {
-    instructions.writeVarLong((length.toLong() shl DeltaOp.SHIFT) or opcode.toLong())
+  private fun writeTag(length: Long, opcode: Int) {
+    instructions.writeVarLong((length shl DeltaOp.SHIFT) or opcode.toLong())
   }
 }

@@ -1,5 +1,10 @@
 package com.linroid.kiff.delta
 
+import com.linroid.kiff.internal.materialize
+import com.linroid.kiff.internal.toIntIndex
+import com.linroid.kiff.internal.toIntOffset
+import com.linroid.kiff.io.SeekableSource
+
 /**
  * Greedy matcher: the default [DeltaAlgorithm]. It turns a target region into copy / diff / add /
  * run instructions, hashing every target position in constant time and verifying candidate matches
@@ -17,10 +22,26 @@ internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner 
   private val match = Match()
 
   override fun scan(
+    target: SeekableSource,
+    from: Long,
+    to: Long,
+    sink: DeltaSink,
+    initialAlignment: Long
+  ) {
+    scanBytes(
+      target.materialize("Target").bytes,
+      from.toIntIndex("Target offset"),
+      to.toIntIndex("Target offset"),
+      sink,
+      initialAlignment.toIntOffset("Alignment")
+    )
+  }
+
+  private fun scanBytes(
     target: ByteArray,
     from: Int,
     to: Int,
-    writer: DeltaWriter,
+    sink: DeltaSink,
     initialAlignment: Int
   ) {
     var position = from
@@ -51,8 +72,8 @@ internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner 
 
       if (matchLength >= DeltaOp.MIN_MATCH && matchLength >= runLength) {
         val back = index.backwardLength(matchOffset, target, position, literalStart)
-        writer.add(target, literalStart, position - back)
-        writer.copy(matchOffset - back, matchLength + back)
+        sink.add(target, literalStart, position - back)
+        sink.copy((matchOffset - back).toLong(), (matchLength + back).toLong())
         alignment = matchOffset - position
         aligned = true
         position += matchLength
@@ -63,8 +84,8 @@ internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner 
       }
 
       if (runLength > 0) {
-        writer.add(target, literalStart, position)
-        writer.run(target[position], runLength)
+        sink.add(target, literalStart, position)
+        sink.run(target[position], runLength.toLong())
         aligned = false
         position += runLength
         literalStart = position
@@ -77,8 +98,8 @@ internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner 
         val sourcePosition = position + alignment
         val length = diffLength(target, position, to, sourcePosition)
         if (length >= DeltaOp.MIN_DIFF) {
-          writer.add(target, literalStart, position)
-          writer.diff(source, sourcePosition, target, position, length)
+          sink.add(target, literalStart, position)
+          sink.diff(sourcePosition.toLong(), target, position, position + length)
           position += length
           literalStart = position
           hashPosition = NO_HASH
@@ -91,7 +112,7 @@ internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner 
 
       position++
     }
-    writer.add(target, literalStart, to)
+    sink.add(target, literalStart, to)
   }
 
   /** Length of the repeated-byte run starting at [position], or 0 if it is not worth a RUN. */

@@ -6,6 +6,7 @@ import com.linroid.kiff.ZipEntryChange
 import com.linroid.kiff.ZipEntryStatus
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.io.ByteArraySource
 
 /**
  * Shared by the zip and apk patchers: describe [target] using [source], walking the archive
@@ -13,14 +14,14 @@ import com.linroid.kiff.delta.DeltaWriter
  * they are not, so a patch is always produced.
  */
 internal fun encodeArchive(
-  source: ByteArray,
-  target: ByteArray,
+  source: ByteArraySource,
+  target: ByteArraySource,
   options: ZipEncodeOptions,
   writer: DeltaWriter,
   algorithm: DeltaAlgorithm
 ) {
-  val sourceLayout = ZipReader.parseOrNull(source)
-  val targetLayout = ZipReader.parseOrNull(target)
+  val sourceLayout = ZipReader.parseOrNull(source.bytes)
+  val targetLayout = ZipReader.parseOrNull(target.bytes)
   if (sourceLayout == null || targetLayout == null) {
     algorithm.scanner(source).scan(target, 0, target.size, writer)
     return

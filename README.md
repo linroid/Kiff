@@ -86,6 +86,10 @@ target  varint size + CRC-32
 delta   instruction stream + literal stream
 ```
 
+Sizes and the source offsets inside the delta are 64-bit varints, so a patch can describe inputs
+beyond 2 GB. For any value in `Int` range the encoding is byte for byte what v1 wrote, so v1
+patches still apply; only the declared ceiling moved.
+
 The delta stream is a sequence of four instructions:
 
 | | |
@@ -112,7 +116,57 @@ source offset the target is running parallel to, and emits `DIFF` while the alig
 mostly agree.
 
 Because the instruction set is fixed, a different algorithm needs no change to the patch format or
-to any patcher: it is an encode-side choice that the same reader decodes.
+to any patcher: it is an encode-side choice that the same reader decodes. That is what makes the
+search pluggable.
+
+## Plugging in your own algorithm
+
+`DeltaAlgorithm` is public. Implement it to change how bytes are matched, and hand it to any
+patcher:
+
+```kotlin
+object MyAlgorithm : DeltaAlgorithm {
+  override val name = "mine"
+  override fun scanner(source: SeekableSource, from: Long, to: Long) = object : DeltaScanner {
+    override fun scan(
+      target: SeekableSource, from: Long, to: Long, sink: DeltaSink, initialAlignment: Long
+    ) {
+      // describe target[from, to) with sink.copy / diff / add / run
+    }
+  }
+}
+
+val patch = BinaryDiff(MyAlgorithm).createPatch(source, target)
+val restored = Kiff.binary.applyPatch(source, patch)  // the stock patcher reads it back
+```
+
+The algorithm is not recorded in the patch and nothing needs to know it ran: the regions a scanner
+reports must simply tile the target exactly. An algorithm prepares a scanner over a source range
+once, and a patcher reuses that scanner across many target regions, so the index is built one time
+per range rather than once per region.
+
+## Inputs are addressed, not streamed
+
+A delta is not a sequential transform. A `COPY` names an arbitrary source offset and applying one
+reads that offset back, so Kiff takes a `SeekableSource` - random access, 64-bit positions - rather
+than a stream:
+
+```kotlin
+interface SeekableSource : AutoCloseable {
+  val size: Long
+  fun read(position: Long, into: ByteArray, offset: Int = 0, length: Int = into.size - offset): Int
+}
+```
+
+`ByteArray.asSource()` wraps bytes already in memory; `fileSource(path)` opens a file for random
+access on every target that has a file system (browser JS does not). Checksums are taken straight
+off a source, a chunk at a time, so a file is never read whole for them. The `ByteArray` overloads
+on `Patcher` are conveniences over `ByteArraySource`.
+
+**Current limit:** the bundled `RollingHashAlgorithm` still indexes a `ByteArray`, so a patcher
+materializes both inputs once before encoding and refuses an input above 2 GB with
+`KiffException.UnsupportedInput`. The format and the algorithm contract address more than that; a
+bounded-memory search is the next piece of work, and it needs no format change when it lands.
 
 ## Zip archives
 
@@ -173,5 +227,6 @@ because every dex in this pair still pairs by name.
 `jvm`, `iosArm64`, `iosSimulatorArm64`, `macosArm64`, `macosX64`, `linuxX64`, `mingwX64`,
 `js(nodejs, browser)`.
 
-Patchers need random access to both files, so they work on byte arrays: peak memory is roughly
-source + target + patch + index.
+Patchers address both files through `SeekableSource` rather than reading them as streams, because a
+delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
+peak memory is still roughly source + target + patch + index.

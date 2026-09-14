@@ -1,8 +1,10 @@
 package com.linroid.kiff.zip
 
 import com.linroid.kiff.delta.DeltaAlgorithm
+import com.linroid.kiff.delta.DeltaSink
 import com.linroid.kiff.delta.DeltaScanner
 import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.io.ByteArraySource
 
 /**
  * Describes a target archive region by region.
@@ -13,16 +15,19 @@ import com.linroid.kiff.delta.DeltaWriter
  * buys a finer stride and far fewer hash collisions than indexing the whole archive.
  */
 internal class ZipEncoder(
-  private val source: ByteArray,
+  private val sourceSource: ByteArraySource,
   private val sourceLayout: ZipLayout,
-  private val target: ByteArray,
+  private val targetSource: ByteArraySource,
   private val targetLayout: ZipLayout,
   private val options: ZipEncodeOptions,
   private val algorithm: DeltaAlgorithm
 ) {
 
+  private val source: ByteArray = sourceSource.bytes
+  private val target: ByteArray = targetSource.bytes
+
   /** Built only if some target region has no counterpart to be indexed against. */
-  private val wholeSourceScanner by lazy { algorithm.scanner(source) }
+  private val wholeSourceScanner by lazy { algorithm.scanner(sourceSource) }
 
   fun encode(writer: DeltaWriter) {
     for (region in targetLayout.regions) {
@@ -56,7 +61,7 @@ internal class ZipEncoder(
     if (counterpart.recordEnd - counterpart.localHeaderOffset == recordSize &&
       regionsEqual(counterpart.localHeaderOffset, entry.localHeaderOffset, recordSize)
     ) {
-      writer.copy(counterpart.localHeaderOffset, recordSize)
+      writer.copy(counterpart.localHeaderOffset.toLong(), recordSize.toLong())
       return
     }
 
@@ -71,7 +76,7 @@ internal class ZipEncoder(
         entry.dataOffset,
         writer
       )
-      writer.copy(counterpart.dataOffset, entry.compressedSize)
+      writer.copy(counterpart.dataOffset.toLong(), entry.compressedSize.toLong())
       encodeAgainst(
         counterpart.dataOffset + counterpart.compressedSize,
         counterpart.recordEnd,
@@ -111,10 +116,10 @@ internal class ZipEncoder(
     if (targetTo <= targetFrom) return
     val span = targetTo - targetFrom
     if (span == sourceTo - sourceFrom && regionsEqual(sourceFrom, targetFrom, span)) {
-      writer.copy(sourceFrom, span)
+      writer.copy(sourceFrom.toLong(), span.toLong())
       return
     }
-    val scanner = algorithm.scanner(source, sourceFrom, sourceTo)
+    val scanner = algorithm.scanner(sourceSource, sourceFrom.toLong(), sourceTo.toLong())
     scan(scanner, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
   }
 
@@ -129,7 +134,7 @@ internal class ZipEncoder(
     writer: DeltaWriter,
     alignment: Int
   ) {
-    scanner.scan(target, targetFrom, targetTo, writer, alignment)
+    scanner.scan(targetSource, targetFrom.toLong(), targetTo.toLong(), writer, alignment.toLong())
   }
 
   private fun counterpartOf(entry: ZipEntry): ZipEntry? =
