@@ -1,4 +1,4 @@
-package com.linroid.kdiff.binary
+package com.linroid.kiff.binary
 
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class BinaryDiffEngineTest {
 
   private val engine = BinaryDiffEngine(
-    object : com.linroid.kdiff.algorithm.BinaryDiffAlgorithm {
+    object : com.linroid.kiff.algorithm.BinaryDiffAlgorithm {
       override val name = "test"
       override fun diff(
         source: ByteArray,

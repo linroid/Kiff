@@ -3,7 +3,7 @@ plugins {
   alias(libs.plugins.kotlin.jvm) apply false
 }
 
-group = "com.linroid.kdiff"
+group = "com.linroid.kiff"
 version = "0.1.0"
 
 subprojects {

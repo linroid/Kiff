@@ -1,4 +1,4 @@
-package com.linroid.kdiff.io
+package com.linroid.kiff.io
 
 import kotlinx.io.buffered
 import kotlinx.io.files.Path

@@ -1,4 +1,4 @@
-package com.linroid.kdiff.binary
+package com.linroid.kiff.binary
 
 /**
  * Pure Kotlin qsufsort implementation for building suffix arrays.

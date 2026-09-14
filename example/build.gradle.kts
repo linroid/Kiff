@@ -3,7 +3,7 @@ plugins {
   application
 }
 
-group = "com.linroid.kdiff"
+group = "com.linroid.kiff"
 version = "0.1.0"
 
 dependencies {
@@ -12,5 +12,5 @@ dependencies {
 }
 
 application {
-  mainClass.set("com.linroid.kdiff.example.MainKt")
+  mainClass.set("com.linroid.kiff.example.MainKt")
 }
