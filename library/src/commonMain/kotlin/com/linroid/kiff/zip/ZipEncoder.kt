@@ -1,8 +1,8 @@
 package com.linroid.kiff.zip
 
+import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaScanner
 import com.linroid.kiff.delta.DeltaWriter
-import com.linroid.kiff.delta.MatchIndex
 
 /**
  * Describes a target archive region by region.
@@ -17,11 +17,12 @@ internal class ZipEncoder(
   private val sourceLayout: ZipLayout,
   private val target: ByteArray,
   private val targetLayout: ZipLayout,
-  private val options: ZipEncodeOptions
+  private val options: ZipEncodeOptions,
+  private val algorithm: DeltaAlgorithm
 ) {
 
   /** Built only if some target region has no counterpart to be indexed against. */
-  private val wholeSourceIndex by lazy { MatchIndex(source) }
+  private val wholeSourceScanner by lazy { algorithm.scanner(source) }
 
   fun encode(writer: DeltaWriter) {
     for (region in targetLayout.regions) {
@@ -46,7 +47,7 @@ internal class ZipEncoder(
       if (entry.recordEnd - entry.localHeaderOffset < MIN_SEARCHABLE_RECORD) {
         writer.add(target, entry.localHeaderOffset, entry.recordEnd)
       } else {
-        scan(wholeSourceIndex, entry.localHeaderOffset, entry.recordEnd, writer, alignment = 0)
+        scan(wholeSourceScanner, entry.localHeaderOffset, entry.recordEnd, writer, alignment = 0)
       }
       return
     }
@@ -113,8 +114,8 @@ internal class ZipEncoder(
       writer.copy(sourceFrom, span)
       return
     }
-    val index = MatchIndex(source, sourceFrom, sourceTo)
-    scan(index, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
+    val scanner = algorithm.scanner(source, sourceFrom, sourceTo)
+    scan(scanner, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
   }
 
   /**
@@ -122,13 +123,13 @@ internal class ZipEncoder(
    * a changed entry can be difference-encoded from its counterpart's first byte.
    */
   private fun scan(
-    index: MatchIndex,
+    scanner: DeltaScanner,
     targetFrom: Int,
     targetTo: Int,
     writer: DeltaWriter,
     alignment: Int
   ) {
-    DeltaScanner(index).scan(target, targetFrom, targetTo, writer, alignment)
+    scanner.scan(target, targetFrom, targetTo, writer, alignment)
   }
 
   private fun counterpartOf(entry: ZipEntry): ZipEntry? =

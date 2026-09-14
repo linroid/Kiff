@@ -8,7 +8,7 @@ import kotlinx.io.readByteArray
 /**
  * Whole-file reads and writes.
  *
- * The algorithms need random access to both files, so they work on byte arrays rather than streams;
+ * The patchers need random access to both files, so they work on byte arrays rather than streams;
  * peak memory is roughly source + target + patch.
  */
 object KiffFiles {

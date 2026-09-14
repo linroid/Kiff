@@ -1,4 +1,4 @@
-package com.linroid.kiff.core
+package com.linroid.kiff.text
 
 sealed class Edit {
   data class Insert(val position: Int, val lines: List<String>) : Edit()

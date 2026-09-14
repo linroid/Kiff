@@ -4,7 +4,9 @@ import com.linroid.kiff.apk.analyzeApk
 import com.linroid.kiff.apk.apkEncodeOptions
 import com.linroid.kiff.apk.ApkEntries
 import com.linroid.kiff.apk.looksLikeApk
+import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.zip.encodeArchive
 
 /**
@@ -19,13 +21,17 @@ import com.linroid.kiff.zip.encodeArchive
  * here than for zips in general: current Android builds store `.dex`, `.so` and `resources.arsc`
  * uncompressed, so the entries that dominate an APK are compared as their real content.
  */
-class ApkDiff : DeltaPatchAlgorithm() {
+class ApkDiff internal constructor(
+  internal override val algorithm: DeltaAlgorithm
+) : DeltaPatcher() {
 
-  override val id: AlgorithmId = AlgorithmId.APK
+  constructor() : this(RollingHashAlgorithm)
+
+  override val id: PatcherId = PatcherId.APK
   override val name: String = "apk"
 
   override fun encode(source: ByteArray, target: ByteArray, writer: DeltaWriter) {
-    encodeArchive(source, target, apkEncodeOptions(), writer)
+    encodeArchive(source, target, apkEncodeOptions(), writer, algorithm)
   }
 
   /**

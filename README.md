@@ -3,15 +3,20 @@
 Kotlin Multiplatform file diffing: turn two versions of a file into a patch, and rebuild the second
 file byte for byte from the first one plus that patch.
 
-## Algorithms
+## Patchers
 
-| Algorithm | `AlgorithmId` | Best for |
+| Patcher | `PatcherId` | Best for |
 | --- | --- | --- |
 | `binary` | `BINARY` | Any pair of files, treated as opaque byte streams |
 | `zip` | `ZIP` | Zip archives, compared entry by entry |
 | `apk` | `APK` | Android packages: zip structure plus dex, native library and signing block awareness |
 
-Every algorithm implements the same [`PatchAlgorithm`](library/src/commonMain/kotlin/com/linroid/kiff/PatchAlgorithm.kt)
+A patcher decides how the two files are carved into regions worth comparing: `binary` compares them
+whole, `zip` and `apk` walk the archive and compare each entry against the entry it came from. What
+searches the bytes inside a region is a separate concern - a *delta algorithm* - and all three
+patchers drive the same one.
+
+Every patcher implements the same [`Patcher`](library/src/commonMain/kotlin/com/linroid/kiff/Patcher.kt)
 contract, writes the same self-describing patch container, and restores the target exactly:
 
 ```kotlin
@@ -19,7 +24,7 @@ val patch = Kiff.binary.createPatch(source, target)
 val restored = Kiff.binary.applyPatch(source, patch)  // == target, byte for byte
 ```
 
-File-level helpers pick the algorithm out of the patch itself, so restoring never needs to be told
+File-level helpers pick the patcher out of the patch itself, so restoring never needs to be told
 which one produced it:
 
 ```kotlin
@@ -33,9 +38,9 @@ The `example` module is a small CLI over the library, installed as `kiff`:
 
 ```console
 $ ./gradlew :example:installDist
-$ ./example/build/install/kiff/bin/kiff create -a binary foo-1.0.apk foo-1.1.apk foo.patch
-Created foo.patch with the binary algorithm
-  Algorithm:   binary (format v1)
+$ ./example/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
+Created foo.patch with the binary patcher
+  Patcher:     binary (format v1)
   Source:      67.4 MiB crc32=fa4b3b57
   Target:      71.7 MiB crc32=0d0e6723
   Patch:       13.7 MiB (19.19% of target)
@@ -75,7 +80,7 @@ A patch is a header plus a delta stream:
 
 ```
 "KIFF"  4 bytes
-version 1 byte     algorithm 1 byte     flags 1 byte
+version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
 delta   instruction stream + literal stream
@@ -99,10 +104,15 @@ The two checksums do real work: `applyPatch` refuses a source file that is not t
 built against (`KiffException.SourceMismatch`) and refuses to hand back a target whose checksum does
 not match what was recorded at creation time (`KiffException.VerificationFailed`).
 
-The `binary` algorithm finds copies with a rolling hash over 16-byte blocks of the source, sampled
-every 4-16 bytes depending on file size, which keeps the index small enough to diff APK-sized files
-in a couple of seconds. Between copies it tracks the source offset the target is running parallel
-to, and emits `DIFF` while the aligned bytes still mostly agree.
+The delta algorithm - the search that produces those instructions - is what every patcher drives.
+The one Kiff ships, `RollingHashAlgorithm`, finds copies with a rolling hash over 16-byte blocks of
+the source, sampled every 4-16 bytes depending on how large a range is indexed, which keeps the
+index small enough to diff APK-sized files in a couple of seconds. Between copies it tracks the
+source offset the target is running parallel to, and emits `DIFF` while the aligned bytes still
+mostly agree.
+
+Because the instruction set is fixed, a different algorithm needs no change to the patch format or
+to any patcher: it is an encode-side choice that the same reader decodes.
 
 ## Zip archives
 
@@ -114,7 +124,7 @@ which buys a finer sampling stride and far fewer hash collisions.
 
 Regions the format does not name are described too - the preamble, alignment padding, an APK signing
 block, the central directory - which is what makes the restored archive identical to the last byte.
-If either input turns out not to be a readable zip, the algorithm falls back to a whole-file byte
+If either input turns out not to be a readable zip, the patcher falls back to a whole-file byte
 scan, so it always produces a working patch.
 
 `ZipDiff.analyze(source, target)` reports the same pairing as data, without building a patch.
@@ -127,7 +137,7 @@ content is compared directly.
 
 ## Android packages
 
-`ApkDiff` is the zip algorithm plus what is specific to an APK:
+`ApkDiff` is the zip patcher plus what is specific to an APK:
 
 - **Dex files are paired by ordinal.** A build that gains a dex renumbers the rest, so a
   `classes4.dex` with no counterpart by name or content is still compared against the source's
@@ -146,7 +156,7 @@ real content, not as compressed bytes.
 Two consecutive release builds of the same app, 67.4 MiB and 71.7 MiB, on an M-series Mac. All
 three restore a byte-identical file, checked against the target's SHA-256:
 
-| Algorithm | Patch | Create | Apply |
+| Patcher | Patch | Create | Apply |
 | --- | --- | --- | --- |
 | `binary` | 13.7 MiB (19.19%) | 2.5 s | 0.7 s |
 | `zip` | 13.5 MiB (18.82%) | 2.3 s | 0.8 s |
@@ -154,7 +164,7 @@ three restore a byte-identical file, checked against the target's SHA-256:
 
 The three land close together on *this* pair because ~70% of the target sits in a handful of large
 entries that genuinely changed - a replaced native library, a rebuilt dex - and no amount of
-structure awareness makes new content smaller. The structural algorithms pull ahead when entries
+structure awareness makes new content smaller. The structural patchers pull ahead when entries
 move, when an archive is repacked, or when only part of it was rebuilt; `apk` and `zip` agree here
 because every dex in this pair still pairs by name.
 
@@ -163,5 +173,5 @@ because every dex in this pair still pairs by name.
 `jvm`, `iosArm64`, `iosSimulatorArm64`, `macosArm64`, `macosX64`, `linuxX64`, `mingwX64`,
 `js(nodejs, browser)`.
 
-Algorithms need random access to both files, so they work on byte arrays: peak memory is roughly
+Patchers need random access to both files, so they work on byte arrays: peak memory is roughly
 source + target + patch + index.

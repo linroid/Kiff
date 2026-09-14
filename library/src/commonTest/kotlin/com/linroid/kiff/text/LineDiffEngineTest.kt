@@ -1,12 +1,12 @@
-package com.linroid.kiff.core
+package com.linroid.kiff.text
 
-import com.linroid.kiff.algorithm.DiffAlgorithm
+import com.linroid.kiff.text.LineDiffAlgorithm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-class DiffEngineTest {
+class LineDiffEngineTest {
 
-  private val simpleAlgorithm = object : DiffAlgorithm {
+  private val simpleAlgorithm = object : LineDiffAlgorithm {
     override val name = "simple-test"
 
     override fun diff(source: List<String>, target: List<String>): List<Edit> {
@@ -48,7 +48,7 @@ class DiffEngineTest {
 
   @Test
   fun identicalInputsProduceNoChanges() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val lines = listOf("a", "b", "c")
     val patch = engine.generatePatch(lines, lines)
 
@@ -57,7 +57,7 @@ class DiffEngineTest {
 
   @Test
   fun applyPatchRecoversTarget() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val source = listOf("line1", "line2", "line3")
     val target = listOf("line1", "modified", "line3")
 
@@ -69,7 +69,7 @@ class DiffEngineTest {
 
   @Test
   fun insertOnlyPatch() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val source = listOf("a", "b")
     val target = listOf("a", "b", "c", "d")
 
@@ -79,7 +79,7 @@ class DiffEngineTest {
 
   @Test
   fun deleteOnlyPatch() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val source = listOf("a", "b", "c", "d")
     val target = listOf("a", "b")
 
@@ -89,7 +89,7 @@ class DiffEngineTest {
 
   @Test
   fun emptySourceToNonEmpty() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val source = emptyList<String>()
     val target = listOf("new1", "new2")
 
@@ -99,7 +99,7 @@ class DiffEngineTest {
 
   @Test
   fun nonEmptySourceToEmpty() {
-    val engine = DiffEngine(simpleAlgorithm)
+    val engine = LineDiffEngine(simpleAlgorithm)
     val source = listOf("old1", "old2")
     val target = emptyList<String>()
 

@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class ApkDiffTest {
 
-  private val algorithm = ApkDiff()
+  private val patcher = ApkDiff()
 
   private fun apk(block: TestApkBuilder.() -> Unit): ByteArray =
     TestApkBuilder().apply(block).build()
@@ -29,7 +29,7 @@ class ApkDiffTest {
   @Test
   fun restoresAnIdenticalApk() {
     val original = sampleApk(seed = 1)
-    val size = assertRestores(algorithm, original, original)
+    val size = assertRestores(patcher, original, original)
     assertTrue(size < 128, "identical packages should cost almost nothing, got $size bytes")
   }
 
@@ -46,7 +46,7 @@ class ApkDiffTest {
       signatureFiles(seed = 90)
       signingBlock(structuredBytes(6_000, 7))
     }
-    assertRestores(algorithm, source, target)
+    assertRestores(patcher, source, target)
   }
 
   @Test
@@ -70,7 +70,7 @@ class ApkDiffTest {
       dex("classes3.dex", third)
     }
 
-    val apkSize = assertRestores(algorithm, source, target)
+    val apkSize = assertRestores(patcher, source, target)
     val zipSize = assertRestores(ZipDiff(), source, target)
     assertTrue(
       apkSize < zipSize / 2,
@@ -92,10 +92,10 @@ class ApkDiffTest {
       resource("new.png", structuredBytes(1_000, 22))
       signingBlock(block)
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 2_048, "an unchanged signing block should be copied, got $size bytes")
 
-    val report = algorithm.analyze(source, target)
+    val report = patcher.analyze(source, target)
     assertTrue(report.signed)
     assertEquals(block.size + 32, report.sourceSigningBlockSize)
     assertEquals(report.sourceSigningBlockSize, report.targetSigningBlockSize)
@@ -105,25 +105,25 @@ class ApkDiffTest {
   fun unsignedArchivesReportNoSigningBlock() {
     val source = apk { manifest(); dex("classes.dex", structuredBytes(5_000, 30)) }
     val target = apk { manifest(); dex("classes.dex", structuredBytes(5_100, 31)) }
-    val report = algorithm.analyze(source, target)
+    val report = patcher.analyze(source, target)
     assertFalse(report.signed)
     assertEquals(0, report.sourceSigningBlockSize)
   }
 
   @Test
   fun classifiesEntriesByKind() {
-    assertEquals(ApkEntryKind.MANIFEST, algorithm.kindOf("AndroidManifest.xml"))
-    assertEquals(ApkEntryKind.RESOURCE_TABLE, algorithm.kindOf("resources.arsc"))
-    assertEquals(ApkEntryKind.DEX, algorithm.kindOf("classes.dex"))
-    assertEquals(ApkEntryKind.DEX, algorithm.kindOf("classes12.dex"))
-    assertEquals(ApkEntryKind.NATIVE_LIBRARY, algorithm.kindOf("lib/arm64-v8a/libapp.so"))
-    assertEquals(ApkEntryKind.RESOURCE, algorithm.kindOf("res/aa.png"))
-    assertEquals(ApkEntryKind.ASSET, algorithm.kindOf("assets/model.tflite"))
-    assertEquals(ApkEntryKind.SIGNATURE, algorithm.kindOf("META-INF/CERT.RSA"))
-    assertEquals(ApkEntryKind.SIGNATURE, algorithm.kindOf("META-INF/MANIFEST.MF"))
-    assertEquals(ApkEntryKind.METADATA, algorithm.kindOf("META-INF/services/foo"))
-    assertEquals(ApkEntryKind.OTHER, algorithm.kindOf("stamp-cert-sha256"))
-    assertEquals(ApkEntryKind.OTHER, algorithm.kindOf("lib/arm64-v8a/notalib.txt"))
+    assertEquals(ApkEntryKind.MANIFEST, patcher.kindOf("AndroidManifest.xml"))
+    assertEquals(ApkEntryKind.RESOURCE_TABLE, patcher.kindOf("resources.arsc"))
+    assertEquals(ApkEntryKind.DEX, patcher.kindOf("classes.dex"))
+    assertEquals(ApkEntryKind.DEX, patcher.kindOf("classes12.dex"))
+    assertEquals(ApkEntryKind.NATIVE_LIBRARY, patcher.kindOf("lib/arm64-v8a/libapp.so"))
+    assertEquals(ApkEntryKind.RESOURCE, patcher.kindOf("res/aa.png"))
+    assertEquals(ApkEntryKind.ASSET, patcher.kindOf("assets/model.tflite"))
+    assertEquals(ApkEntryKind.SIGNATURE, patcher.kindOf("META-INF/CERT.RSA"))
+    assertEquals(ApkEntryKind.SIGNATURE, patcher.kindOf("META-INF/MANIFEST.MF"))
+    assertEquals(ApkEntryKind.METADATA, patcher.kindOf("META-INF/services/foo"))
+    assertEquals(ApkEntryKind.OTHER, patcher.kindOf("stamp-cert-sha256"))
+    assertEquals(ApkEntryKind.OTHER, patcher.kindOf("lib/arm64-v8a/notalib.txt"))
   }
 
   @Test
@@ -140,7 +140,7 @@ class ApkDiffTest {
       signingBlock(structuredBytes(6_000, 45))
     }
 
-    val report = algorithm.analyze(source, target)
+    val report = patcher.analyze(source, target)
     val native = report.kinds.single { it.kind == ApkEntryKind.NATIVE_LIBRARY }
     assertEquals(2, native.entryCount)
     assertEquals(1, native.changedCount)
@@ -158,9 +158,9 @@ class ApkDiffTest {
 
   @Test
   fun recognisesWhatIsAnApk() {
-    assertTrue(algorithm.isApk(sampleApk(seed = 50)))
-    assertFalse(algorithm.isApk(apk { resource("a.png", structuredBytes(100, 51)) }))
-    assertFalse(algorithm.isApk(structuredBytes(1_000, seed = 52)))
+    assertTrue(patcher.isApk(sampleApk(seed = 50)))
+    assertFalse(patcher.isApk(apk { resource("a.png", structuredBytes(100, 51)) }))
+    assertFalse(patcher.isApk(structuredBytes(1_000, seed = 52)))
   }
 
   @Test
@@ -170,7 +170,7 @@ class ApkDiffTest {
       resource("a.png", structuredBytes(30_000, 60))
       resource("b.png", structuredBytes(2_000, 61))
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 4_096, "a plain zip should still diff structurally, got $size bytes")
   }
 
@@ -179,24 +179,24 @@ class ApkDiffTest {
     val source = structuredBytes(30_000, seed = 70)
     val target = source.copyOfRange(0, 10_000) + structuredBytes(300, 71) +
       source.copyOfRange(10_000, source.size)
-    assertRestores(algorithm, source, target)
-    assertFailsWith<KiffException.UnsupportedInput> { algorithm.analyze(source, target) }
+    assertRestores(patcher, source, target)
+    assertFailsWith<KiffException.UnsupportedInput> { patcher.analyze(source, target) }
   }
 
   @Test
   fun apkPatchesAreNotInterchangeableWithZipPatches() {
     val source = sampleApk(seed = 80)
     val target = sampleApk(seed = 81)
-    val apkPatch = algorithm.createPatch(source, target)
+    val apkPatch = patcher.createPatch(source, target)
     assertFailsWith<KiffException.InvalidPatch> { ZipDiff().applyPatch(source, apkPatch) }
-    assertEquals(AlgorithmId.APK, Kiff.info(apkPatch).algorithm)
+    assertEquals(PatcherId.APK, Kiff.info(apkPatch).patcher)
   }
 
   @Test
   fun rejectsTheWrongSourceApk() {
     val source = sampleApk(seed = 82)
     val target = sampleApk(seed = 83)
-    val patch = algorithm.createPatch(source, target)
-    assertFailsWith<KiffException.SourceMismatch> { algorithm.applyPatch(sampleApk(84), patch) }
+    val patch = patcher.createPatch(source, target)
+    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(sampleApk(84), patch) }
   }
 }
