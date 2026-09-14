@@ -62,6 +62,23 @@ class ZipDiffTest {
   }
 
   @Test
+  fun aChangedEntryStaysAlignedWhenTheHeaderLengthChanges() {
+    // Alignment padding lives in the local header's extra field, so the two headers differ in
+    // length. The data comparison has to start at the data, not at the record.
+    val original = structuredBytes(200_000, seed = 40)
+    val edited = original.copyOf()
+    for (at in 0 until edited.size step 40) {
+      edited[at] = (edited[at] + 5).toByte()
+    }
+    val size = assertRestores(
+      algorithm,
+      archive { entry("payload.bin", original) },
+      archive { entry("payload.bin", edited, extra = ByteArray(7) { 3 }) }
+    )
+    assertTrue(size < edited.size / 8, "expected a difference-encoded patch, got $size bytes")
+  }
+
+  @Test
   fun restoresAddedAndRemovedEntries() {
     val shared = structuredBytes(40_000, seed = 5)
     val source = archive {
