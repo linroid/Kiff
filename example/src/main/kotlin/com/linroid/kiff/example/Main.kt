@@ -69,51 +69,8 @@ class DiffCommand : CliktCommand(name = "diff") {
   }
 }
 
-class PatchCommand : CliktCommand(name = "patch") {
-  override fun help(context: com.github.ajalt.clikt.core.Context) =
-    "Apply a diff to recover the target file"
-
-  private val binary by option("-b", "--binary", help = "Use binary diff (bsdiff)")
-    .flag()
-  private val sourceFile by argument(help = "Source file path")
-  private val targetFile by argument(help = "Target file path (used to generate the patch)")
-
-  override fun run() {
-    if (binary) {
-      runBinaryPatch()
-    } else {
-      runTextPatch()
-    }
-  }
-
-  private fun runTextPatch() {
-    val engine = DiffEngine(MyersDiffAlgorithm())
-    val source = FileSource(sourceFile).readLines()
-    val target = FileSource(targetFile).readLines()
-    val patch = engine.generatePatch(source, target)
-
-    val recovered = engine.applyPatch(source, patch)
-    recovered.forEach { echo(it) }
-  }
-
-  private fun runBinaryPatch() {
-    val engine = BinaryDiffEngine(BsDiffAlgorithm())
-    val source = FileSource(sourceFile).readBytes()
-    val target = FileSource(targetFile).readBytes()
-    val patch = engine.generatePatch(source, target)
-
-    val recovered = engine.applyPatch(source, patch)
-    echo("Recovered ${recovered.size} bytes")
-    if (recovered.contentEquals(target)) {
-      echo("Roundtrip OK: recovered matches target")
-    } else {
-      echo("ERROR: recovered does not match target")
-    }
-  }
-}
-
 fun main(args: Array<String>) {
   KiffCommand()
-    .subcommands(DiffCommand(), PatchCommand())
+    .subcommands(DiffCommand(), CreateCommand(), ApplyCommand(), InfoCommand())
     .main(args)
 }
