@@ -4,7 +4,7 @@ import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.io.systemFileSystem
 import okio.Path.Companion.toPath
 
-/** Text-file reader behind the example CLI's line diff. */
+/** Text-file reader behind the CLI's line diff. */
 class TextFile(private val path: String) {
 
   fun readLines(): List<String> =
