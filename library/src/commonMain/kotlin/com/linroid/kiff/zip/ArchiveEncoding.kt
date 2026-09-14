@@ -13,22 +13,38 @@ import com.linroid.kiff.delta.MatchIndex
  * structure when both files are readable archives and falling back to a plain byte-level scan when
  * they are not, so a patch is always produced.
  */
-internal fun encodeArchive(source: ByteArray, target: ByteArray, writer: DeltaWriter) {
+internal fun encodeArchive(
+  source: ByteArray,
+  target: ByteArray,
+  options: ZipEncodeOptions,
+  writer: DeltaWriter
+) {
   val sourceLayout = ZipReader.parseOrNull(source)
   val targetLayout = ZipReader.parseOrNull(target)
   if (sourceLayout == null || targetLayout == null) {
     DeltaScanner(MatchIndex(source)).scan(target, 0, target.size, writer)
     return
   }
-  ZipEncoder(source, sourceLayout, target, targetLayout).encode(writer)
+  ZipEncoder(source, sourceLayout, target, targetLayout, options).encode(writer)
 }
 
-internal fun analyzeArchives(source: ByteArray, target: ByteArray): ZipDiffReport {
-  val sourceLayout = ZipReader.parseOrNull(source)
-    ?: throw KiffException.UnsupportedInput("Source is not a readable zip archive")
-  val targetLayout = ZipReader.parseOrNull(target)
-    ?: throw KiffException.UnsupportedInput("Target is not a readable zip archive")
+internal fun parseArchive(bytes: ByteArray, label: String): ZipLayout =
+  ZipReader.parseOrNull(bytes)
+    ?: throw KiffException.UnsupportedInput("$label is not a readable zip archive")
 
+internal fun analyzeArchives(source: ByteArray, target: ByteArray): ZipDiffReport = analyzeLayouts(
+  source,
+  parseArchive(source, "Source"),
+  target,
+  parseArchive(target, "Target")
+)
+
+internal fun analyzeLayouts(
+  source: ByteArray,
+  sourceLayout: ZipLayout,
+  target: ByteArray,
+  targetLayout: ZipLayout
+): ZipDiffReport {
   val changes = ArrayList<ZipEntryChange>(targetLayout.entries.size + 8)
   for (entry in targetLayout.entries) {
     val counterpart = sourceLayout.entriesByName[entry.name]

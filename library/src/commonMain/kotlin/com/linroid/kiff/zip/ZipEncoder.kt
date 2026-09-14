@@ -16,7 +16,8 @@ internal class ZipEncoder(
   private val source: ByteArray,
   private val sourceLayout: ZipLayout,
   private val target: ByteArray,
-  private val targetLayout: ZipLayout
+  private val targetLayout: ZipLayout,
+  private val options: ZipEncodeOptions
 ) {
 
   /** Built only if some target region has no counterpart to be indexed against. */
@@ -135,6 +136,7 @@ internal class ZipEncoder(
       ?: sourceLayout.entriesByContent[
         ZipLayout.ContentKey(entry.crc32, entry.compressedSize, entry.method)
       ]
+      ?: options.pairUnmatched(entry, sourceLayout)
 
   private fun regionsEqual(sourceFrom: Int, targetFrom: Int, length: Int): Boolean {
     if (sourceFrom < 0 || sourceFrom + length > source.size) return false
@@ -149,3 +151,12 @@ internal class ZipEncoder(
     const val MIN_SEARCHABLE_RECORD = 64 * 1024
   }
 }
+
+/** Format-specific knowledge a [ZipEncoder] can be given. */
+internal class ZipEncodeOptions(
+  /**
+   * Last-resort pairing for a target entry that matched no source entry by name or by content -
+   * where an APK can say that `classes4.dex` belongs next to `classes3.dex`.
+   */
+  val pairUnmatched: (ZipEntry, ZipLayout) -> ZipEntry? = { _, _ -> null }
+)
