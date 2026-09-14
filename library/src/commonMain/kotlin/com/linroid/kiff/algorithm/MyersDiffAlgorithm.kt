@@ -1,6 +1,6 @@
-package com.linroid.kdiff.algorithm
+package com.linroid.kiff.algorithm
 
-import com.linroid.kdiff.core.Edit
+import com.linroid.kiff.core.Edit
 
 class MyersDiffAlgorithm : DiffAlgorithm {
   override val name = "myers"

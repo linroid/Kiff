@@ -1,6 +1,6 @@
-package com.linroid.kdiff.core
+package com.linroid.kiff.core
 
-import com.linroid.kdiff.algorithm.DiffAlgorithm
+import com.linroid.kiff.algorithm.DiffAlgorithm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

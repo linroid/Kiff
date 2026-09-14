@@ -1,4 +1,4 @@
-package com.linroid.kdiff.binary
+package com.linroid.kiff.binary
 
 data class BinaryPatch(
   val controlBlocks: List<ControlBlock>,

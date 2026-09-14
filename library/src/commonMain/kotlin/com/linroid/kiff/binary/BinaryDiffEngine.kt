@@ -1,6 +1,6 @@
-package com.linroid.kdiff.binary
+package com.linroid.kiff.binary
 
-import com.linroid.kdiff.algorithm.BinaryDiffAlgorithm
+import com.linroid.kiff.algorithm.BinaryDiffAlgorithm
 
 class BinaryDiffEngine(private val algorithm: BinaryDiffAlgorithm) {
 

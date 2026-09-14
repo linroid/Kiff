@@ -1,6 +1,6 @@
-package com.linroid.kdiff.algorithm
+package com.linroid.kiff.algorithm
 
-import com.linroid.kdiff.binary.BinaryDiffEngine
+import com.linroid.kiff.binary.BinaryDiffEngine
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

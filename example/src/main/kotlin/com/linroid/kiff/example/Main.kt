@@ -1,4 +1,4 @@
-package com.linroid.kdiff.example
+package com.linroid.kiff.example
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.main
@@ -6,14 +6,14 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import com.linroid.kdiff.algorithm.BsDiffAlgorithm
-import com.linroid.kdiff.algorithm.MyersDiffAlgorithm
-import com.linroid.kdiff.binary.BinaryDiffEngine
-import com.linroid.kdiff.core.DiffEngine
-import com.linroid.kdiff.core.Edit
-import com.linroid.kdiff.io.FileSource
+import com.linroid.kiff.algorithm.BsDiffAlgorithm
+import com.linroid.kiff.algorithm.MyersDiffAlgorithm
+import com.linroid.kiff.binary.BinaryDiffEngine
+import com.linroid.kiff.core.DiffEngine
+import com.linroid.kiff.core.Edit
+import com.linroid.kiff.io.FileSource
 
-class KDiffCommand : CliktCommand(name = "kdiff") {
+class KiffCommand : CliktCommand(name = "kiff") {
   override fun run() = Unit
 }
 
@@ -113,7 +113,7 @@ class PatchCommand : CliktCommand(name = "patch") {
 }
 
 fun main(args: Array<String>) {
-  KDiffCommand()
+  KiffCommand()
     .subcommands(DiffCommand(), PatchCommand())
     .main(args)
 }

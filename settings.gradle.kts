@@ -15,7 +15,7 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "KDiff"
+rootProject.name = "Kiff"
 
 include(":library")
 include(":example")

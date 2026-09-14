@@ -1,6 +1,6 @@
-package com.linroid.kdiff.algorithm
+package com.linroid.kiff.algorithm
 
-import com.linroid.kdiff.binary.BinaryPatch
+import com.linroid.kiff.binary.BinaryPatch
 
 interface BinaryDiffAlgorithm {
   val name: String

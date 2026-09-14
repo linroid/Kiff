@@ -1,4 +1,4 @@
-package com.linroid.kdiff.binary
+package com.linroid.kiff.binary
 
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
