@@ -3,27 +3,27 @@ package com.linroid.kiff
 import com.linroid.kiff.internal.ByteReader
 import com.linroid.kiff.io.KiffFiles
 
-/** Entry point: the bundled algorithms plus file-level create/apply helpers. */
+/** Entry point: the bundled patchers plus file-level create/apply helpers. */
 object Kiff {
 
-  val binary: PatchAlgorithm = BinaryDiff()
+  val binary: Patcher = BinaryDiff()
 
   val zip: ZipDiff = ZipDiff()
 
   val apk: ApkDiff = ApkDiff()
 
-  val algorithms: List<PatchAlgorithm> = listOf(binary, zip, apk)
+  val patchers: List<Patcher> = listOf(binary, zip, apk)
 
-  fun algorithm(id: AlgorithmId): PatchAlgorithm = algorithms.first { it.id == id }
+  fun patcher(id: PatcherId): Patcher = patchers.first { it.id == id }
 
-  fun algorithmOrNull(name: String): PatchAlgorithm? =
-    algorithms.firstOrNull { it.name.equals(name, ignoreCase = true) }
+  fun patcherOrNull(name: String): Patcher? =
+    patchers.firstOrNull { it.name.equals(name, ignoreCase = true) }
 
   /** Reads the header of [patch] without applying it. */
   fun info(patch: ByteArray): PatchInfo {
     val header = PatchFormat.readHeader(ByteReader(patch))
     return PatchInfo(
-      algorithm = header.algorithm,
+      patcher = header.patcher,
       formatVersion = header.version,
       sourceSize = header.sourceSize,
       sourceCrc32 = header.sourceCrc32,
@@ -35,12 +35,12 @@ object Kiff {
 
   /** Writes a patch that rebuilds [targetPath] from [sourcePath]. */
   fun createPatch(
-    algorithm: PatchAlgorithm,
+    patcher: Patcher,
     sourcePath: String,
     targetPath: String,
     patchPath: String
   ): PatchInfo {
-    val patch = algorithm.createPatch(
+    val patch = patcher.createPatch(
       KiffFiles.readBytes(sourcePath),
       KiffFiles.readBytes(targetPath)
     )
@@ -49,13 +49,13 @@ object Kiff {
   }
 
   /**
-   * Restores a file from [sourcePath] and [patchPath] into [outputPath], using whichever algorithm
+   * Restores a file from [sourcePath] and [patchPath] into [outputPath], using whichever patcher
    * created the patch.
    */
   fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
     val patch = KiffFiles.readBytes(patchPath)
     val patchInfo = info(patch)
-    val restored = algorithm(patchInfo.algorithm)
+    val restored = patcher(patchInfo.patcher)
       .applyPatch(KiffFiles.readBytes(sourcePath), patch)
     KiffFiles.writeBytes(outputPath, restored)
     return patchInfo

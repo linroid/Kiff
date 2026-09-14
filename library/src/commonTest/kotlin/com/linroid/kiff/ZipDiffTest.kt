@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class ZipDiffTest {
 
-  private val algorithm = ZipDiff()
+  private val patcher = ZipDiff()
 
   private fun archive(block: TestZipBuilder.() -> Unit): ByteArray =
     TestZipBuilder().apply(block).build()
@@ -20,16 +20,16 @@ class ZipDiffTest {
       entry("a.txt", "hello")
       entry("dir/b.bin", structuredBytes(50_000, seed = 1))
     }
-    val size = assertRestores(algorithm, zip, zip)
+    val size = assertRestores(patcher, zip, zip)
     assertTrue(size < 64, "identical archives should cost almost nothing, got $size bytes")
   }
 
   @Test
   fun restoresEmptyArchive() {
     val empty = archive { }
-    assertRestores(algorithm, empty, empty)
-    assertRestores(algorithm, empty, archive { entry("new.txt", "added") })
-    assertRestores(algorithm, archive { entry("old.txt", "gone") }, empty)
+    assertRestores(patcher, empty, empty)
+    assertRestores(patcher, empty, archive { entry("new.txt", "added") })
+    assertRestores(patcher, archive { entry("old.txt", "gone") }, empty)
   }
 
   @Test
@@ -43,7 +43,7 @@ class ZipDiffTest {
       entry("big.bin", untouched)
       entry("small.txt", "version 2")
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 512, "expected a patch sized like the change, got $size bytes")
   }
 
@@ -54,7 +54,7 @@ class ZipDiffTest {
       Random(4).nextBytes(2_000) +
       original.copyOfRange(100_000, original.size)
     val size = assertRestores(
-      algorithm,
+      patcher,
       archive { entry("payload.bin", original) },
       archive { entry("payload.bin", edited) }
     )
@@ -71,7 +71,7 @@ class ZipDiffTest {
       edited[at] = (edited[at] + 5).toByte()
     }
     val size = assertRestores(
-      algorithm,
+      patcher,
       archive { entry("payload.bin", original) },
       archive { entry("payload.bin", edited, extra = ByteArray(7) { 3 }) }
     )
@@ -90,7 +90,7 @@ class ZipDiffTest {
       entry("brand-new.txt", "added in the new version")
       entry("another.bin", structuredBytes(3_000, seed = 6))
     }
-    assertRestores(algorithm, source, target)
+    assertRestores(patcher, source, target)
   }
 
   @Test
@@ -98,7 +98,7 @@ class ZipDiffTest {
     val payload = structuredBytes(120_000, seed = 7)
     val source = archive { entry("classes2.dex", payload) }
     val target = archive { entry("classes3.dex", payload) }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 256, "a rename should be a copy, got $size bytes")
   }
 
@@ -114,7 +114,7 @@ class ZipDiffTest {
       entry("second.bin", second)
       entry("first.bin", first)
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 256, "reordering should be pure copies, got $size bytes")
   }
 
@@ -125,7 +125,7 @@ class ZipDiffTest {
     val target = archive {
       entry("data.bin", payload, extra = ByteArray(12) { 7 }, time = 0x7777)
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 256, "a timestamp change should stay tiny, got $size bytes")
   }
 
@@ -145,7 +145,7 @@ class ZipDiffTest {
       beforeDirectory(signingBlock)
       comment("target archive")
     }
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 2_048, "the shared signing block should be copied, got $size bytes")
   }
 
@@ -158,7 +158,7 @@ class ZipDiffTest {
       entry("streamed.bin", structuredBytes(21_000, seed = 16), dataDescriptor = true)
       entry("plain.txt", "no descriptor here")
     }
-    assertRestores(algorithm, source, target)
+    assertRestores(patcher, source, target)
   }
 
   @Test
@@ -166,7 +166,7 @@ class ZipDiffTest {
     // Method 8 with opaque payloads: Kiff never inflates, so it must not care what the bytes are.
     val source = archive { entry("a.bin", structuredBytes(40_000, seed = 17), method = 8) }
     val target = archive { entry("a.bin", structuredBytes(41_000, seed = 18), method = 8) }
-    assertRestores(algorithm, source, target)
+    assertRestores(patcher, source, target)
   }
 
   @Test
@@ -174,15 +174,15 @@ class ZipDiffTest {
     val source = structuredBytes(30_000, seed = 19)
     val target = source.copyOfRange(0, 10_000) + structuredBytes(500, seed = 20) +
       source.copyOfRange(10_000, source.size)
-    val size = assertRestores(algorithm, source, target)
+    val size = assertRestores(patcher, source, target)
     assertTrue(size < 2_048, "the fallback should still delta, got $size bytes")
   }
 
   @Test
   fun fallsBackWhenOnlyOneSideIsAnArchive() {
     val zip = archive { entry("a.txt", "hello") }
-    assertRestores(algorithm, structuredBytes(5_000, seed = 21), zip)
-    assertRestores(algorithm, zip, structuredBytes(5_000, seed = 22))
+    assertRestores(patcher, structuredBytes(5_000, seed = 21), zip)
+    assertRestores(patcher, zip, structuredBytes(5_000, seed = 22))
   }
 
   @Test
@@ -202,7 +202,7 @@ class ZipDiffTest {
       entry("added.txt", "new")
     }
 
-    val report = algorithm.analyze(source, target)
+    val report = patcher.analyze(source, target)
     assertEquals(1, report.count(ZipEntryStatus.UNCHANGED))
     assertEquals(1, report.count(ZipEntryStatus.METADATA_CHANGED))
     assertEquals(1, report.count(ZipEntryStatus.MODIFIED))
@@ -218,30 +218,30 @@ class ZipDiffTest {
   fun analyzeRejectsNonArchives() {
     val zip = archive { entry("a.txt", "hello") }
     assertFailsWith<KiffException.UnsupportedInput> {
-      algorithm.analyze(structuredBytes(100, seed = 25), zip)
+      patcher.analyze(structuredBytes(100, seed = 25), zip)
     }
     assertFailsWith<KiffException.UnsupportedInput> {
-      algorithm.analyze(zip, structuredBytes(100, seed = 26))
+      patcher.analyze(zip, structuredBytes(100, seed = 26))
     }
   }
 
   @Test
-  fun patchesAreNotInterchangeableBetweenAlgorithms() {
+  fun patchesAreNotInterchangeableBetweenPatchers() {
     val source = archive { entry("a.txt", "one") }
     val target = archive { entry("a.txt", "two") }
-    val zipPatch = algorithm.createPatch(source, target)
+    val zipPatch = patcher.createPatch(source, target)
     assertFailsWith<KiffException.InvalidPatch> { BinaryDiff().applyPatch(source, zipPatch) }
 
     val binaryPatch = BinaryDiff().createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { algorithm.applyPatch(source, binaryPatch) }
+    assertFailsWith<KiffException.InvalidPatch> { patcher.applyPatch(source, binaryPatch) }
   }
 
   @Test
   fun rejectsTheWrongSourceArchive() {
     val source = archive { entry("a.bin", structuredBytes(2_000, seed = 27)) }
     val target = archive { entry("a.bin", structuredBytes(2_100, seed = 28)) }
-    val patch = algorithm.createPatch(source, target)
+    val patch = patcher.createPatch(source, target)
     val other = archive { entry("a.bin", structuredBytes(2_000, seed = 29)) }
-    assertFailsWith<KiffException.SourceMismatch> { algorithm.applyPatch(other, patch) }
+    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(other, patch) }
   }
 }

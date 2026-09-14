@@ -7,29 +7,29 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.linroid.kiff.Kiff
-import com.linroid.kiff.PatchAlgorithm
+import com.linroid.kiff.Patcher
 import com.linroid.kiff.PatchInfo
 import com.linroid.kiff.io.KiffFiles
 
 class CreateCommand : CliktCommand(name = "create") {
   override fun help(context: Context) = "Create a patch that turns SOURCE into TARGET"
 
-  private val algorithmName by option(
-    "-a",
-    "--algorithm",
-    help = "Algorithm to use: ${Kiff.algorithms.joinToString("|") { it.name }}"
+  private val patcherName by option(
+    "-p",
+    "--patcher",
+    help = "Patcher to use: ${Kiff.patchers.joinToString("|") { it.name }}"
   ).default("binary")
   private val source by argument(help = "Original file")
   private val target by argument(help = "Updated file")
   private val patch by argument(help = "Patch file to write")
 
   override fun run() {
-    val algorithm = resolveAlgorithm(algorithmName)
+    val patcher = resolvePatcher(patcherName)
     requireFile(source)
     requireFile(target)
     val elapsed = measureMillis {
-      val info = Kiff.createPatch(algorithm, source, target, patch)
-      echo("Created $patch with the ${algorithm.name} algorithm")
+      val info = Kiff.createPatch(patcher, source, target, patch)
+      echo("Created $patch with the ${patcher.name} patcher")
       echoInfo(info)
     }
     echo("  Took:        ${elapsed} ms")
@@ -48,7 +48,7 @@ class ApplyCommand : CliktCommand(name = "apply") {
     requireFile(patch)
     val elapsed = measureMillis {
       val info = Kiff.applyPatch(source, patch, output)
-      echo("Restored $output with the ${info.algorithm.name.lowercase()} algorithm")
+      echo("Restored $output with the ${info.patcher.name.lowercase()} patcher")
       echoInfo(info)
     }
     echo("  Took:        ${elapsed} ms")
@@ -67,7 +67,7 @@ class InfoCommand : CliktCommand(name = "info") {
 }
 
 private fun CliktCommand.echoInfo(info: PatchInfo) {
-  echo("  Algorithm:   ${info.algorithm.name.lowercase()} (format v${info.formatVersion})")
+  echo("  Patcher:     ${info.patcher.name.lowercase()} (format v${info.formatVersion})")
   echo("  Source:      ${formatBytes(info.sourceSize.toLong())} crc32=${hex(info.sourceCrc32)}")
   echo("  Target:      ${formatBytes(info.targetSize.toLong())} crc32=${hex(info.targetCrc32)}")
   val share = formatPercent(info.ratio)
@@ -76,9 +76,9 @@ private fun CliktCommand.echoInfo(info: PatchInfo) {
 
 private fun hex(value: UInt) = value.toString(16).padStart(8, '0')
 
-internal fun resolveAlgorithm(name: String): PatchAlgorithm = Kiff.algorithmOrNull(name)
+internal fun resolvePatcher(name: String): Patcher = Kiff.patcherOrNull(name)
   ?: throw UsageError(
-    "Unknown algorithm '$name'. Available: ${Kiff.algorithms.joinToString(", ") { it.name }}"
+    "Unknown patcher '$name'. Available: ${Kiff.patchers.joinToString(", ") { it.name }}"
   )
 
 internal fun requireFile(path: String) {

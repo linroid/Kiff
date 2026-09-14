@@ -1,10 +1,9 @@
 package com.linroid.kiff.delta
 
 /**
- * Greedy matcher that turns a target region into copy / diff / add / run instructions.
- *
- * A scanner describes any number of target regions against one [MatchIndex], so the archive
- * algorithms can index a single entry and still emit copies reaching anywhere in the source.
+ * Greedy matcher: the default [DeltaAlgorithm]. It turns a target region into copy / diff / add /
+ * run instructions, hashing every target position in constant time and verifying candidate matches
+ * against a [MatchIndex] built over one source range.
  *
  * Beyond exact matches it tracks an *alignment*: the source offset the target is currently running
  * parallel to. When no match is found at a position but the aligned source bytes still mostly
@@ -12,22 +11,17 @@ package com.linroid.kiff.delta
  * patches small for recompiled code, where long stretches are identical except for embedded
  * offsets.
  */
-internal class DeltaScanner(private val index: MatchIndex) {
+internal class RollingHashScanner(private val index: MatchIndex) : DeltaScanner {
 
   private val source = index.source
   private val match = Match()
 
-  /**
-   * @param initialAlignment source offset that `target[from]` is expected to correspond to, minus
-   *   [from]; archive algorithms pass the offset of the matching entry so a changed entry can start
-   *   out aligned.
-   */
-  fun scan(
+  override fun scan(
     target: ByteArray,
     from: Int,
     to: Int,
     writer: DeltaWriter,
-    initialAlignment: Int = 0
+    initialAlignment: Int
   ) {
     var position = from
     var literalStart = from

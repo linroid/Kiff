@@ -1,8 +1,8 @@
-package com.linroid.kiff.algorithm
+package com.linroid.kiff.text
 
-import com.linroid.kiff.core.Edit
+import com.linroid.kiff.text.Edit
 
-class MyersDiffAlgorithm : DiffAlgorithm {
+class MyersDiffAlgorithm : LineDiffAlgorithm {
   override val name = "myers"
 
   override fun diff(source: List<String>, target: List<String>): List<Edit> {

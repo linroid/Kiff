@@ -1,5 +1,6 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaReader
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.internal.ByteReader
@@ -7,11 +8,11 @@ import com.linroid.kiff.internal.ByteWriter
 import com.linroid.kiff.internal.Crc32
 
 /**
- * Base class for the bundled algorithms. They differ only in how they *describe* the target - the
+ * Base class for the bundled patchers. They differ only in how they *describe* the target - the
  * container, the checksum verification and the restore path are shared, so any patch restores the
- * target byte for byte no matter which algorithm produced it.
+ * target byte for byte no matter which patcher produced it.
  */
-sealed class DeltaPatchAlgorithm : PatchAlgorithm {
+sealed class DeltaPatcher : Patcher {
 
   final override fun createPatch(source: ByteArray, target: ByteArray): ByteArray {
     val writer = DeltaWriter(target.size)
@@ -29,9 +30,9 @@ sealed class DeltaPatchAlgorithm : PatchAlgorithm {
   final override fun applyPatch(source: ByteArray, patch: ByteArray): ByteArray {
     val reader = ByteReader(patch)
     val header = PatchFormat.readHeader(reader)
-    if (header.algorithm != id) {
+    if (header.patcher != id) {
       throw KiffException.InvalidPatch(
-        "Patch was built by ${header.algorithm.name.lowercase()}, not $name"
+        "Patch was built by ${header.patcher.name.lowercase()}, not $name"
       )
     }
     if (source.size != header.sourceSize) {
@@ -54,6 +55,12 @@ sealed class DeltaPatchAlgorithm : PatchAlgorithm {
     }
     return target
   }
+
+  /**
+   * The delta algorithm this patcher drives. Patchers differ in how they carve the inputs into
+   * regions, not in how bytes are searched, so any algorithm works with any of them.
+   */
+  internal abstract val algorithm: DeltaAlgorithm
 
   /** Describes [target] in terms of [source] by driving [writer]. */
   internal abstract fun encode(source: ByteArray, target: ByteArray, writer: DeltaWriter)

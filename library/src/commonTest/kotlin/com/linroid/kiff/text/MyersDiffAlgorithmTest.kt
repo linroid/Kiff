@@ -1,7 +1,7 @@
-package com.linroid.kiff.algorithm
+package com.linroid.kiff.text
 
-import com.linroid.kiff.core.DiffEngine
-import com.linroid.kiff.core.Edit
+import com.linroid.kiff.text.LineDiffEngine
+import com.linroid.kiff.text.Edit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class MyersDiffAlgorithmTest {
 
   private val algorithm = MyersDiffAlgorithm()
-  private val engine = DiffEngine(algorithm)
+  private val engine = LineDiffEngine(algorithm)
 
   @Test
   fun nameIsCorrect() {

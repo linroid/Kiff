@@ -1,15 +1,15 @@
-package com.linroid.kiff.core
+package com.linroid.kiff.text
 
-import com.linroid.kiff.algorithm.DiffAlgorithm
+import com.linroid.kiff.text.LineDiffAlgorithm
 
-class DiffEngine(private val algorithm: DiffAlgorithm) {
+class LineDiffEngine(private val algorithm: LineDiffAlgorithm) {
 
-  fun generatePatch(source: List<String>, target: List<String>): Patch {
+  fun generatePatch(source: List<String>, target: List<String>): LinePatch {
     val edits = algorithm.diff(source, target)
-    return Patch(edits)
+    return LinePatch(edits)
   }
 
-  fun applyPatch(source: List<String>, patch: Patch): List<String> {
+  fun applyPatch(source: List<String>, patch: LinePatch): List<String> {
     val result = mutableListOf<String>()
     var sourceIndex = 0
 

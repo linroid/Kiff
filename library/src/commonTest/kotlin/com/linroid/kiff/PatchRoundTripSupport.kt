@@ -4,14 +4,14 @@ import kotlin.random.Random
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
-/** Asserts that [algorithm] rebuilds [target] byte for byte, and reports the patch size. */
-fun assertRestores(algorithm: PatchAlgorithm, source: ByteArray, target: ByteArray): Int {
-  val patch = algorithm.createPatch(source, target)
+/** Asserts that [patcher] rebuilds [target] byte for byte, and reports the patch size. */
+fun assertRestores(patcher: Patcher, source: ByteArray, target: ByteArray): Int {
+  val patch = patcher.createPatch(source, target)
   val info = Kiff.info(patch)
-  assertEquals(algorithm.id, info.algorithm)
+  assertEquals(patcher.id, info.patcher)
   assertEquals(source.size, info.sourceSize)
   assertEquals(target.size, info.targetSize)
-  assertContentEquals(target, algorithm.applyPatch(source, patch), "restored bytes differ")
+  assertContentEquals(target, patcher.applyPatch(source, patch), "restored bytes differ")
   return patch.size
 }
 

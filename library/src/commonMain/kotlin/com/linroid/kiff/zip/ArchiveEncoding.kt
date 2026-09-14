@@ -4,12 +4,11 @@ import com.linroid.kiff.KiffException
 import com.linroid.kiff.ZipDiffReport
 import com.linroid.kiff.ZipEntryChange
 import com.linroid.kiff.ZipEntryStatus
-import com.linroid.kiff.delta.DeltaScanner
+import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
-import com.linroid.kiff.delta.MatchIndex
 
 /**
- * Shared by the zip and apk algorithms: describe [target] using [source], walking the archive
+ * Shared by the zip and apk patchers: describe [target] using [source], walking the archive
  * structure when both files are readable archives and falling back to a plain byte-level scan when
  * they are not, so a patch is always produced.
  */
@@ -17,15 +16,16 @@ internal fun encodeArchive(
   source: ByteArray,
   target: ByteArray,
   options: ZipEncodeOptions,
-  writer: DeltaWriter
+  writer: DeltaWriter,
+  algorithm: DeltaAlgorithm
 ) {
   val sourceLayout = ZipReader.parseOrNull(source)
   val targetLayout = ZipReader.parseOrNull(target)
   if (sourceLayout == null || targetLayout == null) {
-    DeltaScanner(MatchIndex(source)).scan(target, 0, target.size, writer)
+    algorithm.scanner(source).scan(target, 0, target.size, writer)
     return
   }
-  ZipEncoder(source, sourceLayout, target, targetLayout, options).encode(writer)
+  ZipEncoder(source, sourceLayout, target, targetLayout, options, algorithm).encode(writer)
 }
 
 internal fun parseArchive(bytes: ByteArray, label: String): ZipLayout =

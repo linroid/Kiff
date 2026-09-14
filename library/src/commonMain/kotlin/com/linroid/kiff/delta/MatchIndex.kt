@@ -8,7 +8,7 @@ package com.linroid.kiff.delta
  * literal compressor picks up instead.
  *
  * Indexing is limited to `[from, to)` but matches may grow past those bounds, so an archive
- * algorithm can index one entry - a much smaller range, and therefore a finer stride and fewer hash
+ * patcher can index one entry - a much smaller range, and therefore a finer stride and fewer hash
  * collisions than the whole file - while still emitting copies that reach anywhere in the source.
  */
 internal class MatchIndex(

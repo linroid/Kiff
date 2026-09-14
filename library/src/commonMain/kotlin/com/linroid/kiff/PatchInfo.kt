@@ -1,7 +1,7 @@
 package com.linroid.kiff
 
 data class PatchInfo(
-  val algorithm: AlgorithmId,
+  val patcher: PatcherId,
   val formatVersion: Int,
   val sourceSize: Int,
   val sourceCrc32: UInt,
