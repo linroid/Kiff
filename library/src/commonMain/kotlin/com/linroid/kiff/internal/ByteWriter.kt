@@ -42,10 +42,14 @@ internal class ByteWriter(initialCapacity: Int = 64) {
 
   fun writeVarInt(value: Int) = writeVarLong(value.toLong())
 
-  /** Zig-zag encoding keeps small negative deltas short. */
-  fun writeSignedVarInt(value: Int) {
-    val zigzag = (value shl 1) xor (value shr 31)
-    writeVarLong(zigzag.toLong() and 0xFFFFFFFFL)
+  /**
+   * Zig-zag encoding keeps small negative deltas short.
+   *
+   * For any value in `Int` range this produces exactly the bytes the 32-bit encoding did, so a v1
+   * patch and a v2 patch of the same small inputs are byte for byte identical.
+   */
+  fun writeSignedVarLong(value: Long) {
+    writeVarLong((value shl 1) xor (value shr 63))
   }
 
   fun toByteArray(): ByteArray = buffer.copyOf(length)

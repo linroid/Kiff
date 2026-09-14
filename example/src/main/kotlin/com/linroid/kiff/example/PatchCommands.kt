@@ -68,10 +68,10 @@ class InfoCommand : CliktCommand(name = "info") {
 
 private fun CliktCommand.echoInfo(info: PatchInfo) {
   echo("  Patcher:     ${info.patcher.name.lowercase()} (format v${info.formatVersion})")
-  echo("  Source:      ${formatBytes(info.sourceSize.toLong())} crc32=${hex(info.sourceCrc32)}")
-  echo("  Target:      ${formatBytes(info.targetSize.toLong())} crc32=${hex(info.targetCrc32)}")
+  echo("  Source:      ${formatBytes(info.sourceSize)} crc32=${hex(info.sourceCrc32)}")
+  echo("  Target:      ${formatBytes(info.targetSize)} crc32=${hex(info.targetCrc32)}")
   val share = formatPercent(info.ratio)
-  echo("  Patch:       ${formatBytes(info.patchSize.toLong())} ($share of target)")
+  echo("  Patch:       ${formatBytes(info.patchSize)} ($share of target)")
 }
 
 private fun hex(value: UInt) = value.toString(16).padStart(8, '0')

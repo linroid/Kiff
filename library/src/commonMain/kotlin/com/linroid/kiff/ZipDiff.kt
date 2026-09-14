@@ -2,6 +2,7 @@ package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.analyzeArchives
@@ -20,17 +21,15 @@ import com.linroid.kiff.zip.encodeArchive
  *
  * Falls back to a whole-file byte scan when either input is not a readable zip.
  */
-class ZipDiff internal constructor(
-  internal override val algorithm: DeltaAlgorithm
+class ZipDiff(
+  override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
 ) : DeltaPatcher() {
-
-  constructor() : this(RollingHashAlgorithm)
 
   override val id: PatcherId = PatcherId.ZIP
   override val name: String = "zip"
 
-  override fun encode(source: ByteArray, target: ByteArray, writer: DeltaWriter) {
-    encodeArchive(source, target, ZipEncodeOptions(), writer, algorithm)
+  override fun encode(source: ByteArraySource, target: ByteArraySource, sink: DeltaWriter) {
+    encodeArchive(source, target, ZipEncodeOptions(), sink, algorithm)
   }
 
   /**

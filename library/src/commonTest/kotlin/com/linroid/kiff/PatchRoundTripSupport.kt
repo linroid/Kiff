@@ -9,8 +9,8 @@ fun assertRestores(patcher: Patcher, source: ByteArray, target: ByteArray): Int 
   val patch = patcher.createPatch(source, target)
   val info = Kiff.info(patch)
   assertEquals(patcher.id, info.patcher)
-  assertEquals(source.size, info.sourceSize)
-  assertEquals(target.size, info.targetSize)
+  assertEquals(source.size.toLong(), info.sourceSize)
+  assertEquals(target.size.toLong(), info.targetSize)
   assertContentEquals(target, patcher.applyPatch(source, patch), "restored bytes differ")
   return patch.size
 }

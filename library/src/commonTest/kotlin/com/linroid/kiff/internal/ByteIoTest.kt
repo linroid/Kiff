@@ -20,18 +20,23 @@ class ByteIoTest {
   }
 
   @Test
-  fun signedVarIntsRoundTrip() {
-    val values = listOf(0, -1, 1, -127, 4096, -70_000_000, 70_000_000, Int.MIN_VALUE, Int.MAX_VALUE)
+  fun signedVarLongsRoundTrip() {
+    val values = listOf(
+      0L, -1L, 1L, -127L, 4096L, -70_000_000L, 70_000_000L,
+      Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong(),
+      // Past 2 GB, which is the whole point of the 64-bit encoding.
+      1L shl 31, -(1L shl 31), 1L shl 40, -(1L shl 40)
+    )
     val writer = ByteWriter()
-    values.forEach { writer.writeSignedVarInt(it) }
+    values.forEach { writer.writeSignedVarLong(it) }
     val reader = ByteReader(writer.toByteArray())
-    values.forEach { assertEquals(it, reader.readSignedVarInt()) }
+    values.forEach { assertEquals(it, reader.readSignedVarLong()) }
   }
 
   @Test
   fun smallValuesStaySmall() {
     val writer = ByteWriter()
-    writer.writeSignedVarInt(-3)
+    writer.writeSignedVarLong(-3)
     assertEquals(1, writer.size)
   }
 
