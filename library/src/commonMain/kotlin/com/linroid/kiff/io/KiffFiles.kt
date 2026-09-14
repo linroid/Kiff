@@ -1,9 +1,6 @@
 package com.linroid.kiff.io
 
-import kotlinx.io.buffered
-import kotlinx.io.files.Path
-import kotlinx.io.files.SystemFileSystem
-import kotlinx.io.readByteArray
+import okio.Path.Companion.toPath
 
 /**
  * Whole-file reads and writes, for the patch itself and for restored output.
@@ -14,13 +11,13 @@ import kotlinx.io.readByteArray
 object KiffFiles {
 
   fun readBytes(path: String): ByteArray =
-    SystemFileSystem.source(Path(path)).buffered().use { it.readByteArray() }
+    systemFileSystem.read(path.toPath()) { readByteArray() }
 
   fun writeBytes(path: String, bytes: ByteArray) {
-    SystemFileSystem.sink(Path(path)).buffered().use { it.write(bytes) }
+    systemFileSystem.write(path.toPath()) { write(bytes) }
   }
 
-  fun exists(path: String): Boolean = SystemFileSystem.exists(Path(path))
+  fun exists(path: String): Boolean = systemFileSystem.exists(path.toPath())
 
-  fun size(path: String): Long? = SystemFileSystem.metadataOrNull(Path(path))?.size
+  fun size(path: String): Long? = systemFileSystem.metadataOrNull(path.toPath())?.size
 }

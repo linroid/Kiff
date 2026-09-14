@@ -26,7 +26,11 @@ kotlin {
 
   sourceSets {
     commonMain.dependencies {
-      implementation(libs.kotlinx.io.core)
+      implementation(libs.okio)
+    }
+    // okio's file system lives in a separate artifact on JS; everywhere else it is in okio core.
+    jsMain.dependencies {
+      implementation(libs.okio.nodefilesystem)
     }
     commonTest.dependencies {
       implementation(libs.kotlin.test)
