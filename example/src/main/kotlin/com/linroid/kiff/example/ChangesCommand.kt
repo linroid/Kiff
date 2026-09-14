@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import com.linroid.kiff.ApkDiffReport
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.ZipEntryChange
 import com.linroid.kiff.ZipEntryStatus
@@ -20,7 +21,14 @@ class ChangesCommand : CliktCommand(name = "changes") {
   override fun run() {
     requireFile(source)
     requireFile(target)
-    val report = Kiff.zip.analyze(KiffFiles.readBytes(source), KiffFiles.readBytes(target))
+    val sourceBytes = KiffFiles.readBytes(source)
+    val targetBytes = KiffFiles.readBytes(target)
+    val apk = if (Kiff.apk.isApk(sourceBytes) || Kiff.apk.isApk(targetBytes)) {
+      Kiff.apk.analyze(sourceBytes, targetBytes)
+    } else {
+      null
+    }
+    val report = apk?.entries ?: Kiff.zip.analyze(sourceBytes, targetBytes)
 
     echo("${formatBytes(report.sourceSize.toLong())} -> ${formatBytes(report.targetSize.toLong())}")
     echo(
@@ -28,6 +36,10 @@ class ChangesCommand : CliktCommand(name = "changes") {
         "${status.name.lowercase()}=${report.count(status)}"
       }
     )
+    if (apk != null) {
+      echo("")
+      echoKinds(apk)
+    }
     echo("")
     val shown = if (all) report.changes else report.changed
     for (change in shown.sortedByDescending { maxOf(it.sourceSize, it.targetSize) }) {
@@ -35,6 +47,30 @@ class ChangesCommand : CliktCommand(name = "changes") {
     }
     if (shown.isEmpty()) echo("  (no differences)")
   }
+
+  private fun echoKinds(report: ApkDiffReport) {
+    for (kind in report.kinds) {
+      val counts = buildList {
+        add("${kind.entryCount} ${if (kind.entryCount == 1) "entry" else "entries"}")
+        if (kind.changedCount > 0) add("${kind.changedCount} changed")
+        if (kind.addedCount > 0) add("${kind.addedCount} added")
+        if (kind.removedCount > 0) add("${kind.removedCount} removed")
+      }
+      val growth = if (kind.growth == 0L) "" else " ${signed(kind.growth)}"
+      echo(
+        "  ${kind.kind.name.lowercase().padEnd(15)} ${counts.joinToString(", ")}, " +
+          "${formatBytes(kind.targetBytes)}$growth"
+      )
+    }
+    if (report.signed) {
+      val from = formatBytes(report.sourceSigningBlockSize.toLong())
+      val to = formatBytes(report.targetSigningBlockSize.toLong())
+      echo("  ${"signing block".padEnd(15)} $from -> $to")
+    }
+  }
+
+  private fun signed(growth: Long) =
+    if (growth > 0) "(+${formatBytes(growth)})" else "(-${formatBytes(-growth)})"
 
   private fun marker(status: ZipEntryStatus) = when (status) {
     ZipEntryStatus.UNCHANGED -> "="

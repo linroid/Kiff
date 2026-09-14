@@ -1,6 +1,7 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.analyzeArchives
 import com.linroid.kiff.zip.encodeArchive
 
@@ -23,7 +24,7 @@ class ZipDiff : DeltaPatchAlgorithm() {
   override val name: String = "zip"
 
   override fun encode(source: ByteArray, target: ByteArray, writer: DeltaWriter) {
-    encodeArchive(source, target, writer)
+    encodeArchive(source, target, ZipEncodeOptions(), writer)
   }
 
   /**
