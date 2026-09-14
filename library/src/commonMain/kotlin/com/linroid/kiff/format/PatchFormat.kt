@@ -1,7 +1,7 @@
-package com.linroid.kiff
+package com.linroid.kiff.format
 
-import com.linroid.kiff.internal.ByteReader
-import com.linroid.kiff.internal.ByteWriter
+import com.linroid.kiff.KiffException
+import com.linroid.kiff.PatcherId
 
 /**
  * Patch container shared by every patcher:

@@ -1,9 +1,9 @@
 package com.linroid.kiff.delta
 
 import com.linroid.kiff.KiffException
-import com.linroid.kiff.internal.ByteReader
-import com.linroid.kiff.internal.Lzss
-import com.linroid.kiff.internal.toIntIndex
+import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.format.Lzss
+import com.linroid.kiff.io.toIntIndex
 
 /**
  * Rebuilds target bytes from a source and a delta produced by [DeltaWriter].

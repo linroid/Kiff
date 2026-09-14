@@ -1,9 +1,6 @@
 package com.linroid.kiff.io
 
 import com.linroid.kiff.KiffException
-import okio.FileHandle
-import okio.IOException
-import okio.Path.Companion.toPath
 
 /**
  * Random-access, read-only view over a run of bytes.
@@ -48,45 +45,4 @@ fun SeekableSource.readFully(
     }
     done += count
   }
-}
-
-/** A [SeekableSource] over bytes already in memory. */
-class ByteArraySource(internal val bytes: ByteArray) : SeekableSource {
-
-  override val size: Long get() = bytes.size.toLong()
-
-  override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
-    if (position >= bytes.size) return -1
-    val count = minOf(length.toLong(), bytes.size - position).toInt()
-    if (count <= 0) return 0
-    bytes.copyInto(into, offset, position.toInt(), position.toInt() + count)
-    return count
-  }
-}
-
-/** Wraps these bytes as a [SeekableSource] without copying them. */
-fun ByteArray.asSource(): SeekableSource = ByteArraySource(this)
-
-/**
- * Opens [path] for random-access reading, backed by okio's `FileHandle`.
- *
- * Available wherever the target has a file system; the browser JS target does not, and throws
- * [KiffException.UnsupportedInput].
- */
-fun fileSource(path: String): SeekableSource = try {
-  FileHandleSource(systemFileSystem.openReadOnly(path.toPath()))
-} catch (e: IOException) {
-  throw KiffException.UnsupportedInput("Cannot open $path for reading: ${e.message}")
-}
-
-private class FileHandleSource(private val handle: FileHandle) : SeekableSource {
-
-  override val size: Long = handle.size()
-
-  override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
-    if (position >= size) return -1
-    return handle.read(position, into, offset, length)
-  }
-
-  override fun close() = handle.close()
 }

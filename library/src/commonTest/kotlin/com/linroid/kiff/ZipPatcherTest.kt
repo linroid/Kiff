@@ -1,15 +1,16 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.zip.TestZipBuilder
+import com.linroid.kiff.zip.ZipEntryStatus
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class ZipDiffTest {
+class ZipPatcherTest {
 
-  private val patcher = ZipDiff()
+  private val patcher = ZipPatcher()
 
   private fun archive(block: TestZipBuilder.() -> Unit): ByteArray =
     TestZipBuilder().apply(block).build()
@@ -230,9 +231,9 @@ class ZipDiffTest {
     val source = archive { entry("a.txt", "one") }
     val target = archive { entry("a.txt", "two") }
     val zipPatch = patcher.createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { BinaryDiff().applyPatch(source, zipPatch) }
+    assertFailsWith<KiffException.InvalidPatch> { BinaryPatcher().applyPatch(source, zipPatch) }
 
-    val binaryPatch = BinaryDiff().createPatch(source, target)
+    val binaryPatch = BinaryPatcher().createPatch(source, target)
     assertFailsWith<KiffException.InvalidPatch> { patcher.applyPatch(source, binaryPatch) }
   }
 

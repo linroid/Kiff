@@ -1,8 +1,8 @@
 package com.linroid.kiff.delta
 
-import com.linroid.kiff.BinaryDiff
+import com.linroid.kiff.BinaryPatcher
 import com.linroid.kiff.Kiff
-import com.linroid.kiff.ZipDiff
+import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.asSource
 import com.linroid.kiff.io.readFully
@@ -67,7 +67,7 @@ class CustomAlgorithmTest {
 
   @Test
   fun aCustomAlgorithmProducesPatchesTheOrdinaryReaderRestores() {
-    val patcher = BinaryDiff(LiteralOnlyAlgorithm)
+    val patcher = BinaryPatcher(LiteralOnlyAlgorithm)
     val patch = patcher.createPatch(source, target)
     assertContentEquals(target, patcher.applyPatch(source, patch))
   }
@@ -75,21 +75,21 @@ class CustomAlgorithmTest {
   @Test
   fun theAlgorithmIsNotRecordedInThePatch() {
     // Nothing about the search reaches the container, so the stock patcher reads it back.
-    val patch = BinaryDiff(LiteralOnlyAlgorithm).createPatch(source, target)
+    val patch = BinaryPatcher(LiteralOnlyAlgorithm).createPatch(source, target)
     assertContentEquals(target, Kiff.binary.applyPatch(source, patch))
     assertEquals(com.linroid.kiff.PatcherId.BINARY, Kiff.info(patch).patcher)
   }
 
   @Test
   fun runInstructionsFromOutsideTheLibraryRestore() {
-    val patcher = BinaryDiff(RunOnlyAlgorithm)
+    val patcher = BinaryPatcher(RunOnlyAlgorithm)
     val patch = patcher.createPatch(source, target)
     assertContentEquals(target, Kiff.binary.applyPatch(source, patch))
   }
 
   @Test
   fun theArchivePatchersTakeAnAlgorithmToo() {
-    val patcher = ZipDiff(LiteralOnlyAlgorithm)
+    val patcher = ZipPatcher(LiteralOnlyAlgorithm)
     val patch = patcher.createPatch(source, target)
     assertContentEquals(target, patcher.applyPatch(source, patch))
   }
@@ -97,13 +97,13 @@ class CustomAlgorithmTest {
   @Test
   fun theBundledAlgorithmStillBeatsANaiveOne() {
     val smart = Kiff.binary.createPatch(source, target).size
-    val naive = BinaryDiff(LiteralOnlyAlgorithm).createPatch(source, target).size
+    val naive = BinaryPatcher(LiteralOnlyAlgorithm).createPatch(source, target).size
     assertTrue(smart < naive, "rolling hash produced $smart bytes, literal-only $naive")
   }
 
   @Test
   fun defaultAlgorithmIsTheRollingHash() {
-    assertEquals(RollingHashAlgorithm, BinaryDiff().algorithm)
-    assertEquals("rolling-hash", Kiff.binary.let { (it as BinaryDiff).algorithm.name })
+    assertEquals(RollingHashAlgorithm, BinaryPatcher().algorithm)
+    assertEquals("rolling-hash", Kiff.binary.let { (it as BinaryPatcher).algorithm.name })
   }
 }

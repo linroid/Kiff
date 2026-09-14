@@ -7,7 +7,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.linroid.kiff.text.MyersDiffAlgorithm
 import com.linroid.kiff.text.LineDiffEngine
 import com.linroid.kiff.text.Edit
-import com.linroid.kiff.io.FileSource
+import com.linroid.kiff.text.TextFile
 
 class KiffCommand : CliktCommand(name = "kiff") {
   override fun run() = Unit
@@ -22,8 +22,8 @@ class DiffCommand : CliktCommand(name = "diff") {
 
   override fun run() {
     val engine = LineDiffEngine(MyersDiffAlgorithm())
-    val source = FileSource(sourceFile).readLines()
-    val target = FileSource(targetFile).readLines()
+    val source = TextFile(sourceFile).readLines()
+    val target = TextFile(targetFile).readLines()
     val patch = engine.generatePatch(source, target)
 
     for (edit in patch.edits) {

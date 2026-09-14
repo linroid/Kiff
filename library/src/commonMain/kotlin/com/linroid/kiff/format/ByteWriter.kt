@@ -1,4 +1,4 @@
-package com.linroid.kiff.internal
+package com.linroid.kiff.format
 
 /** Append-only byte buffer with the primitives the patch format needs. */
 internal class ByteWriter(initialCapacity: Int = 64) {

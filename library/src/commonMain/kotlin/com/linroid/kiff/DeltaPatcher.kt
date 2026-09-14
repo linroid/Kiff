@@ -3,13 +3,15 @@ package com.linroid.kiff
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaReader
 import com.linroid.kiff.delta.DeltaWriter
-import com.linroid.kiff.internal.ByteReader
-import com.linroid.kiff.internal.ByteWriter
-import com.linroid.kiff.internal.Crc32
-import com.linroid.kiff.internal.materialize
+import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.Crc32
+import com.linroid.kiff.format.PatchFormat
+import com.linroid.kiff.format.toHex
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.asSource
+import com.linroid.kiff.io.materialize
 
 /**
  * Base class for the bundled patchers. They differ only in how they *describe* the target - the
@@ -93,5 +95,3 @@ sealed class DeltaPatcher : Patcher {
     const val HEADER_ESTIMATE = 32
   }
 }
-
-internal fun UInt.toHex(): String = toString(16).padStart(8, '0')

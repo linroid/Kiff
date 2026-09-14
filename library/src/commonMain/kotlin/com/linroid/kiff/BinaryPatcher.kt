@@ -12,7 +12,7 @@ import com.linroid.kiff.delta.RollingHashAlgorithm
  * Works on any pair of files. The archive-aware patchers produce smaller patches for archives
  * because they can tell which regions are worth comparing.
  */
-class BinaryDiff(
+class BinaryPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
 ) : DeltaPatcher() {
 

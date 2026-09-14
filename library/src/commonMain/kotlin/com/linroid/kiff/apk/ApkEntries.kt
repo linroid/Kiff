@@ -1,7 +1,5 @@
 package com.linroid.kiff.apk
 
-import com.linroid.kiff.ApkEntryKind
-
 internal object ApkEntries {
 
   private val signatureSuffixes = listOf(".SF", ".RSA", ".DSA", ".EC")

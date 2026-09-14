@@ -1,16 +1,30 @@
 package com.linroid.kiff.io
 
+import com.linroid.kiff.KiffException
+import okio.FileHandle
+import okio.IOException
 import okio.Path.Companion.toPath
 
-/** Text-file reader behind the example CLI's line diff. */
-class FileSource(private val path: String) {
+/**
+ * Opens [path] for random-access reading, backed by okio's `FileHandle`.
+ *
+ * Available wherever the target has a file system; the browser JS target does not, and throws
+ * [KiffException.UnsupportedInput].
+ */
+fun fileSource(path: String): SeekableSource = try {
+  FileHandleSource(systemFileSystem.openReadOnly(path.toPath()))
+} catch (e: IOException) {
+  throw KiffException.UnsupportedInput("Cannot open $path for reading: ${e.message}")
+}
 
-  fun readLines(): List<String> =
-    systemFileSystem.read(path.toPath()) { readUtf8() }
-      .split("\n")
-      .dropLastWhile { it.isEmpty() }
+private class FileHandleSource(private val handle: FileHandle) : SeekableSource {
 
-  fun readBytes(): ByteArray = KiffFiles.readBytes(path)
+  override val size: Long = handle.size()
 
-  fun close() {}
+  override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
+    if (position >= size) return -1
+    return handle.read(position, into, offset, length)
+  }
+
+  override fun close() = handle.close()
 }

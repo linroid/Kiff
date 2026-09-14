@@ -1,6 +1,6 @@
 package com.linroid.kiff.zip
 
-import com.linroid.kiff.internal.Crc32
+import com.linroid.kiff.format.Crc32
 
 /** Builds real zip archives in memory, including the odd corners Kiff has to reproduce exactly. */
 class TestZipBuilder {

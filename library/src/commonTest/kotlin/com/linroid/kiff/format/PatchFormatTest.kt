@@ -1,6 +1,9 @@
-package com.linroid.kiff
+package com.linroid.kiff.format
 
-import com.linroid.kiff.internal.ByteWriter
+import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffException
+import com.linroid.kiff.PatcherId
+import com.linroid.kiff.structuredBytes
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -52,7 +55,7 @@ class PatchFormatTest {
     val out = ByteWriter(32)
     val huge = 9_000_000_000L
     PatchFormat.writeHeader(out, PatcherId.BINARY, huge, 1u, huge + 1, 2u)
-    val header = PatchFormat.readHeader(com.linroid.kiff.internal.ByteReader(out.toByteArray()))
+    val header = PatchFormat.readHeader(com.linroid.kiff.format.ByteReader(out.toByteArray()))
     assertEquals(huge, header.sourceSize)
     assertEquals(huge + 1, header.targetSize)
   }

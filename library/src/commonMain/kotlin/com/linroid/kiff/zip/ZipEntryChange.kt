@@ -1,15 +1,4 @@
-package com.linroid.kiff
-
-enum class ZipEntryStatus {
-  /** Byte-identical local record, header included. */
-  UNCHANGED,
-
-  /** Same data, different local header - a timestamp or alignment padding changed. */
-  METADATA_CHANGED,
-  MODIFIED,
-  ADDED,
-  REMOVED
-}
+package com.linroid.kiff.zip
 
 data class ZipEntryChange(
   val name: String,

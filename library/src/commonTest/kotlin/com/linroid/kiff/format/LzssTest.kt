@@ -1,4 +1,4 @@
-package com.linroid.kiff.internal
+package com.linroid.kiff.format
 
 import kotlin.random.Random
 import kotlin.test.Test

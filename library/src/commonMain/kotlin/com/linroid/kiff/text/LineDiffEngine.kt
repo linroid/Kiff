@@ -1,7 +1,5 @@
 package com.linroid.kiff.text
 
-import com.linroid.kiff.text.LineDiffAlgorithm
-
 class LineDiffEngine(private val algorithm: LineDiffAlgorithm) {
 
   fun generatePatch(source: List<String>, target: List<String>): LinePatch {
