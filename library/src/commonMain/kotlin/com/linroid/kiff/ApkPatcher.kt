@@ -1,13 +1,15 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.apk.ApkDiffReport
+import com.linroid.kiff.apk.ApkEntries
+import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.analyzeApk
 import com.linroid.kiff.apk.apkEncodeOptions
-import com.linroid.kiff.apk.ApkEntries
 import com.linroid.kiff.apk.looksLikeApk
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
-import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.delta.RollingHashAlgorithm
+import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.zip.encodeArchive
 
 /**
@@ -18,11 +20,12 @@ import com.linroid.kiff.zip.encodeArchive
  * between the last entry and the central directory is reproduced as its own region, and
  * [analyze] groups the differences the way the package is actually built.
  *
- * Like [ZipDiff] it never recompresses, which is what makes a restore byte-exact. That matters more
- * here than for zips in general: current Android builds store `.dex`, `.so` and `resources.arsc`
- * uncompressed, so the entries that dominate an APK are compared as their real content.
+ * Like [ZipPatcher] it never recompresses, which is what makes a restore byte-exact. That matters
+ * more here than for zips in general: current Android builds store `.dex`, `.so` and
+ * `resources.arsc` uncompressed, so the entries that dominate an APK are compared as their real
+ * content.
  */
-class ApkDiff(
+class ApkPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
 ) : DeltaPatcher() {
 

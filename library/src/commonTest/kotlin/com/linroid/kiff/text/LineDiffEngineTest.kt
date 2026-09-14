@@ -1,6 +1,5 @@
 package com.linroid.kiff.text
 
-import com.linroid.kiff.text.LineDiffAlgorithm
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

@@ -1,8 +1,8 @@
 package com.linroid.kiff.delta
 
-import com.linroid.kiff.internal.ByteWriter
-import com.linroid.kiff.internal.Lzss
-import com.linroid.kiff.internal.toIntIndex
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.Lzss
+import com.linroid.kiff.io.toIntIndex
 
 /**
  * The bundled [DeltaSink]: builds an instruction stream plus a literal stream.

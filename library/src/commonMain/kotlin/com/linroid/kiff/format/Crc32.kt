@@ -1,4 +1,4 @@
-package com.linroid.kiff.internal
+package com.linroid.kiff.format
 
 import com.linroid.kiff.io.SeekableSource
 
@@ -40,3 +40,6 @@ internal object Crc32 {
 
   private const val CHUNK = 1 shl 16
 }
+
+/** Eight lowercase hex digits, the way a CRC-32 is conventionally shown. */
+internal fun UInt.toHex(): String = toString(16).padStart(8, '0')

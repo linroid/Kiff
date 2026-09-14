@@ -1,7 +1,5 @@
 package com.linroid.kiff.text
 
-import com.linroid.kiff.text.LineDiffEngine
-import com.linroid.kiff.text.Edit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

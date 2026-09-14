@@ -1,15 +1,17 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.TestApkBuilder
+import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ApkDiffTest {
+class ApkPatcherTest {
 
-  private val patcher = ApkDiff()
+  private val patcher = ApkPatcher()
 
   private fun apk(block: TestApkBuilder.() -> Unit): ByteArray =
     TestApkBuilder().apply(block).build()
@@ -71,7 +73,7 @@ class ApkDiffTest {
     }
 
     val apkSize = assertRestores(patcher, source, target)
-    val zipSize = assertRestores(ZipDiff(), source, target)
+    val zipSize = assertRestores(ZipPatcher(), source, target)
     assertTrue(
       apkSize < zipSize / 2,
       "ordinal pairing should beat the generic zip pairing: apk=$apkSize zip=$zipSize"
@@ -188,7 +190,7 @@ class ApkDiffTest {
     val source = sampleApk(seed = 80)
     val target = sampleApk(seed = 81)
     val apkPatch = patcher.createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { ZipDiff().applyPatch(source, apkPatch) }
+    assertFailsWith<KiffException.InvalidPatch> { ZipPatcher().applyPatch(source, apkPatch) }
     assertEquals(PatcherId.APK, Kiff.info(apkPatch).patcher)
   }
 

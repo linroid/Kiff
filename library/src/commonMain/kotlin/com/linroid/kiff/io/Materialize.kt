@@ -1,9 +1,6 @@
-package com.linroid.kiff.internal
+package com.linroid.kiff.io
 
 import com.linroid.kiff.KiffException
-import com.linroid.kiff.io.ByteArraySource
-import com.linroid.kiff.io.SeekableSource
-import com.linroid.kiff.io.readFully
 
 /**
  * Reads a whole source into memory, returning the backing array unchanged when there already is

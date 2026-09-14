@@ -1,9 +1,6 @@
 package com.linroid.kiff.zip
 
 import com.linroid.kiff.KiffException
-import com.linroid.kiff.ZipDiffReport
-import com.linroid.kiff.ZipEntryChange
-import com.linroid.kiff.ZipEntryStatus
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.io.ByteArraySource

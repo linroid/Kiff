@@ -1,17 +1,18 @@
 package com.linroid.kiff
 
-import com.linroid.kiff.internal.ByteReader
+import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.format.PatchFormat
 import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.io.fileSource
 
 /** Entry point: the bundled patchers plus file-level create/apply helpers. */
 object Kiff {
 
-  val binary: Patcher = BinaryDiff()
+  val binary: Patcher = BinaryPatcher()
 
-  val zip: ZipDiff = ZipDiff()
+  val zip: ZipPatcher = ZipPatcher()
 
-  val apk: ApkDiff = ApkDiff()
+  val apk: ApkPatcher = ApkPatcher()
 
   val patchers: List<Patcher> = listOf(binary, zip, apk)
 

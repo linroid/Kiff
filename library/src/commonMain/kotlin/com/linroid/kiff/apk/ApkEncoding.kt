@@ -1,8 +1,6 @@
 package com.linroid.kiff.apk
 
-import com.linroid.kiff.ApkDiffReport
-import com.linroid.kiff.ApkKindSummary
-import com.linroid.kiff.ZipEntryStatus
+import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.ZipEntry
 import com.linroid.kiff.zip.ZipLayout

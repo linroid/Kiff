@@ -5,10 +5,10 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import com.linroid.kiff.ApkDiffReport
+import com.linroid.kiff.apk.ApkDiffReport
 import com.linroid.kiff.Kiff
-import com.linroid.kiff.ZipEntryChange
-import com.linroid.kiff.ZipEntryStatus
+import com.linroid.kiff.zip.ZipEntryChange
+import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.io.KiffFiles
 
 class ChangesCommand : CliktCommand(name = "changes") {

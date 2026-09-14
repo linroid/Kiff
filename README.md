@@ -40,7 +40,7 @@ The `example` module is a small CLI over the library, installed as `kiff`:
 $ ./gradlew :example:installDist
 $ ./example/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
 Created foo.patch with the binary patcher
-  Patcher:     binary (format v1)
+  Patcher:     binary (format v2)
   Source:      67.4 MiB crc32=fa4b3b57
   Target:      71.7 MiB crc32=0d0e6723
   Patch:       13.7 MiB (19.19% of target)
@@ -136,7 +136,7 @@ object MyAlgorithm : DeltaAlgorithm {
   }
 }
 
-val patch = BinaryDiff(MyAlgorithm).createPatch(source, target)
+val patch = BinaryPatcher(MyAlgorithm).createPatch(source, target)
 val restored = Kiff.binary.applyPatch(source, patch)  // the stock patcher reads it back
 ```
 
@@ -176,7 +176,7 @@ bounded-memory search is the next piece of work, and it needs no format change w
 
 ## Zip archives
 
-`ZipDiff` reads both archives' layouts and describes the target region by region, pairing each
+`ZipPatcher` reads both archives' layouts and describes the target region by region, pairing each
 target entry with the source entry it came from - by name, or by content fingerprint when an entry
 was renamed. An unchanged entry then costs a single copy instruction no matter how far it moved, and
 a changed entry is indexed against its counterpart alone rather than against the whole archive,
@@ -187,7 +187,7 @@ block, the central directory - which is what makes the restored archive identica
 If either input turns out not to be a readable zip, the patcher falls back to a whole-file byte
 scan, so it always produces a working patch.
 
-`ZipDiff.analyze(source, target)` reports the same pairing as data, without building a patch.
+`ZipPatcher.analyze(source, target)` reports the same pairing as data, without building a patch.
 
 **Entry data is never recompressed.** That is what makes a restore byte-exact - re-deflating would
 have to reproduce the original compressor's output bit for bit - but it also means a patch for a
@@ -197,7 +197,7 @@ content is compared directly.
 
 ## Android packages
 
-`ApkDiff` is the zip patcher plus what is specific to an APK:
+`ApkPatcher` is the zip patcher plus what is specific to an APK:
 
 - **Dex files are paired by ordinal.** A build that gains a dex renumbers the rest, so a
   `classes4.dex` with no counterpart by name or content is still compared against the source's
@@ -205,7 +205,7 @@ content is compared directly.
 - **The signing block is a first-class region.** The unnamed run of bytes a v2+ signed APK carries
   between its last entry and the central directory is located, reproduced exactly, and reported on.
 - **Entries are classified** as dex, native library, manifest, resource table, resource, asset,
-  signature, metadata or other, which is what makes `ApkDiff.analyze` readable.
+  signature, metadata or other, which is what makes `ApkPatcher.analyze` readable.
 
 Storing `.so`, `.dex` and `resources.arsc` uncompressed is the norm for current Android builds - 108
 of the 191 entries in the APK above - so the entries that dominate the package are compared as their
@@ -227,6 +227,19 @@ entries that genuinely changed - a replaced native library, a rebuilt dex - and 
 structure awareness makes new content smaller. The structural patchers pull ahead when entries
 move, when an archive is repacked, or when only part of it was rebuilt; `apk` and `zip` agree here
 because every dex in this pair still pairs by name.
+
+## Layout
+
+Everything a caller needs is in `com.linroid.kiff`; the subpackages are the pieces behind it.
+
+| Package | Holds |
+| --- | --- |
+| `com.linroid.kiff` | `Kiff`, `Patcher`, `PatcherId`, `PatchInfo`, `KiffException`, and the three patchers |
+| `.delta` | the algorithm seam - `DeltaAlgorithm`, `DeltaScanner`, `DeltaSink` - plus the bundled rolling-hash search and the instruction codec |
+| `.io` | `SeekableSource`, `ByteArraySource`, `fileSource`, whole-file helpers |
+| `.format` | the patch container and its primitives: varint I/O, CRC-32, LZSS |
+| `.zip` / `.apk` | archive parsing and region encoding, each with the report type its patcher returns |
+| `.text` | the line-based Myers diff, which is not part of the patch pipeline |
 
 ## Targets
 

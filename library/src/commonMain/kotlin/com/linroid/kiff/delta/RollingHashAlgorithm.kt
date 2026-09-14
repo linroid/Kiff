@@ -1,7 +1,7 @@
 package com.linroid.kiff.delta
 
-import com.linroid.kiff.internal.materialize
-import com.linroid.kiff.internal.toIntIndex
+import com.linroid.kiff.io.materialize
+import com.linroid.kiff.io.toIntIndex
 import com.linroid.kiff.io.SeekableSource
 
 /**

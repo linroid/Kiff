@@ -1,4 +1,4 @@
-package com.linroid.kiff
+package com.linroid.kiff.apk
 
 /** What an APK entry is, which is what makes a size comparison between two builds readable. */
 enum class ApkEntryKind {

@@ -1,13 +1,14 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.format.PatchFormat
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class BinaryDiffTest {
+class BinaryPatcherTest {
 
-  private val patcher = BinaryDiff()
+  private val patcher = BinaryPatcher()
 
   @Test
   fun restoresEmptyInputs() {
