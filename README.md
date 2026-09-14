@@ -34,11 +34,11 @@ Kiff.applyPatch("foo-1.0.bin", "foo.patch", "foo-1.1-restored.bin")
 
 ## CLI
 
-The `example` module is a small CLI over the library, installed as `kiff`:
+The `cli` module is a small command-line front end for the library, installed as `kiff`:
 
 ```console
-$ ./gradlew :example:installDist
-$ ./example/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
+$ ./gradlew :cli:installDist
+$ ./cli/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
 Created foo.patch with the binary patcher
   Patcher:     binary (format v2)
   Source:      67.4 MiB crc32=fa4b3b57
@@ -46,8 +46,8 @@ Created foo.patch with the binary patcher
   Patch:       13.7 MiB (19.19% of target)
   Took:        2450 ms
 
-$ ./example/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
-$ ./example/build/install/kiff/bin/kiff info foo.patch
+$ ./cli/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
+$ ./cli/build/install/kiff/bin/kiff info foo.patch
 ```
 
 `kiff changes foo-1.0.apk foo-1.1.apk` lists what differs entry by entry, without building a

@@ -1,4 +1,4 @@
-package com.linroid.kiff.example
+package com.linroid.kiff.cli
 
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument

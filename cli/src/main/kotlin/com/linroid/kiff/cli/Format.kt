@@ -1,4 +1,4 @@
-package com.linroid.kiff.example
+package com.linroid.kiff.cli
 
 /** Human-readable byte count, e.g. `1.4 MiB`. */
 fun formatBytes(bytes: Long): String {

@@ -18,4 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "Kiff"
 
 include(":library")
-include(":example")
+include(":cli")
