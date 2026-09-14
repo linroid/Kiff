@@ -1,6 +1,9 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.format.PatchFormat
+import com.linroid.kiff.format.toHex
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -137,6 +140,34 @@ class BinaryPatcherTest {
 
     val corrupted = source.copyOf().also { it[0] = (it[0] + 1).toByte() }
     assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(corrupted, patch) }
+  }
+
+  @Test
+  fun rejectsARestoreThatFailsItsChecksum() {
+    val source = structuredBytes(4096, seed = 17)
+    val target = structuredBytes(4096, seed = 18)
+    val patch = patcher.createPatch(source, target)
+
+    // Rewrite the header with a target checksum no restore can produce, leaving the delta itself
+    // alone: the bytes come back correct, so only the final check can reject them.
+    val reader = ByteReader(patch)
+    val header = PatchFormat.readHeader(reader)
+    val expected = header.targetCrc32 xor 1u
+    val out = ByteWriter(patch.size)
+    PatchFormat.writeHeader(
+      out,
+      header.patcher,
+      header.sourceSize,
+      header.sourceCrc32,
+      header.targetSize,
+      expected
+    )
+    out.writeBytes(patch.copyOfRange(reader.offset, patch.size))
+
+    val failure = assertFailsWith<KiffException.VerificationFailed> {
+      patcher.applyPatch(source, out.toByteArray())
+    }
+    assertTrue(expected.toHex() in failure.message.orEmpty(), failure.message.orEmpty())
   }
 
   @Test
