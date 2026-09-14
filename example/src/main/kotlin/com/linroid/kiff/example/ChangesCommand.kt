@@ -1,6 +1,5 @@
 package com.linroid.kiff.example
 
-import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
@@ -11,14 +10,14 @@ import com.linroid.kiff.zip.ZipEntryChange
 import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.io.KiffFiles
 
-class ChangesCommand : CliktCommand(name = "changes") {
+class ChangesCommand : KiffCommand(name = "changes") {
   override fun help(context: Context) = "List what changed entry by entry between two archives"
 
   private val all by option("--all", help = "Include unchanged entries").flag()
   private val source by argument(help = "Original archive")
   private val target by argument(help = "Updated archive")
 
-  override fun run() {
+  override fun execute() {
     requireFile(source)
     requireFile(target)
     val sourceBytes = KiffFiles.readBytes(source)

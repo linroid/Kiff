@@ -11,7 +11,7 @@ import com.linroid.kiff.Patcher
 import com.linroid.kiff.PatchInfo
 import com.linroid.kiff.io.KiffFiles
 
-class CreateCommand : CliktCommand(name = "create") {
+class CreateCommand : KiffCommand(name = "create") {
   override fun help(context: Context) = "Create a patch that turns SOURCE into TARGET"
 
   private val patcherName by option(
@@ -23,7 +23,7 @@ class CreateCommand : CliktCommand(name = "create") {
   private val target by argument(help = "Updated file")
   private val patch by argument(help = "Patch file to write")
 
-  override fun run() {
+  override fun execute() {
     val patcher = resolvePatcher(patcherName)
     requireFile(source)
     requireFile(target)
@@ -36,14 +36,14 @@ class CreateCommand : CliktCommand(name = "create") {
   }
 }
 
-class ApplyCommand : CliktCommand(name = "apply") {
+class ApplyCommand : KiffCommand(name = "apply") {
   override fun help(context: Context) = "Restore a file from SOURCE and PATCH"
 
   private val source by argument(help = "Original file")
   private val patch by argument(help = "Patch file")
   private val output by argument(help = "File to write the restored target to")
 
-  override fun run() {
+  override fun execute() {
     requireFile(source)
     requireFile(patch)
     val elapsed = measureMillis {
@@ -55,12 +55,12 @@ class ApplyCommand : CliktCommand(name = "apply") {
   }
 }
 
-class InfoCommand : CliktCommand(name = "info") {
+class InfoCommand : KiffCommand(name = "info") {
   override fun help(context: Context) = "Show what a patch file contains"
 
   private val patch by argument(help = "Patch file")
 
-  override fun run() {
+  override fun execute() {
     requireFile(patch)
     echoInfo(Kiff.info(KiffFiles.readBytes(patch)))
   }
