@@ -1,23 +1,33 @@
 package com.linroid.kiff.delta
 
 /**
- * Hash index over strided [RollingHash.WINDOW]-byte blocks of the source.
+ * Hash index over strided [RollingHash.WINDOW]-byte blocks of a source range.
  *
- * Sampling every `stride` bytes instead of every byte keeps the index small enough for APK-sized
- * inputs (a 32 MiB entry costs ~10 MiB of index) at the price of missing matches shorter than
- * `WINDOW + stride - 1` bytes, which the literal compressor picks up instead.
+ * Sampling every `stride` bytes instead of every byte keeps the index affordable for APK-sized
+ * inputs, at the price of missing matches shorter than `WINDOW + stride - 1` bytes, which the
+ * literal compressor picks up instead.
+ *
+ * Indexing is limited to `[from, to)` but matches may grow past those bounds, so an archive
+ * algorithm can index one entry - a much smaller range, and therefore a finer stride and fewer hash
+ * collisions than the whole file - while still emitting copies that reach anywhere in the source.
  */
-internal class MatchIndex(private val source: ByteArray) {
+internal class MatchIndex(
+  val source: ByteArray,
+  private val from: Int = 0,
+  private val to: Int = source.size
+) {
+
+  private val span = to - from
 
   // Always a power of two so the builder can mask instead of dividing.
   private val stride: Int = when {
-    source.size <= 8 shl 20 -> 4
-    source.size <= 64 shl 20 -> 8
+    span <= 32 shl 20 -> 4
+    span <= 256 shl 20 -> 8
     else -> 16
   }
 
   private val blockCount: Int =
-    if (source.size < RollingHash.WINDOW) 0 else (source.size - RollingHash.WINDOW) / stride + 1
+    if (span < RollingHash.WINDOW) 0 else (span - RollingHash.WINDOW) / stride + 1
 
   private val tableBits: Int = run {
     var bits = 10
@@ -25,17 +35,17 @@ internal class MatchIndex(private val source: ByteArray) {
     bits
   }
 
-  private val head = IntArray(1 shl tableBits) { -1 }
+  private val head = IntArray(if (blockCount == 0) 0 else 1 shl tableBits) { -1 }
   private val next = IntArray(blockCount)
 
   init {
     if (blockCount > 0) {
-      var hash = RollingHash.of(source, 0)
-      var position = 0
+      var hash = RollingHash.of(source, from)
+      var position = from
       var block = 0
-      val last = source.size - RollingHash.WINDOW
+      val last = to - RollingHash.WINDOW
       while (true) {
-        if (position and (stride - 1) == 0) {
+        if ((position - from) and (stride - 1) == 0) {
           val slot = RollingHash.mix(hash, tableBits)
           next[block] = head[slot]
           head[slot] = block
@@ -59,7 +69,7 @@ internal class MatchIndex(private val source: ByteArray) {
     var block = head[RollingHash.mix(hash, tableBits)]
     var probes = 0
     while (block >= 0 && probes < MAX_PROBES) {
-      val offset = block * stride
+      val offset = from + block * stride
       val length = forwardLength(offset, target, position, targetEnd)
       if (length > best.length) {
         best.length = length

@@ -36,8 +36,8 @@ Created foo.patch with the binary algorithm
   Algorithm:   binary (format v1)
   Source:      67.4 MiB crc32=fa4b3b57
   Target:      71.7 MiB crc32=0d0e6723
-  Patch:       18.1 MiB (25.27% of target)
-  Took:        2263 ms
+  Patch:       13.7 MiB (19.19% of target)
+  Took:        2450 ms
 
 $ ./example/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
 $ ./example/build/install/kiff/bin/kiff info foo.patch
@@ -57,9 +57,19 @@ target  varint size + CRC-32
 delta   instruction stream + literal stream
 ```
 
-The delta stream is a sequence of three instructions - `COPY` a range from anywhere in the source,
-`ADD` literal bytes, `RUN` a repeated byte - and the literal stream is packed with a small built-in
-LZ77 codec. Literals stay in their own stream so they compress as one block.
+The delta stream is a sequence of four instructions:
+
+| | |
+| --- | --- |
+| `COPY` | a range from anywhere in the source |
+| `DIFF` | a range that *almost* matches, as byte-wise differences from the source |
+| `ADD` | literal bytes |
+| `RUN` | a repeated byte |
+
+`DIFF` is what keeps patches small for recompiled code. Long stretches of a new build are identical
+to the old one except for embedded offsets, so the differences are mostly zero and collapse in the
+literal stream, where the same region emitted as literals would not compress at all. Literals and
+difference bytes share one stream, packed with a small built-in LZ77 codec.
 
 The two checksums do real work: `applyPatch` refuses a source file that is not the one the patch was
 built against (`KiffException.SourceMismatch`) and refuses to hand back a target whose checksum does
@@ -67,7 +77,8 @@ not match what was recorded at creation time (`KiffException.VerificationFailed`
 
 The `binary` algorithm finds copies with a rolling hash over 16-byte blocks of the source, sampled
 every 4-16 bytes depending on file size, which keeps the index small enough to diff APK-sized files
-in a couple of seconds.
+in a couple of seconds. Between copies it tracks the source offset the target is running parallel
+to, and emits `DIFF` while the aligned bytes still mostly agree.
 
 ## Targets
 

@@ -30,9 +30,9 @@ internal object DeltaReader {
 
     while (true) {
       val tag = instructions.readVarLong()
-      val opcode = (tag and 0x3L).toInt()
+      val opcode = (tag and DeltaOp.MASK).toInt()
       if (opcode == DeltaOp.END) break
-      val length = (tag ushr 2).toInt()
+      val length = (tag ushr DeltaOp.SHIFT).toInt()
       checkFits(targetPosition, length, targetSize)
       when (opcode) {
         DeltaOp.ADD -> {
@@ -56,6 +56,24 @@ internal object DeltaReader {
           val value = instructions.readByte().toByte()
           target.fill(value, targetPosition, targetPosition + length)
         }
+        DeltaOp.DIFF -> {
+          val sourceOffset = sourceCursor + instructions.readSignedVarInt()
+          if (sourceOffset < 0 || sourceOffset + length > source.size) {
+            throw KiffException.InvalidPatch(
+              "Delta diffs [$sourceOffset, ${sourceOffset + length}) outside the source"
+            )
+          }
+          if (literalPosition + length > literals.size) {
+            throw KiffException.InvalidPatch("Delta reads past the literal stream")
+          }
+          for (i in 0 until length) {
+            target[targetPosition + i] =
+              (source[sourceOffset + i] + literals[literalPosition + i]).toByte()
+          }
+          literalPosition += length
+          sourceCursor = sourceOffset + length
+        }
+        else -> throw KiffException.InvalidPatch("Unknown delta opcode $opcode")
       }
       targetPosition += length
     }

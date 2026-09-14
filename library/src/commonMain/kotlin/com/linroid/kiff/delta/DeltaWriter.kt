@@ -37,6 +37,32 @@ internal class DeltaWriter(estimatedTargetSize: Int = 1024) {
     targetSize += length
   }
 
+  /**
+   * Describes `target[targetFrom, targetFrom + length)` as the byte-wise difference from
+   * `source[sourceOffset, sourceOffset + length)`.
+   *
+   * This is what keeps a patch small when a region is *almost* a copy - recompiled code whose
+   * embedded offsets shifted, say. The difference bytes are mostly zero, so they collapse in the
+   * literal stream, whereas the same region emitted as literals would not compress at all.
+   */
+  fun diff(
+    source: ByteArray,
+    sourceOffset: Int,
+    target: ByteArray,
+    targetFrom: Int,
+    length: Int
+  ) {
+    if (length <= 0) return
+    flushAdd()
+    writeTag(length, DeltaOp.DIFF)
+    instructions.writeSignedVarInt(sourceOffset - sourceCursor)
+    sourceCursor = sourceOffset + length
+    for (i in 0 until length) {
+      literals.writeByte(target[targetFrom + i] - source[sourceOffset + i])
+    }
+    targetSize += length
+  }
+
   fun run(value: Byte, length: Int) {
     if (length <= 0) return
     flushAdd()
@@ -72,6 +98,6 @@ internal class DeltaWriter(estimatedTargetSize: Int = 1024) {
   }
 
   private fun writeTag(length: Int, opcode: Int) {
-    instructions.writeVarLong((length.toLong() shl 2) or opcode.toLong())
+    instructions.writeVarLong((length.toLong() shl DeltaOp.SHIFT) or opcode.toLong())
   }
 }

@@ -5,15 +5,14 @@ import com.linroid.kiff.KiffException
 /**
  * Small LZ77/LZSS codec used to pack the literal stream of a delta.
  *
- * Deliberately simple and allocation-light: a 64 KiB window, a fixed hash-chain match finder, and a
- * varint token stream. It exists so patches stay small without pulling a platform compressor into
- * common code, not to compete with zlib.
+ * Deliberately simple and allocation-light: a window of up to 1 MiB, a fixed hash-chain match
+ * finder, and a varint token stream. It exists so patches stay small without pulling a platform
+ * compressor into common code, not to compete with zlib.
  */
 internal object Lzss {
 
   private const val MIN_MATCH = 4
-  private const val WINDOW = 1 shl 16
-  private const val WINDOW_MASK = WINDOW - 1
+  private const val MAX_WINDOW = 1 shl 20
   private const val HASH_BITS = 17
   private const val HASH_SIZE = 1 shl HASH_BITS
   private const val MAX_CHAIN = 24
@@ -21,7 +20,9 @@ internal object Lzss {
   fun compress(data: ByteArray): ByteArray {
     val out = ByteWriter(data.size / 3 + 32)
     val head = IntArray(HASH_SIZE) { -1 }
-    val prev = IntArray(WINDOW)
+    val window = windowFor(data.size)
+    val windowMask = window - 1
+    val prev = IntArray(window)
 
     var position = 0
     var literalStart = 0
@@ -38,17 +39,17 @@ internal object Lzss {
       var chain = 0
       while (candidate >= 0 && chain < MAX_CHAIN) {
         val distance = position - candidate
-        if (distance <= 0 || distance > WINDOW) break
+        if (distance <= 0 || distance > window) break
         val length = matchLength(data, candidate, position)
         if (length > bestLength) {
           bestLength = length
           bestDistance = distance
           if (length >= 255) break
         }
-        candidate = prev[candidate and WINDOW_MASK]
+        candidate = prev[candidate and windowMask]
         chain++
       }
-      prev[position and WINDOW_MASK] = head[hash]
+      prev[position and windowMask] = head[hash]
       head[hash] = position
 
       if (bestLength >= MIN_MATCH) {
@@ -59,7 +60,7 @@ internal object Lzss {
         for (i in position + 1 until position + bestLength) {
           if (i + MIN_MATCH > data.size) break
           val h = hash4(data, i)
-          prev[i and WINDOW_MASK] = head[h]
+          prev[i and windowMask] = head[h]
           head[h] = i
         }
         position += bestLength
@@ -122,6 +123,13 @@ internal object Lzss {
   }
 
   private const val MAX_LITERAL_RUN = 1 shl 16
+
+  /** Smallest power of two that covers the input, capped at [MAX_WINDOW]. */
+  private fun windowFor(size: Int): Int {
+    var window = 1 shl 12
+    while (window < size && window < MAX_WINDOW) window = window shl 1
+    return window
+  }
 
   private fun hash4(data: ByteArray, position: Int): Int {
     val value = (data[position].toInt() and 0xFF) or

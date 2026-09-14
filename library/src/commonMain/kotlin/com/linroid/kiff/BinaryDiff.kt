@@ -1,6 +1,7 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaScanner
+import com.linroid.kiff.delta.MatchIndex
 import com.linroid.kiff.delta.DeltaWriter
 
 /**
@@ -16,6 +17,6 @@ class BinaryDiff : DeltaPatchAlgorithm() {
   override val name: String = "binary"
 
   override fun encode(source: ByteArray, target: ByteArray, writer: DeltaWriter) {
-    DeltaScanner(source).scan(target, 0, target.size, writer)
+    DeltaScanner(MatchIndex(source)).scan(target, 0, target.size, writer)
   }
 }

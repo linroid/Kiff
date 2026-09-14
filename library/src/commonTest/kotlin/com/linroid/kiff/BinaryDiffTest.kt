@@ -95,7 +95,34 @@ class BinaryDiffTest {
       val at = random.nextInt(target.size)
       target[at] = (target[at] + 13).toByte()
     }
-    assertRestores(algorithm, source, target)
+    val size = assertRestores(algorithm, source, target)
+    assertTrue(size < 8 * 1024, "scattered edits should stay cheap, got $size bytes")
+  }
+
+  @Test
+  fun editsTooDenseToMatchAreStillEncodedAsDifferences() {
+    // Every 24th byte differs, so exact matches are short and useless: the patch is only small if
+    // the region is described as a byte-wise difference from the aligned source.
+    val source = structuredBytes(256 * 1024, seed = 30)
+    val target = source.copyOf()
+    for (at in 0 until target.size step 24) {
+      target[at] = (target[at] + 7).toByte()
+    }
+    val size = assertRestores(algorithm, source, target)
+    assertTrue(size < target.size / 8, "expected a difference-encoded patch, got $size bytes")
+  }
+
+  @Test
+  fun editsAfterAnInsertionRealignAndStayCheap() {
+    val source = structuredBytes(256 * 1024, seed = 31)
+    val head = source.copyOfRange(0, 60_000)
+    val tail = source.copyOfRange(60_000, source.size).copyOf()
+    for (at in 0 until tail.size step 40) {
+      tail[at] = (tail[at] + 3).toByte()
+    }
+    val target = head + Random(32).nextBytes(4_000) + tail
+    val size = assertRestores(algorithm, source, target)
+    assertTrue(size < target.size / 8, "expected realignment after the insertion, got $size bytes")
   }
 
   @Test
