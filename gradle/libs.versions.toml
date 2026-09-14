@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.3.10"
+kotlin = "2.3.21"
 kotlinx-io = "0.8.2"
 clikt = "5.1.0"
 [libraries]
