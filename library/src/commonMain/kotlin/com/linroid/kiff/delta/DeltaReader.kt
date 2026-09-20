@@ -2,6 +2,9 @@ package com.linroid.kiff.delta
 
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.io.RestoreTarget
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readFully
 
 /**
  * Rebuilds one region's bytes from a source and the instruction stream [DeltaWriter] produced.
@@ -9,26 +12,27 @@ import com.linroid.kiff.format.ByteReader
  * One reader decodes every delta region: the instruction set is fixed, so nothing here has to know
  * which search produced the stream. What a region *is* - and which encoding it chose - is the
  * region tree's business, not this one's.
+ *
+ * Nothing is held whole. The source is addressed rather than read in, the target is written out as
+ * it is produced, and the only buffer is one of [CHUNK] bytes reused between instructions.
  */
-internal object DeltaReader {
+internal class DeltaReader(private val buffer: ByteArray = ByteArray(CHUNK)) {
 
   /**
-   * Applies the instructions in [instructions] to fill `target[at, at + length)`.
+   * Applies the instructions in [instructions], writing [length] bytes to [out].
    *
    * Content comes from the patch's shared literal stream starting at [literalFrom]; the number of
    * literal bytes consumed is returned so the caller can advance to the next region.
    */
   fun apply(
-    source: ByteArray,
+    source: SeekableSource,
     instructions: ByteReader,
     literals: ByteArray,
     literalFrom: Int,
-    target: ByteArray,
-    at: Int,
+    out: RestoreTarget,
     length: Int
   ): Int {
-    val end = at + length
-    var targetPosition = at
+    var produced = 0
     var literalPosition = literalFrom
     var sourceCursor = 0L
 
@@ -36,48 +40,87 @@ internal object DeltaReader {
       val tag = instructions.readVarLong()
       val opcode = (tag and DeltaOp.MASK).toInt()
       if (opcode == DeltaOp.END) break
-      val run = (tag ushr DeltaOp.SHIFT).toIntLength()
-      checkFits(targetPosition, run, end)
+      val run = (tag ushr DeltaOp.SHIFT).toRunLength()
+      if (produced + run > length) {
+        throw KiffException.InvalidPatch("Delta writes past the end of its region")
+      }
       when (opcode) {
         DeltaOp.ADD -> {
           checkLiterals(literalPosition, run, literals.size)
-          literals.copyInto(target, targetPosition, literalPosition, literalPosition + run)
+          out.write(literals, literalPosition, literalPosition + run)
           literalPosition += run
         }
         DeltaOp.COPY -> {
-          val sourceOffset = sourceCursor + instructions.readSignedVarLong()
-          val from = checkInSource(sourceOffset, run, source.size)
-          source.copyInto(target, targetPosition, from, from + run)
-          sourceCursor = sourceOffset + run
+          val offset = sourceCursor + instructions.readSignedVarLong()
+          checkInSource(offset, run, source.size)
+          copy(source, offset, run, out)
+          sourceCursor = offset + run
         }
         DeltaOp.RUN -> {
           val value = instructions.readByte().toByte()
-          target.fill(value, targetPosition, targetPosition + run)
+          fill(value, run, out)
         }
         DeltaOp.DIFF -> {
-          val sourceOffset = sourceCursor + instructions.readSignedVarLong()
-          val from = checkInSource(sourceOffset, run, source.size)
+          val offset = sourceCursor + instructions.readSignedVarLong()
+          checkInSource(offset, run, source.size)
           checkLiterals(literalPosition, run, literals.size)
-          for (i in 0 until run) {
-            target[targetPosition + i] =
-              (source[from + i] + literals[literalPosition + i]).toByte()
-          }
+          difference(source, offset, run, literals, literalPosition, out)
           literalPosition += run
-          sourceCursor = sourceOffset + run
+          sourceCursor = offset + run
         }
         else -> throw KiffException.InvalidPatch("Unknown delta opcode $opcode")
       }
-      targetPosition += run
+      produced += run
     }
-    if (targetPosition != end) {
-      throw KiffException.InvalidPatch(
-        "Delta produced ${targetPosition - at} of $length bytes for a region"
-      )
+    if (produced != length) {
+      throw KiffException.InvalidPatch("Delta produced $produced of $length bytes for a region")
     }
     return literalPosition - literalFrom
   }
 
-  private fun Long.toIntLength(): Int {
+  private fun copy(source: SeekableSource, at: Long, length: Int, out: RestoreTarget) {
+    var done = 0
+    while (done < length) {
+      val count = minOf(buffer.size, length - done)
+      source.readFully(at + done, buffer, 0, count)
+      out.write(buffer, 0, count)
+      done += count
+    }
+  }
+
+  /** The source bytes plus the differences the patch carries for them. */
+  private fun difference(
+    source: SeekableSource,
+    at: Long,
+    length: Int,
+    literals: ByteArray,
+    literalFrom: Int,
+    out: RestoreTarget
+  ) {
+    var done = 0
+    while (done < length) {
+      val count = minOf(buffer.size, length - done)
+      source.readFully(at + done, buffer, 0, count)
+      for (i in 0 until count) {
+        buffer[i] = (buffer[i] + literals[literalFrom + done + i]).toByte()
+      }
+      out.write(buffer, 0, count)
+      done += count
+    }
+  }
+
+  private fun fill(value: Byte, length: Int, out: RestoreTarget) {
+    val filled = minOf(buffer.size, length)
+    buffer.fill(value, 0, filled)
+    var done = 0
+    while (done < length) {
+      val step = minOf(filled, length - done)
+      out.write(buffer, 0, step)
+      done += step
+    }
+  }
+
+  private fun Long.toRunLength(): Int {
     if (this < 0 || this > Int.MAX_VALUE) {
       throw KiffException.InvalidPatch("Instruction length $this is out of range")
     }
@@ -85,23 +128,21 @@ internal object DeltaReader {
   }
 
   private fun checkLiterals(position: Int, length: Int, available: Int) {
-    if (position + length > available) {
+    if (position < 0 || position + length > available) {
       throw KiffException.InvalidPatch("Delta reads past the literal stream")
     }
   }
 
-  private fun checkInSource(sourceOffset: Long, length: Int, sourceSize: Int): Int {
-    if (sourceOffset < 0 || sourceOffset + length > sourceSize) {
+  private fun checkInSource(offset: Long, length: Int, size: Long) {
+    if (offset < 0 || offset + length > size) {
       throw KiffException.InvalidPatch(
-        "Delta reads [$sourceOffset, ${sourceOffset + length}) outside the source"
+        "Delta reads [$offset, ${offset + length}) outside the source"
       )
     }
-    return sourceOffset.toInt()
   }
 
-  private fun checkFits(position: Int, length: Int, end: Int) {
-    if (length < 0 || position + length > end) {
-      throw KiffException.InvalidPatch("Delta writes past the end of its region")
-    }
+  private companion object {
+    /** Big enough that a large copy is a handful of reads, small enough to be nothing. */
+    const val CHUNK = 1 shl 16
   }
 }

@@ -305,6 +305,17 @@ access on every target that has a file system (browser JS does not). Checksums a
 off a source, a chunk at a time, so a file is never read whole for them. The `ByteArray` overloads
 on `Patcher` are conveniences over `ByteArraySource`.
 
+Applying a patch never holds either file. A patch describes its target front to back, so the
+restore is written out as it is produced, and the source is addressed rather than read in:
+
+```kotlin
+Kiff.apk.applyPatch(sourceFile, patch, target)   // target is a RestoreTarget
+```
+
+That is the difference between a restore a build server can do and one a phone can. Applying a
+4.6 MiB patch to a 71.8 MiB package needs about 32 MB of heap this way, against something over 170
+when both files are held - and what is left is the patch itself, not the files.
+
 File access is [okio](https://square.github.io/okio/), whose `FileHandle` gives 64-bit random
 access from common code on every target Kiff builds for. Paths are plain `String` throughout the
 public API and okio is an implementation detail: no okio type appears in a public signature, and it

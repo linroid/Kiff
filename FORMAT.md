@@ -127,6 +127,18 @@ This exists because a table of ids is the renumbering problem in its purest form
 dex's `string_ids` is an offset into the file, so inserting one string shifts all of them — while
 the gaps between those entries barely move.
 
+## Applying without holding the files
+
+A patch describes its target in order, front to back, and addresses its source at arbitrary
+offsets. So a reader needs random access to the source and only somewhere to put the target - never
+either file in memory.
+
+Two encodings are the exceptions, and both are bounded by one region rather than by the file:
+`TEXT` needs its source range in memory to split into lines, and `COLUMNS` needs its source range
+rearranged and its own output built before either can be used. The checksums make this workable in
+the first place: a streamed restore cannot be checked after the fact, because afterwards the bytes
+are gone.
+
 ## What a reader must refuse
 
 Not a list of nice-to-haves. Each of these is a way for a malformed patch to produce bytes instead

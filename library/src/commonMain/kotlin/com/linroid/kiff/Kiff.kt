@@ -61,10 +61,13 @@ object Kiff {
   fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
     val patch = KiffFiles.readBytes(patchPath)
     val patchInfo = info(patch)
-    val restored = fileSource(sourcePath).use { source ->
-      patcher(patchInfo.patcher).applyPatch(source, patch)
+    // Neither file is held: the source is addressed on disk and the restore goes straight to the
+    // output, so this costs the same whether the package is eight megabytes or eight hundred.
+    fileSource(sourcePath).use { source ->
+      KiffFiles.writeStreaming(outputPath) { target ->
+        patcher(patchInfo.patcher).applyPatch(source, patch, target)
+      }
     }
-    KiffFiles.writeBytes(outputPath, restored)
     return patchInfo
   }
 }
