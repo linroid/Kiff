@@ -8,6 +8,7 @@ import com.linroid.kiff.format.Lzss
 import com.linroid.kiff.format.MAX_REGION_DEPTH
 import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.format.beatsStoring
+import com.linroid.kiff.format.encoding
 import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionAlgorithm
@@ -70,26 +71,21 @@ internal class ContainerEncoder(
       val literalsBefore = literals.size
       val node = leaf(WHOLE_FILE, RegionKind.WHOLE, 0, source.size, 0, target.size, literals)
       recorder?.record(
-        WHOLE_FILE,
-        RegionKind.WHOLE,
-        target.size.toLong(),
-        node.structureBytes(),
-        (literals.size - literalsBefore).toLong(),
-        emptyList()
+        RegionCost(
+          name = WHOLE_FILE,
+          kind = RegionKind.WHOLE,
+          encoding = node.encoding(),
+          targetBytes = target.size.toLong(),
+          instructionBytes = node.structureBytes(),
+          literalBytes = (literals.size - literalsBefore).toLong()
+        )
       )
       return node
     }
 
     val sourceChildren = rootFormat!!.decompose(source, 0, source.size)
     val built = composite(rootFormat, sourceChildren, children, literals, depth = 0)
-    if (recorder != null) {
-      for (cost in built.costs) {
-        recorder.record(
-          cost.name, cost.kind, cost.targetBytes,
-          cost.instructionBytes, cost.literalBytes, cost.children
-        )
-      }
-    }
+    if (recorder != null) for (cost in built.costs) recorder.record(cost)
     return built.node
   }
 
@@ -120,6 +116,7 @@ internal class ContainerEncoder(
         RegionCost(
           name = child.name,
           kind = child.kind,
+          encoding = one.node.encoding(),
           targetBytes = child.size.toLong(),
           instructionBytes = one.node.structureBytes(),
           literalBytes = (literals.size - before).toLong(),
@@ -176,6 +173,7 @@ internal class ContainerEncoder(
         // Distinguishable from the record around it, which is reported by its bare name.
         name = "${child.name} (data)",
         kind = child.kind,
+        encoding = payload.node.encoding(),
         targetBytes = (child.contentTo - child.contentFrom).toLong(),
         instructionBytes = payload.node.structureBytes(),
         literalBytes = (literals.size - before).toLong(),
@@ -281,6 +279,7 @@ internal class ContainerEncoder(
       RegionCost(
         name = name,
         kind = kind,
+        encoding = node.encoding(),
         targetBytes = (targetTo - targetFrom).toLong(),
         instructionBytes = node.structureBytes(),
         literalBytes = (literals.size - before).toLong()

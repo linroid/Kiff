@@ -1,5 +1,7 @@
 package com.linroid.kiff.region
 
+import com.linroid.kiff.format.RegionEncoding
+
 /**
  * What a region is *for*, which is what makes an attribution readable across formats.
  *
@@ -32,6 +34,15 @@ enum class RegionKind {
 data class RegionCost(
   val name: String,
   val kind: RegionKind,
+  /**
+   * How the region was described, once the encoder had weighed the alternatives.
+   *
+   * Without it the figures are ambiguous exactly where it matters: a difference-encoded region
+   * emits one byte per target byte, so it reports the same share as one stored outright, while
+   * packing to almost nothing. [RegionEncoding.DELTA] against [RegionEncoding.RAW] is what tells
+   * the two apart, and so whether a region is a problem or already solved.
+   */
+  val encoding: RegionEncoding,
   /** Bytes of the target this region covers. */
   val targetBytes: Long,
   /** Bytes of instruction stream spent describing this region. */
@@ -61,6 +72,9 @@ data class RegionCost(
 
   /** True when the region carried no content of its own, only references into the source. */
   val carriedNothing: Boolean get() = literalBytes == 0L
+
+  /** True when nothing could be made of the region and its bytes were carried as they are. */
+  val wasStored: Boolean get() = encoding == RegionEncoding.RAW
 }
 
 /**
@@ -111,14 +125,7 @@ data class RegionReport(
  * change the patch: the bytes reported are the same bytes the encoder would have written anyway.
  */
 internal fun interface RegionRecorder {
-  fun record(
-    name: String,
-    kind: RegionKind,
-    targetBytes: Long,
-    instructionBytes: Long,
-    literalBytes: Long,
-    children: List<RegionCost>
-  )
+  fun record(cost: RegionCost)
 }
 
 /** Label for the single region a patcher reports when it scans an input whole. */

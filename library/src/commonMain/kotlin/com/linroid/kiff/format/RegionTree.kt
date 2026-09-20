@@ -9,7 +9,7 @@ import com.linroid.kiff.KiffException
  * the code rather than assuming every region speaks the delta instruction set. Codes are part of
  * the patch format and never change meaning.
  */
-internal enum class RegionEncoding(val code: Int) {
+enum class RegionEncoding(internal val code: Int) {
   /** Children tile this region's target range, in order. */
   COMPOSITE(0),
 
@@ -22,7 +22,7 @@ internal enum class RegionEncoding(val code: Int) {
   /** A line-level edit script, for regions that are text. */
   TEXT(3);
 
-  companion object {
+  internal companion object {
     fun fromCode(code: Int): RegionEncoding = entries.firstOrNull { it.code == code }
       ?: throw KiffException.InvalidPatch("Unknown region encoding $code")
   }
@@ -68,6 +68,14 @@ internal sealed class RegionNode {
     val sourceLength: Long,
     val edits: ByteArray
   ) : RegionNode()
+}
+
+/** How this node describes its bytes. */
+internal fun RegionNode.encoding(): RegionEncoding = when (this) {
+  is RegionNode.Composite -> RegionEncoding.COMPOSITE
+  is RegionNode.Delta -> RegionEncoding.DELTA
+  is RegionNode.Text -> RegionEncoding.TEXT
+  is RegionNode.Raw -> RegionEncoding.RAW
 }
 
 /** Serializes a region tree. Depth-first, which is the order the literal stream is consumed in. */
