@@ -150,5 +150,11 @@ of an error.
 - a region that runs past the end of the target, or a composite whose children do not add up to it
 - an instruction reading outside the source, or past the end of the content stream
 - a `COLUMNS` field layout it cannot apply, or one naming a source range outside the source
+- content longer than the target, which no patch can use and which names its own allocation
 - a region whose checksum does not match what it produced
 - a restored target whose checksum does not match the header
+
+One bound a reader cannot derive: the target size is declared in the header, and a reader returning
+the result as an array has to allocate that much before anything has corroborated it. Restoring
+into a `RestoreTarget` does not, which is the safer shape for a patch from somewhere you do not
+control; a caller who knows what it is expecting can also check `Kiff.info(patch).targetSize` first.
