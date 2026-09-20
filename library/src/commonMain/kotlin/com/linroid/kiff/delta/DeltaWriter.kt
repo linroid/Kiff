@@ -11,8 +11,7 @@ import com.linroid.kiff.io.toIntIndex
  * [add] calls collapse into a single ADD instruction.
  *
  * Instruction lengths and source offsets are written as 64-bit varints, so the format addresses
- * inputs beyond 2 GB. For anything in `Int` range the bytes are identical to what the 32-bit
- * encoding produced, which is why a v1 patch still reads correctly.
+ * inputs beyond 2 GB.
  */
 internal class DeltaWriter(
   private val source: ByteArray,
