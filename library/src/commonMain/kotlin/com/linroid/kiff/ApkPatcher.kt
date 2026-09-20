@@ -9,10 +9,13 @@ import com.linroid.kiff.apk.apkEncodeOptions
 import com.linroid.kiff.apk.groupApkCost
 import com.linroid.kiff.apk.looksLikeApk
 import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionRecorder
+import com.linroid.kiff.region.TextAwareRegionPlanner
 import com.linroid.kiff.zip.encodeArchive
 
 /**
@@ -29,7 +32,9 @@ import com.linroid.kiff.zip.encodeArchive
  * content.
  */
 class ApkPatcher(
-  override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
+  override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
+  /** Chooses how each leaf region is described; see [RegionPlanner]. */
+  val planner: RegionPlanner = TextAwareRegionPlanner
 ) : DeltaPatcher() {
 
   override val id: PatcherId = PatcherId.APK
@@ -38,11 +43,10 @@ class ApkPatcher(
   override fun encode(
     source: ByteArraySource,
     target: ByteArraySource,
-    sink: DeltaWriter,
+    literals: ByteWriter,
     recorder: RegionRecorder?
-  ) {
-    encodeArchive(source, target, apkEncodeOptions(), sink, algorithm, recorder)
-  }
+  ): RegionNode =
+    encodeArchive(source, target, apkEncodeOptions(planner), literals, algorithm, recorder)
 
   /**
    * Reports what changed, entry by entry and grouped by kind, without building a patch.

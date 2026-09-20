@@ -1,9 +1,12 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.delta.DeltaWriter
-import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.delta.RollingHashAlgorithm
+import com.linroid.kiff.delta.encodeWhole
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.RegionNode
+import com.linroid.kiff.format.structureBytes
+import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.region.WHOLE_FILE_REGION
@@ -25,19 +28,19 @@ class BinaryPatcher(
   override fun encode(
     source: ByteArraySource,
     target: ByteArraySource,
-    sink: DeltaWriter,
+    literals: ByteWriter,
     recorder: RegionRecorder?
-  ) {
-    val instructionsBefore = sink.instructionBytes
-    val literalsBefore = sink.literalBytes
-    algorithm.scanner(source).scan(target, 0, target.size, sink)
+  ): RegionNode {
+    val literalsBefore = literals.size
     // There is only ever one region here: this patcher does not carve the target up at all.
+    val node = encodeWhole(source, target, algorithm, literals)
     recorder?.record(
       WHOLE_FILE_REGION,
       RegionKind.WHOLE,
       target.size,
-      sink.instructionBytes - instructionsBefore,
-      sink.literalBytes - literalsBefore
+      node.structureBytes(),
+      (literals.size - literalsBefore).toLong()
     )
+    return node
   }
 }
