@@ -1,5 +1,6 @@
 package com.linroid.kiff
 
+import com.linroid.kiff.io.RestoreTarget
 import com.linroid.kiff.io.SeekableSource
 
 /**
@@ -28,6 +29,18 @@ interface Patcher {
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail the recorded checksum.
    */
   fun applyPatch(source: SeekableSource, patch: ByteArray): ByteArray
+
+  /**
+   * Rebuilds the target into [target] rather than returning it.
+   *
+   * A patch describes its target in order, so a restore never needs the result in memory - only
+   * somewhere to put it. Prefer this wherever the result is large or the machine is small, which
+   * is most places a patch is actually applied.
+   *
+   * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
+   * @throws KiffException.VerificationFailed if the rebuilt bytes fail a recorded checksum.
+   */
+  fun applyPatch(source: SeekableSource, patch: ByteArray, target: RestoreTarget)
 
   fun createPatch(source: ByteArray, target: ByteArray): ByteArray
 

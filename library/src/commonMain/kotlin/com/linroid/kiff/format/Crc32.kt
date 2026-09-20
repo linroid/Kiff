@@ -30,7 +30,23 @@ internal object Crc32 {
     return crc.inv().toUInt()
   }
 
-  private fun update(seed: Int, data: ByteArray, from: Int, to: Int): Int {
+  /**
+   * A checksum computed as the bytes go past, for a restore that never holds them all at once.
+   *
+   * Two run at a time while a patch is applied: one over the whole target, and one that is started
+   * and finished around each region so a failure can name where it happened.
+   */
+  class Running {
+    private var crc = -1
+
+    fun update(data: ByteArray, from: Int, to: Int) {
+      crc = Crc32.update(crc, data, from, to)
+    }
+
+    fun value(): UInt = crc.inv().toUInt()
+  }
+
+  internal fun update(seed: Int, data: ByteArray, from: Int, to: Int): Int {
     var crc = seed
     for (i in from until to) {
       crc = table[(crc xor data[i].toInt()) and 0xFF] xor (crc ushr 8)

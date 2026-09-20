@@ -2,6 +2,12 @@ package com.linroid.kiff.format
 
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.delta.DeltaReader
+import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.io.CheckedRestoreTarget
+import com.linroid.kiff.io.RestoreTarget
+import com.linroid.kiff.io.ScratchRestoreTarget
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readFully
 import com.linroid.kiff.io.toIntIndex
 import com.linroid.kiff.text.TextRegion
 
@@ -18,6 +24,10 @@ import com.linroid.kiff.text.TextRegion
  * Keeping every leaf's content in a single stream is what lets the structure be a tree without
  * paying for it: the bytes a patch carries stay contiguous and compress as one block, while the
  * tree holds only shape and instructions.
+ *
+ * Applying one holds neither file. The source is addressed through a [SeekableSource], the target
+ * is written out as it is produced, and only what a single region needs at once is buffered - which
+ * is what lets a device with far less memory than the machine that built the patch apply it.
  */
 internal object PatchPayload {
 
@@ -40,14 +50,15 @@ internal object PatchPayload {
     return out.toByteArray()
   }
 
-  fun read(
-    source: ByteArray,
+  /** Restores the target into [out], answering the checksum of everything written. */
+  fun apply(
+    source: SeekableSource,
     patch: ByteArray,
     from: Int,
     targetSize: Long,
-    checksums: Boolean
-  ): ByteArray {
-    val size = targetSize.toIntIndex("Target size")
+    checksums: Boolean,
+    out: RestoreTarget
+  ): UInt {
     val container = ByteReader(patch, from)
     val treeLength = container.readVarInt()
     val literalLength = container.readVarInt()
@@ -63,45 +74,50 @@ internal object PatchPayload {
       else -> throw KiffException.InvalidPatch("Unknown literal encoding $literalFlag")
     }
 
-    val target = ByteArray(size)
-    val cursor = LiteralCursor()
-    val written = applyNode(tree, source, literals, cursor, target, 0, 0, checksums)
-    if (written != size) {
-      throw KiffException.InvalidPatch("Patch described $written of $size target bytes")
+    val checked = CheckedRestoreTarget(out)
+    val state = Restore(source, literals, checked, DeltaReader())
+    val written = applyNode(tree, state, checked, targetSize, depth = 0, checksums = checksums)
+    if (written != targetSize) {
+      throw KiffException.InvalidPatch("Patch described $written of $targetSize target bytes")
     }
-    return target
+    return checked.wholeChecksum()
   }
 
-  /** Fills `target[at, at + node length)` and answers how many bytes that was. */
+  /**
+   * Fills [out] with the next node's worth of target bytes and answers how many that was.
+   *
+   * [Restore.checked] is the restore as a whole, which is where a region's checksum has to be
+   * taken from; [out] is where this node's bytes actually go. The two differ only inside a columns
+   * region, whose contents cannot be emitted until they are whole.
+   */
   private fun applyNode(
     tree: ByteReader,
-    source: ByteArray,
-    literals: ByteArray,
-    cursor: LiteralCursor,
-    target: ByteArray,
-    at: Int,
+    state: Restore,
+    out: RestoreTarget,
+    room: Long,
     depth: Int,
     checksums: Boolean
-  ): Int {
+  ): Long {
     if (depth > MAX_REGION_DEPTH) {
       throw KiffException.InvalidPatch("Region tree nests deeper than $MAX_REGION_DEPTH")
     }
-    val length = tree.readVarLong().toIntIndex("Region length")
-    if (at + length > target.size) {
+    val length = tree.readVarLong()
+    if (length < 0 || length > room) {
       throw KiffException.InvalidPatch("Region runs past the end of the target")
     }
     val encoding = RegionEncoding.fromCode(tree.readByte())
-    // A composite produces nothing itself; its children each carry their own.
+    val onTheRestore = out === state.checked
     val expected =
       if (checksums && encoding != RegionEncoding.COMPOSITE) tree.readUInt32() else null
+    val startedAt = state.checked.position
+    if (expected != null && onTheRestore) state.checked.startRegion()
+
     when (encoding) {
       RegionEncoding.COMPOSITE -> {
         val children = tree.readVarInt()
-        var written = 0
+        var written = 0L
         repeat(children) {
-          written += applyNode(
-            tree, source, literals, cursor, target, at + written, depth + 1, checksums
-          )
+          written += applyNode(tree, state, out, length - written, depth + 1, checksums)
         }
         if (written != length) {
           throw KiffException.InvalidPatch(
@@ -109,81 +125,106 @@ internal object PatchPayload {
           )
         }
       }
+
       RegionEncoding.DELTA -> {
         val instructionLength = tree.readVarInt()
         val instructions = ByteReader(tree.bytes, tree.offset)
         tree.skip(instructionLength)
-        cursor.value += DeltaReader.apply(
-          source = source,
+        state.literalCursor += state.delta.apply(
+          source = state.source,
           instructions = instructions,
-          literals = literals,
-          literalFrom = cursor.value,
-          target = target,
-          at = at,
-          length = length
+          literals = state.literals,
+          literalFrom = state.literalCursor,
+          out = out,
+          length = length.toIntIndex("Region length")
         )
       }
+
       RegionEncoding.RAW -> {
-        if (cursor.value + length > literals.size) {
+        val span = length.toIntIndex("Region length")
+        if (state.literalCursor + span > state.literals.size) {
           throw KiffException.InvalidPatch("Raw region reads past the literal stream")
         }
-        literals.copyInto(target, at, cursor.value, cursor.value + length)
-        cursor.value += length
+        out.write(state.literals, state.literalCursor, state.literalCursor + span)
+        state.literalCursor += span
       }
-      RegionEncoding.COLUMNS -> {
-        val sourceFrom = tree.readVarLong().toIntIndex("Column source offset")
-        val sourceLength = tree.readVarLong().toIntIndex("Column source length")
-        val count = tree.readByte()
-        val widths = List(count) { tree.readByte() }
-        if (!ColumnTransform.suits(widths, length)) {
-          throw KiffException.InvalidPatch("Column region declares a row this cannot describe")
-        }
-        if (sourceFrom < 0 || sourceFrom + sourceLength > source.size) {
-          throw KiffException.InvalidPatch("Column region names a source range outside the source")
-        }
-        // Both sides are rearranged the same way; the region inside describes one against the
-        // other, and the result is rearranged back.
-        val rearranged = ColumnTransform.forward(source, sourceFrom, sourceFrom + sourceLength, widths)
-        val scratch = ByteArray(length)
-        // The region inside describes rearranged bytes, which are not target bytes, so it
-        // carries no checksum; this node's covers what the rearrangement finally produces.
-        val written = applyNode(tree, rearranged, literals, cursor, scratch, 0, depth + 1, false)
-        if (written != length) {
-          throw KiffException.InvalidPatch("Column region produced $written of $length bytes")
-        }
-        ColumnTransform.inverse(scratch, widths, length).copyInto(target, at)
-      }
+
       RegionEncoding.TEXT -> {
-        val sourceFrom = tree.readVarLong().toIntIndex("Text source offset")
-        val sourceLength = tree.readVarLong().toIntIndex("Text source length")
+        val sourceFrom = tree.readVarLong()
+        val sourceLength = tree.readVarLong()
         val editLength = tree.readVarInt()
         val edits = ByteReader(tree.bytes, tree.offset)
         tree.skip(editLength)
-        cursor.value += TextRegion.apply(
-          source = source,
-          sourceFrom = sourceFrom,
-          sourceLength = sourceLength,
+        state.literalCursor += TextRegion.apply(
+          source = state.read(sourceFrom, sourceLength, "Text"),
           edits = edits,
-          literals = literals,
-          literalFrom = cursor.value,
-          target = target,
-          at = at,
-          length = length
+          literals = state.literals,
+          literalFrom = state.literalCursor,
+          out = out,
+          length = length.toIntIndex("Region length")
         )
       }
+
+      RegionEncoding.COLUMNS -> {
+        val sourceFrom = tree.readVarLong()
+        val sourceLength = tree.readVarLong()
+        val count = tree.readByte()
+        val widths = List(count) { tree.readByte() }
+        val span = length.toIntIndex("Region length")
+        if (!ColumnTransform.suits(widths, span)) {
+          throw KiffException.InvalidPatch("Column region declares a row this cannot describe")
+        }
+        val sourceBytes = state.read(sourceFrom, sourceLength, "Column")
+        val rearranged = ColumnTransform.forward(sourceBytes, 0, sourceBytes.size, widths)
+        val scratch = ByteArray(span)
+        val nested = state.over(ByteArraySource(rearranged))
+        val written =
+          applyNode(tree, nested, ScratchRestoreTarget(scratch), length, depth + 1, false)
+        if (written != length) {
+          throw KiffException.InvalidPatch("Column region produced $written of $length bytes")
+        }
+        state.literalCursor = nested.literalCursor
+        val restored = ColumnTransform.inverse(scratch, widths, span)
+        out.write(restored, 0, span)
+      }
     }
-    if (expected != null) {
-      val actual = Crc32.compute(target, at, at + length)
+
+    if (expected != null && onTheRestore) {
+      val actual = state.checked.finishRegion()
       if (actual != expected) {
         throw KiffException.VerificationFailed(
-          "Region [$at, ${at + length}) described as ${encoding.name.lowercase()} restored to " +
-            "${actual.toHex()}, not the ${expected.toHex()} it was built from"
+          "Region [$startedAt, ${startedAt + length}) described as " +
+            "${encoding.name.lowercase()} restored to ${actual.toHex()}, not the " +
+            "${expected.toHex()} it was built from"
         )
       }
     }
     return length
   }
 
-  /** Where the next leaf's content starts; leaves consume the shared stream in tree order. */
-  private class LiteralCursor(var value: Int = 0)
+  /** What a restore carries from one region to the next. */
+  private class Restore(
+    val source: SeekableSource,
+    val literals: ByteArray,
+    val checked: CheckedRestoreTarget,
+    val delta: DeltaReader
+  ) {
+    /** Where the next region's content starts; regions consume the stream in tree order. */
+    var literalCursor: Int = 0
+
+    /** The same restore against a different source, for a region that rearranges its own. */
+    fun over(other: SeekableSource) = Restore(other, literals, checked, delta).also {
+      it.literalCursor = literalCursor
+    }
+
+    /** Reads a source range in, for the encodings that cannot work a chunk at a time. */
+    fun read(from: Long, length: Long, what: String): ByteArray {
+      if (from < 0 || length < 0 || from + length > source.size) {
+        throw KiffException.InvalidPatch("$what region names a source range outside the source")
+      }
+      val bytes = ByteArray(length.toIntIndex("$what source length"))
+      source.readFully(from, bytes)
+      return bytes
+    }
+  }
 }

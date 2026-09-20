@@ -4,6 +4,8 @@ import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.assertRestores
+import com.linroid.kiff.io.ByteArrayRestoreTarget
+import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.BinaryRegionPlanner
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
@@ -136,7 +138,10 @@ class RegionTreeTest {
     payload.writeBytes(tree)
 
     val failure = assertFailsWith<KiffException.InvalidPatch> {
-      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 1, checksums = false)
+      PatchPayload.apply(
+        ByteArraySource(ByteArray(4)), payload.toByteArray(), 0, 1,
+        checksums = false, out = ByteArrayRestoreTarget(1)
+      )
     }
     assertTrue("nests" in failure.message.orEmpty(), failure.message.orEmpty())
   }
@@ -156,7 +161,10 @@ class RegionTreeTest {
     payload.writeBytes(tree)
 
     assertFailsWith<KiffException.InvalidPatch> {
-      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 10, checksums = false)
+      PatchPayload.apply(
+        ByteArraySource(ByteArray(4)), payload.toByteArray(), 0, 10,
+        checksums = false, out = ByteArrayRestoreTarget(10)
+      )
     }
   }
 }

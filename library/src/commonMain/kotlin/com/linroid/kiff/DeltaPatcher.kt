@@ -9,7 +9,10 @@ import com.linroid.kiff.format.PatchPayload
 import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.format.toHex
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.io.ByteArrayRestoreTarget
+import com.linroid.kiff.io.RestoreTarget
 import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.toIntIndex
 import com.linroid.kiff.io.asSource
 import com.linroid.kiff.io.materialize
 import com.linroid.kiff.region.RegionCost
@@ -74,6 +77,18 @@ sealed class DeltaPatcher : Patcher {
 
   final override fun applyPatch(source: SeekableSource, patch: ByteArray): ByteArray {
     val reader = ByteReader(patch)
+    val header = checkedHeader(source, patch, reader)
+    val collected = ByteArrayRestoreTarget(header.targetSize.toIntIndex("Target size"))
+    restore(source, patch, header, reader.offset, collected)
+    return collected.toByteArray()
+  }
+
+  /** Reads the header and refuses a source that is not the one the patch was built against. */
+  private fun checkedHeader(
+    source: SeekableSource,
+    patch: ByteArray,
+    reader: ByteReader
+  ): PatchFormat.Header {
     val header = PatchFormat.readHeader(reader)
     if (header.patcher != id) {
       throw KiffException.InvalidPatch(
@@ -91,18 +106,47 @@ sealed class DeltaPatcher : Patcher {
         "Source CRC-32 ${sourceCrc.toHex()} does not match ${header.sourceCrc32.toHex()}"
       )
     }
-    val bytes = source.materialize("Source").bytes
-    val target = PatchPayload.read(
-      bytes, patch, reader.offset, header.targetSize,
-      checksums = header.flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0
+    return header
+  }
+
+  /**
+   * Restores the target into [target] instead of returning it.
+   *
+   * A patch describes its target front to back, so nothing here ever holds the result - and the
+   * source is addressed rather than read in. That is the difference between a restore a build
+   * server can do and one a phone can: applying a patch for a seventy-megabyte package needs tens
+   * of megabytes this way, against something over a hundred and seventy when both files are held.
+   */
+  final override fun applyPatch(
+    source: SeekableSource,
+    patch: ByteArray,
+    target: RestoreTarget
+  ) {
+    val reader = ByteReader(patch)
+    val header = checkedHeader(source, patch, reader)
+    restore(source, patch, header, reader.offset, target)
+  }
+
+  private fun restore(
+    source: SeekableSource,
+    patch: ByteArray,
+    header: PatchFormat.Header,
+    payloadFrom: Int,
+    target: RestoreTarget
+  ) {
+    val targetCrc = PatchPayload.apply(
+      source = source,
+      patch = patch,
+      from = payloadFrom,
+      targetSize = header.targetSize,
+      checksums = header.flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0,
+      out = target
     )
-    val targetCrc = Crc32.compute(target)
     if (targetCrc != header.targetCrc32) {
       throw KiffException.VerificationFailed(
         "Restored target CRC-32 ${targetCrc.toHex()} does not match ${header.targetCrc32.toHex()}"
       )
     }
-    return target
   }
 
   final override fun createPatch(source: ByteArray, target: ByteArray): ByteArray =

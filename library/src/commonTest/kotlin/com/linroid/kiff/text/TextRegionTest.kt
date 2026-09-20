@@ -2,6 +2,7 @@ package com.linroid.kiff.text
 
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.io.ByteArrayRestoreTarget
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -26,19 +27,16 @@ class TextRegionTest {
         literals
       )
     )
-    val restored = ByteArray(targetBytes.size)
+    val restored = ByteArrayRestoreTarget(targetBytes.size)
     val consumed = TextRegion.apply(
       source = sourceBytes,
-      sourceFrom = 0,
-      sourceLength = sourceBytes.size,
       edits = ByteReader(edits),
       literals = literals.toByteArray(),
       literalFrom = 0,
-      target = restored,
-      at = 0,
+      out = restored,
       length = targetBytes.size
     )
-    assertContentEquals(targetBytes, restored, "restored text differs")
+    assertContentEquals(targetBytes, restored.toByteArray(), "restored text differs")
     assertEquals(literals.size, consumed, "should consume exactly what it wrote")
     return edits.size + literals.size
   }

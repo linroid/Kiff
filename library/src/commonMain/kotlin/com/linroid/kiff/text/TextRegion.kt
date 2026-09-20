@@ -3,6 +3,7 @@ package com.linroid.kiff.text
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.io.RestoreTarget
 
 /**
  * The TEXT region encoding: a line-level edit script over raw bytes.
@@ -114,24 +115,17 @@ internal object TextRegion {
    */
   fun apply(
     source: ByteArray,
-    sourceFrom: Int,
-    sourceLength: Int,
     edits: ByteReader,
     literals: ByteArray,
     literalFrom: Int,
-    target: ByteArray,
-    at: Int,
+    out: RestoreTarget,
     length: Int
   ): Int {
-    if (sourceFrom < 0 || sourceFrom + sourceLength > source.size) {
-      throw KiffException.InvalidPatch("Text region names a source range outside the source")
-    }
-    val starts = lineStarts(source, sourceFrom, sourceFrom + sourceLength)
+    val starts = lineStarts(source, 0, source.size)
     val lineCount = starts.size - 1
 
-    val end = at + length
     var sourceLine = 0
-    var targetPosition = at
+    var produced = 0
     var literalPosition = literalFrom
 
     while (true) {
@@ -142,9 +136,9 @@ internal object TextRegion {
           val from = lineAt(starts, sourceLine, lines, lineCount)
           val to = starts[sourceLine + lines]
           val span = to - from
-          checkFits(targetPosition, span, end)
-          source.copyInto(target, targetPosition, from, to)
-          targetPosition += span
+          checkFits(produced, span, length)
+          out.write(source, from, to)
+          produced += span
           sourceLine += lines
         }
         OP_DELETE -> {
@@ -154,21 +148,19 @@ internal object TextRegion {
         }
         OP_INSERT -> {
           val span = edits.readVarInt()
-          checkFits(targetPosition, span, end)
+          checkFits(produced, span, length)
           if (span < 0 || literalPosition + span > literals.size) {
             throw KiffException.InvalidPatch("Text region reads past the literal stream")
           }
-          literals.copyInto(target, targetPosition, literalPosition, literalPosition + span)
-          targetPosition += span
+          out.write(literals, literalPosition, literalPosition + span)
+          produced += span
           literalPosition += span
         }
         else -> throw KiffException.InvalidPatch("Unknown text edit opcode $op")
       }
     }
-    if (targetPosition != end) {
-      throw KiffException.InvalidPatch(
-        "Text region produced ${targetPosition - at} of $length bytes"
-      )
+    if (produced != length) {
+      throw KiffException.InvalidPatch("Text region produced $produced of $length bytes")
     }
     return literalPosition - literalFrom
   }
@@ -196,8 +188,8 @@ internal object TextRegion {
     return starts[line]
   }
 
-  private fun checkFits(position: Int, span: Int, end: Int) {
-    if (span < 0 || position + span > end) {
+  private fun checkFits(produced: Int, span: Int, length: Int) {
+    if (span < 0 || produced + span > length) {
       throw KiffException.InvalidPatch("Text region writes past the end of its region")
     }
   }
