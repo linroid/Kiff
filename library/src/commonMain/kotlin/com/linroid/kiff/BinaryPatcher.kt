@@ -5,8 +5,10 @@ import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.delta.encodeWhole
 import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.format.RegionNode
+import com.linroid.kiff.format.encoding
 import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionCost
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.region.WHOLE_FILE_REGION
@@ -35,12 +37,14 @@ class BinaryPatcher(
     // There is only ever one region here: this patcher does not carve the target up at all.
     val node = encodeWhole(source, target, algorithm, literals)
     recorder?.record(
-      WHOLE_FILE_REGION,
-      RegionKind.WHOLE,
-      target.size,
-      node.structureBytes(),
-      (literals.size - literalsBefore).toLong(),
-      emptyList()
+      RegionCost(
+        name = WHOLE_FILE_REGION,
+        kind = RegionKind.WHOLE,
+        encoding = node.encoding(),
+        targetBytes = target.size,
+        instructionBytes = node.structureBytes(),
+        literalBytes = (literals.size - literalsBefore).toLong()
+      )
     )
     return node
   }

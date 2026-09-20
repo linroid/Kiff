@@ -51,6 +51,12 @@ class ExplainCommand : KiffCommand(name = "explain") {
     echo(total("Content", "${formatBytes(report.literalBytes)} carried, before it is packed"))
     echo(total("Instructions", "${formatBytes(report.instructionBytes)} of references"))
     echo(total("Referenced", "${report.referenced.size} regions the patch only points at"))
+    val stored = report.allRegions.filter { it.wasStored }
+    if (stored.isNotEmpty()) {
+      // Worth separating: a region reported at 100% may be difference-encoded and pack to nothing,
+      // or may be carried as it is. Only the second kind is a problem left to solve.
+      echo(total("Stored", "${formatBytes(stored.sumOf { it.patchBytes })} nothing could be made of"))
+    }
   }
 
   private fun total(label: String, value: String) = "  ${"$label:".padEnd(14)}$value"
@@ -108,7 +114,8 @@ class ExplainCommand : KiffCommand(name = "explain") {
   }
 
   private fun describe(region: RegionCost) =
-    "${region.name} (${formatPercent(region.ratio)} of ${formatBytes(region.targetBytes)})"
+    "${region.name} (${formatPercent(region.ratio)} of ${formatBytes(region.targetBytes)}, " +
+      "${region.encoding.name.lowercase()})"
 
   private companion object {
     const val TOP_REGIONS = 15

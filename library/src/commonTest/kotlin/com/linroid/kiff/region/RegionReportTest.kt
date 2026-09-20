@@ -1,10 +1,12 @@
 package com.linroid.kiff.region
 
 import com.linroid.kiff.Kiff
+import com.linroid.kiff.format.RegionEncoding
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -130,6 +132,32 @@ class RegionReportTest {
         "children of ${region.name} should account for it: $below against ${region.patchBytes}"
       )
     }
+  }
+
+  @Test
+  fun aRegionSaysHowItWasDescribed() {
+    // A region reported at 100% may be difference-encoded, which packs to nearly nothing, or may
+    // be carried as it is. Only the encoding tells them apart, and only one of them is a problem.
+    val base = com.linroid.kiff.zip.TestZipBuilder()
+      .entry("a.bin", structuredBytes(30_000, seed = 90)).build()
+
+    // An entry the source never had: there is nothing to describe it against, so it is carried.
+    val added = com.linroid.kiff.zip.TestZipBuilder()
+      .entry("a.bin", structuredBytes(30_000, seed = 90))
+      .entry("new.bin", structuredBytes(5_000, seed = 92))
+      .build()
+    val stored = Kiff.zip.explain(base, added).allRegions.first { it.name == "new.bin" }
+    assertEquals(RegionEncoding.RAW, stored.encoding, "no counterpart, so nothing to make of it")
+    assertTrue(stored.wasStored)
+
+    // The same entry with every 24th byte nudged: an almost-match, which difference encoding eats.
+    val nudged = structuredBytes(30_000, seed = 90).also { bytes ->
+      for (at in bytes.indices step 24) bytes[at] = (bytes[at] + 3).toByte()
+    }
+    val shifted = com.linroid.kiff.zip.TestZipBuilder().entry("a.bin", nudged).build()
+    val delta = Kiff.zip.explain(base, shifted).allRegions.first { it.name == "a.bin (data)" }
+    assertEquals(RegionEncoding.DELTA, delta.encoding)
+    assertFalse(delta.wasStored)
   }
 
   @Test
