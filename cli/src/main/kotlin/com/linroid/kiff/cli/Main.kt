@@ -48,7 +48,8 @@ fun main(args: Array<String>) {
       CreateCommand(),
       ApplyCommand(),
       InfoCommand(),
-      ChangesCommand()
+      ChangesCommand(),
+      ExplainCommand()
     )
     .main(args)
 }

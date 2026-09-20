@@ -4,6 +4,8 @@ import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.ZipEntry
 import com.linroid.kiff.zip.ZipLayout
+import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.region.RegionReport
 import com.linroid.kiff.zip.ZipReader
 import com.linroid.kiff.zip.analyzeLayouts
 import com.linroid.kiff.zip.parseArchive
@@ -57,6 +59,30 @@ internal fun analyzeApk(source: ByteArray, target: ByteArray): ApkDiffReport {
     kinds = kinds,
     sourceSigningBlockSize = ApkSigningBlock.sizeOf(source, sourceLayout.directoryStart),
     targetSigningBlockSize = ApkSigningBlock.sizeOf(target, targetLayout.directoryStart)
+  )
+}
+
+/** Groups a region-by-region attribution the way an APK is actually built. */
+internal fun groupApkCost(report: RegionReport): ApkPatchReport {
+  val kinds = report.regions
+    .filter { it.kind == RegionKind.CONTENT }
+    .groupBy { ApkEntries.kindOf(it.name) }
+    .map { (kind, costs) ->
+      ApkKindCost(
+        kind = kind,
+        entryCount = costs.size,
+        targetBytes = costs.sumOf { it.targetBytes },
+        instructionBytes = costs.sumOf { it.instructionBytes },
+        literalBytes = costs.sumOf { it.literalBytes }
+      )
+    }
+    .sortedWith(compareByDescending<ApkKindCost> { it.patchBytes }.thenBy { it.kind.ordinal })
+
+  return ApkPatchReport(
+    regions = report,
+    kinds = kinds,
+    gapBytes = report.bytes(RegionKind.GAP),
+    directoryBytes = report.bytes(RegionKind.INDEX)
   )
 }
 

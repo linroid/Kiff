@@ -4,6 +4,9 @@ import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.delta.RollingHashAlgorithm
+import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.region.RegionRecorder
+import com.linroid.kiff.region.WHOLE_FILE_REGION
 
 /**
  * General purpose binary patcher: it treats both files as opaque byte streams and describes the
@@ -19,7 +22,22 @@ class BinaryPatcher(
   override val id: PatcherId = PatcherId.BINARY
   override val name: String = "binary"
 
-  override fun encode(source: ByteArraySource, target: ByteArraySource, sink: DeltaWriter) {
+  override fun encode(
+    source: ByteArraySource,
+    target: ByteArraySource,
+    sink: DeltaWriter,
+    recorder: RegionRecorder?
+  ) {
+    val instructionsBefore = sink.instructionBytes
+    val literalsBefore = sink.literalBytes
     algorithm.scanner(source).scan(target, 0, target.size, sink)
+    // There is only ever one region here: this patcher does not carve the target up at all.
+    recorder?.record(
+      WHOLE_FILE_REGION,
+      RegionKind.WHOLE,
+      target.size,
+      sink.instructionBytes - instructionsBefore,
+      sink.literalBytes - literalsBefore
+    )
   }
 }

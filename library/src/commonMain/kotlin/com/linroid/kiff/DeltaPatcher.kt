@@ -12,6 +12,9 @@ import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.asSource
 import com.linroid.kiff.io.materialize
+import com.linroid.kiff.region.RegionCost
+import com.linroid.kiff.region.RegionRecorder
+import com.linroid.kiff.region.RegionReport
 
 /**
  * Base class for the bundled patchers. They differ only in how they *describe* the target - the
@@ -30,14 +33,27 @@ sealed class DeltaPatcher : Patcher {
    */
   abstract val algorithm: DeltaAlgorithm
 
-  final override fun createPatch(source: SeekableSource, target: SeekableSource): ByteArray {
+  final override fun createPatch(source: SeekableSource, target: SeekableSource): ByteArray =
+    build(source, target, recorder = null)
+
+  /**
+   * [createPatch], additionally telling [recorder] what each region of the target cost.
+   *
+   * Recording rides along with the ordinary encode instead of replacing it, so a measured patch is
+   * byte for byte the patch [createPatch] would have produced.
+   */
+  internal fun build(
+    source: SeekableSource,
+    target: SeekableSource,
+    recorder: RegionRecorder?
+  ): ByteArray {
     val sourceCrc = Crc32.compute(source)
     val targetCrc = Crc32.compute(target)
     val sourceBytes = source.materialize("Source")
     val targetBytes = target.materialize("Target")
 
     val writer = DeltaWriter(sourceBytes.bytes, target.size)
-    encode(sourceBytes, targetBytes, writer)
+    encode(sourceBytes, targetBytes, writer, recorder)
     check(writer.length == target.size) {
       "$name described ${writer.length} bytes but the target has ${target.size}"
     }
@@ -84,11 +100,36 @@ sealed class DeltaPatcher : Patcher {
   final override fun applyPatch(source: ByteArray, patch: ByteArray): ByteArray =
     applyPatch(source.asSource(), patch)
 
-  /** Describes [target] in terms of [source] by driving [sink]. */
+  /**
+   * Builds a patch and reports where its bytes went, region by region.
+   *
+   * Every patcher carves its target into regions - a zip into entries, gaps and its directory, this
+   * one into a single whole - so every patcher can say what each of them cost. Unlike the `analyze`
+   * reports this has to do the full encode, because a region's cost is only known once it has been
+   * described; the patch itself is discarded.
+   */
+  fun explain(source: ByteArray, target: ByteArray): RegionReport {
+    val regions = ArrayList<RegionCost>()
+    val recorder = RegionRecorder { name, kind, bytes, instructions, literals ->
+      regions.add(RegionCost(name, kind, bytes, instructions, literals))
+    }
+    val patch = build(source.asSource(), target.asSource(), recorder)
+    return RegionReport(
+      regions = regions,
+      targetSize = target.size.toLong(),
+      patchSize = patch.size.toLong()
+    )
+  }
+
+  /**
+   * Describes [target] in terms of [source] by driving [sink], reporting each region's cost to
+   * [recorder] when one is given.
+   */
   internal abstract fun encode(
     source: ByteArraySource,
     target: ByteArraySource,
-    sink: DeltaWriter
+    sink: DeltaWriter,
+    recorder: RegionRecorder?
   )
 
   private companion object {
