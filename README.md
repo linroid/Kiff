@@ -72,7 +72,26 @@ unchanged=412  metadata_changed=3  modified=11  added=2  removed=1
   + META-INF/services/qux (26 B)
 ```
 
-`kiff diff foo.txt bar.txt` prints a line-based (Myers) diff instead, for text files.
+`kiff diff foo.txt bar.txt` prints a unified diff instead, for text files - the format `patch(1)`,
+`git apply` and every review tool already read:
+
+```console
+$ kiff diff config.old config.new
+--- config.old
++++ config.new
+@@ -1,4 +1,5 @@
+ alpha
+-beta
++beta changed
+ gamma
+ delta
++epsilon
+\ No newline at end of file
+```
+
+Lines carry their own terminators internally, so whether a file ended in a newline survives the
+round trip; `UnifiedDiff.parse` and `UnifiedDiff.apply` read the format back, refusing a hunk whose
+context does not match the source.
 
 `kiff changes` says what differs; `kiff explain` says what the difference *cost*, which is not the
 same question - a large entry can change and still be nearly free, and a small one can be expensive:
