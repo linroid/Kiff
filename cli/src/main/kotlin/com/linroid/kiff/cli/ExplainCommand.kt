@@ -19,6 +19,10 @@ class ExplainCommand : KiffCommand(name = "explain") {
   override fun help(context: Context) = "Show where a patch's bytes go, region by region"
 
   private val all by option("--all", help = "List every region, not just the costly ones").flag()
+  private val tree by option(
+    "--tree",
+    help = "Show the regions inside a region: a dex's sections, an inner archive's entries"
+  ).flag()
   private val source by argument(help = "Original file")
   private val target by argument(help = "Updated file")
 
@@ -71,6 +75,15 @@ class ExplainCommand : KiffCommand(name = "explain") {
       formatPercent(bytes.toDouble() / total).padStart(9)
 
   private fun echoRegions(report: RegionReport) {
+    if (tree) {
+      echo("")
+      echo("Regions, and what they were described as")
+      for (region in report.regions.sortedByDescending { it.patchBytes }) {
+        if (region.patchBytes == 0L && !all) continue
+        echoTree(region, depth = 0)
+      }
+      return
+    }
     val costly = report.costly
     val shown = if (all) costly else costly.take(TOP_REGIONS)
     echo("")
@@ -81,6 +94,17 @@ class ExplainCommand : KiffCommand(name = "explain") {
     if (costly.isEmpty()) echo("  (the target was described entirely by copies)")
     val hidden = costly.size - shown.size
     if (hidden > 0) echo("  ... and $hidden more, use --all")
+    val deeper = report.allRegions.size - report.regions.size
+    if (deeper > 0) echo("  ($deeper regions nested inside these, use --tree)")
+  }
+
+  private fun echoTree(region: RegionCost, depth: Int) {
+    val indent = "  ".repeat(depth + 1)
+    echo("${formatBytes(region.patchBytes).padStart(10)}  $indent${describe(region)}")
+    for (child in region.children.sortedByDescending { it.patchBytes }) {
+      if (child.patchBytes == 0L && !all) continue
+      echoTree(child, depth + 1)
+    }
   }
 
   private fun describe(region: RegionCost) =

@@ -99,6 +99,38 @@ class RegionReportTest {
   }
 
   @Test
+  fun aRegionThatWasTakenApartReportsWhatItWasTakenApartInto() {
+    // Without this the tool goes blind exactly where the bytes are: an archive inside an archive,
+    // or a dex inside either, shows up as one number with nothing behind it.
+    val innerA = com.linroid.kiff.zip.TestZipBuilder()
+      .entry("a.bin", structuredBytes(9_000, seed = 80))
+      .entry("b.bin", structuredBytes(9_000, seed = 81))
+      .build()
+    val innerB = com.linroid.kiff.zip.TestZipBuilder()
+      .entry("a.bin", structuredBytes(9_000, seed = 80))
+      .entry("b.bin", structuredBytes(9_000, seed = 82))
+      .build()
+    val outerA = com.linroid.kiff.zip.TestZipBuilder().entry("bundle.zip", innerA).build()
+    val outerB = com.linroid.kiff.zip.TestZipBuilder().entry("bundle.zip", innerB).build()
+
+    val report = Kiff.zip.explain(outerA, outerB)
+    assertTrue(
+      report.allRegions.size > report.regions.size,
+      "nested regions should be reported as well as the top level"
+    )
+
+    // Whatever the shape, a region's children account for exactly what the region itself cost.
+    for (region in report.allRegions) {
+      if (region.children.isEmpty()) continue
+      assertEquals(
+        region.patchBytes,
+        region.children.sumOf { it.patchBytes },
+        "children of ${region.name} should add up to it"
+      )
+    }
+  }
+
+  @Test
   fun attributionCoversTheDeltaItReports() {
     val report = Kiff.zip.explain(source, target)
     // Literals are packed after the regions are measured, so the attributed total is the delta
