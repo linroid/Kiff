@@ -6,6 +6,7 @@ import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.apk.TestApkBuilder
 import com.linroid.kiff.ApkPatcher
 import com.linroid.kiff.assertRestores
+import com.linroid.kiff.format.RegionEncoding
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
@@ -132,6 +133,43 @@ class DexFormatTest {
     .section(0x2001, code)
     .section(0x2002, structuredBytes(900, seed + 100))
     .build()
+
+  @Test
+  fun anIdTableIsReadAsColumnsWhenThatIsSmaller() {
+    // A table of offsets where an entry was inserted early: every later offset shifts, so read as
+    // they lie the two builds share nothing, and the table would be carried whole.
+    fun table(count: Int, from: Int): ByteArray {
+      val out = ByteArray(count * 4)
+      var value = from
+      for (row in 0 until count) {
+        for (i in 0 until 4) out[row * 4 + i] = ((value shr (8 * i)) and 0xFF).toByte()
+        value += 11 + (row % 7)
+      }
+      return out
+    }
+    val source = TestZipBuilder().entry(
+      "classes.dex",
+      TestDexBuilder().section(0x0001, table(400, 500)).section(0x2001, structuredBytes(3_000, 1))
+        .build()
+    ).build()
+    val target = TestZipBuilder().entry(
+      "classes.dex",
+      TestDexBuilder().section(0x0001, table(400, 564)).section(0x2001, structuredBytes(3_000, 1))
+        .build()
+    ).build()
+
+    assertRestores(Kiff.zip, source, target)
+    val table = Kiff.zip.explain(source, target).allRegions.first { it.name == "string_ids" }
+    // The encoding is the claim worth making: a candidate only wins by packing smaller than every
+    // other. The reported ratio is not - it counts unpacked bytes, and the delta inside a columns
+    // region is mostly difference-encoded, which emits one byte per target byte whatever it packs
+    // down to.
+    assertEquals(
+      RegionEncoding.COLUMNS,
+      table.encoding,
+      "a table of shifting offsets should be read as columns of differences"
+    )
+  }
 
   private fun u32(bytes: ByteArray, at: Int): Int {
     var value = 0

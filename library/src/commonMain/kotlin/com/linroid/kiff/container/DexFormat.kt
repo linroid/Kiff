@@ -72,11 +72,31 @@ class DexFormat : ContainerFormat {
           name = nameOf(types[i]),
           kind = kindOf(types[i]),
           from = from + offsets[i],
-          to = end
+          to = end,
+          columns = columnsOf(types[i])
         )
       )
     }
     return children
+  }
+
+  /**
+   * The row layout of the sections that are tables, from the dex specification.
+   *
+   * These are the sections a byte search cannot touch: every entry holds an index or an offset
+   * into the rest of the file, so adding anything shifts all of them and no run survives. Read as
+   * columns of differences they become mostly stable.
+   */
+  private fun columnsOf(type: Int): List<Int>? = when (type) {
+    TYPE_STRING_IDS -> listOf(4)                  // string_data_off
+    TYPE_TYPE_IDS -> listOf(4)                    // descriptor_idx
+    TYPE_PROTO_IDS -> listOf(4, 4, 4)             // shorty_idx, return_type_idx, parameters_off
+    TYPE_FIELD_IDS -> listOf(2, 2, 4)             // class_idx, type_idx, name_idx
+    TYPE_METHOD_IDS -> listOf(2, 2, 4)            // class_idx, proto_idx, name_idx
+    TYPE_CLASS_DEFS -> List(8) { 4 }              // eight u32 fields
+    TYPE_CALL_SITE_IDS -> listOf(4)               // call_site_off
+    TYPE_METHOD_HANDLES -> listOf(2, 2, 2, 2)     // type, unused, field_or_method_id, unused
+    else -> null
   }
 
   private fun nameOf(type: Int): String = SECTION_NAMES[type] ?: "section 0x${type.toString(16)}"
@@ -112,6 +132,14 @@ class DexFormat : ContainerFormat {
     const val MAP_ITEM_OFFSET = 8
     const val MAX_SECTIONS = 4096
 
+    const val TYPE_STRING_IDS = 0x0001
+    const val TYPE_TYPE_IDS = 0x0002
+    const val TYPE_PROTO_IDS = 0x0003
+    const val TYPE_FIELD_IDS = 0x0004
+    const val TYPE_METHOD_IDS = 0x0005
+    const val TYPE_CLASS_DEFS = 0x0006
+    const val TYPE_CALL_SITE_IDS = 0x0007
+    const val TYPE_METHOD_HANDLES = 0x0008
     const val TYPE_CODE = 0x2001
     const val TYPE_STRING_DATA = 0x2002
     const val TYPE_DEBUG_INFO = 0x2003
@@ -121,14 +149,14 @@ class DexFormat : ContainerFormat {
 
     val SECTION_NAMES = mapOf(
       0x0000 to "header",
-      0x0001 to "string_ids",
-      0x0002 to "type_ids",
-      0x0003 to "proto_ids",
-      0x0004 to "field_ids",
-      0x0005 to "method_ids",
-      0x0006 to "class_defs",
-      0x0007 to "call_site_ids",
-      0x0008 to "method_handles",
+      TYPE_STRING_IDS to "string_ids",
+      TYPE_TYPE_IDS to "type_ids",
+      TYPE_PROTO_IDS to "proto_ids",
+      TYPE_FIELD_IDS to "field_ids",
+      TYPE_METHOD_IDS to "method_ids",
+      TYPE_CLASS_DEFS to "class_defs",
+      TYPE_CALL_SITE_IDS to "call_site_ids",
+      TYPE_METHOD_HANDLES to "method_handles",
       0x1000 to "map_list",
       0x1001 to "type_list",
       0x1002 to "annotation_set_refs",
