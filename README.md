@@ -138,14 +138,17 @@ and changes neither the node set nor the reader.
 A container is taken apart by a `ContainerFormat`, and that is the whole extension point:
 
 ```kotlin
-class DexFormat : ContainerFormat {
-  override val name = "dex"
+class TarFormat : ContainerFormat {
+  override val name = "tar"
   override fun detect(bytes: ByteArray, from: Int, to: Int) = /* magic */
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* sections */
+  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* members */
 }
 
-val patcher = ApkPatcher(containers = NestedContainers + DexFormat())
+val patcher = ApkPatcher(containers = NestedContainers + TarFormat())
 ```
+
+`NestedContainers` already holds `ZipFormat` and `DexFormat`, so an archive inside an archive, and
+a dex inside either, are taken apart without being asked.
 
 Nothing else moves. The patch format does not change, because a decomposed region is more nodes of
 the same four kinds; the reader does not change, because a patch records the structure it used
@@ -162,6 +165,12 @@ discarded, so a format that does not pay off costs encode time and never patch s
 more than it sounds: a byte search that copies from anywhere in the source is already good at
 finding moved and edited content, so on *stored* content today, decomposing mostly breaks even. It
 will earn its keep on compressed children, which cannot be compared at all without being decoded.
+
+`DexFormat` is a worked example, and an honest one. A dex is mostly tables of offsets into itself,
+so adding a method renumbers everything after it and a byte search finds nothing to match: on a real
+pair of builds the two dex files account for 98% of the patch while costing 90% of their own size.
+Splitting them by section, which their map list makes nearly free, recovers about 0.3%. Section
+boundaries are not the fix for renumbering - they are what a fix would be built on.
 
 Every leaf is chosen by measurement, not by guess. Whatever a `RegionPlanner` nominates, the encoder
 builds it, builds the byte-level encoding too, and keeps whichever packs smaller - and keeps neither
