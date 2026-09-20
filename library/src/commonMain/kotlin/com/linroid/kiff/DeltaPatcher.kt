@@ -110,8 +110,8 @@ sealed class DeltaPatcher : Patcher {
    */
   fun explain(source: ByteArray, target: ByteArray): RegionReport {
     val regions = ArrayList<RegionCost>()
-    val recorder = RegionRecorder { name, kind, bytes, instructions, literals ->
-      regions.add(RegionCost(name, kind, bytes, instructions, literals))
+    val recorder = RegionRecorder { name, kind, bytes, instructions, content, children ->
+      regions.add(RegionCost(name, kind, bytes, instructions, content, children))
     }
     val patch = build(source.asSource(), target.asSource(), recorder)
     return RegionReport(

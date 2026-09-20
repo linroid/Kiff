@@ -11,6 +11,7 @@ import com.linroid.kiff.format.beatsStoring
 import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionAlgorithm
+import com.linroid.kiff.region.RegionCost
 import com.linroid.kiff.region.RegionInfo
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.region.RegionPlanner
@@ -73,41 +74,60 @@ internal class ContainerEncoder(
         RegionKind.WHOLE,
         target.size.toLong(),
         node.structureBytes(),
-        (literals.size - literalsBefore).toLong()
+        (literals.size - literalsBefore).toLong(),
+        emptyList()
       )
       return node
     }
 
     val sourceChildren = rootFormat!!.decompose(source, 0, source.size)
-    return composite(rootFormat, sourceChildren, children, literals, recorder, depth = 0)
+    val built = composite(rootFormat, sourceChildren, children, literals, depth = 0)
+    if (recorder != null) {
+      for (cost in built.costs) {
+        recorder.record(
+          cost.name, cost.kind, cost.targetBytes,
+          cost.instructionBytes, cost.literalBytes, cost.children
+        )
+      }
+    }
+    return built.node
   }
 
-  /** Encodes a list of paired children into one composite, recording each as it goes. */
+  /**
+   * Encodes a list of paired children into one composite, collecting what each of them cost.
+   *
+   * The costs come back rather than going into a recorder, because a composite built here may yet
+   * be thrown away - it is weighed against describing the same bytes whole. Reporting as it went
+   * would attribute a patch to regions that are not in it.
+   */
   private fun composite(
     format: ContainerFormat,
     sourceChildren: List<Child>,
     targetChildren: List<Child>,
     literals: ByteWriter,
-    recorder: RegionRecorder?,
     depth: Int
-  ): RegionNode {
+  ): Built {
     val pairing = Pairing(format, sourceChildren)
     val groups = Groups(sourceChildren)
     val encoded = ArrayList<Encoded>(targetChildren.size)
+    val costs = ArrayList<RegionCost>(targetChildren.size)
     for (child in targetChildren) {
-      val literalsBefore = literals.size
-      val node = encodeChild(child, pairing.counterpartOf(child), groups, literals, depth)
-      encoded.add(node)
-      recorder?.record(
-        child.name,
-        child.kind,
-        child.size.toLong(),
-        node.node.structureBytes(),
-        (literals.size - literalsBefore).toLong()
+      val before = literals.size
+      val one = encodeChild(child, pairing.counterpartOf(child), groups, literals, depth)
+      encoded.add(one)
+      costs.add(
+        RegionCost(
+          name = child.name,
+          kind = child.kind,
+          targetBytes = child.size.toLong(),
+          instructionBytes = one.node.structureBytes(),
+          literalBytes = (literals.size - before).toLong(),
+          children = one.children
+        )
       )
     }
     groups.close()
-    return RegionNode.Composite(coalesce(encoded))
+    return Built(RegionNode.Composite(coalesce(encoded)), costs)
   }
 
   private fun encodeChild(
@@ -135,21 +155,38 @@ internal class ContainerEncoder(
 
     // A child with no framing is just its payload, and needs no composite around it.
     if (child.isBare && counterpart.isBare) {
-      return Encoded(describe(child, counterpart, groups, literals, depth))
+      val payload = describe(child, counterpart, groups, literals, depth)
+      return Encoded(payload.node, children = payload.costs)
     }
 
     // Framing is compared as the bytes it is; only the payload gets to choose for itself.
     val parts = ArrayList<RegionNode>(3)
+    val costs = ArrayList<RegionCost>(3)
     addPart(
-      parts, "${child.name} (header)", RegionKind.INDEX,
+      parts, costs, "${child.name} (header)", RegionKind.INDEX,
       counterpart.from, counterpart.contentFrom, child.from, child.contentFrom, literals
     )
-    parts.add(describe(child, counterpart, groups, literals, depth))
+
+    val before = literals.size
+    val payload = describe(child, counterpart, groups, literals, depth)
+    parts.add(payload.node)
+    costs.add(
+      RegionCost(
+        // Distinguishable from the record around it, which is reported by its bare name.
+        name = "${child.name} (data)",
+        kind = child.kind,
+        targetBytes = (child.contentTo - child.contentFrom).toLong(),
+        instructionBytes = payload.node.structureBytes(),
+        literalBytes = (literals.size - before).toLong(),
+        children = payload.costs
+      )
+    )
+
     addPart(
-      parts, "${child.name} (descriptor)", RegionKind.INDEX,
+      parts, costs, "${child.name} (descriptor)", RegionKind.INDEX,
       counterpart.contentTo, counterpart.to, child.contentTo, child.to, literals
     )
-    return Encoded(RegionNode.Composite(parts))
+    return Encoded(RegionNode.Composite(parts), children = costs)
   }
 
   /**
@@ -165,14 +202,14 @@ internal class ContainerEncoder(
     groups: Groups,
     literals: ByteWriter,
     depth: Int
-  ): RegionNode {
+  ): Built {
     val name = child.name
     val kind = child.kind
     val targetFrom = child.contentFrom
     val targetTo = child.contentTo
     val sourceFrom = counterpart.contentFrom
     val sourceTo = counterpart.contentTo
-    if (targetTo <= targetFrom) return RegionNode.Raw(0)
+    if (targetTo <= targetFrom) return Built(RegionNode.Raw(0), emptyList())
 
     val decomposed = if (
       child.storage == Storage.STORED &&
@@ -195,10 +232,10 @@ internal class ContainerEncoder(
       packedCost(flat, flatBytes)
     ) {
       literals.writeBytes(decomposed.literals)
-      return decomposed.node
+      return Built(decomposed.node, decomposed.costs)
     }
     literals.writeBytes(flatBytes)
-    return flat
+    return Built(flat, emptyList())
   }
 
   /** Builds the decomposed form of a range into its own buffer, so it can be weighed and dropped. */
@@ -216,8 +253,8 @@ internal class ContainerEncoder(
     if (sourceChildren.isEmpty()) return null
 
     val scratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
-    val node = composite(format, sourceChildren, targetChildren, scratch, null, depth + 1)
-    return Candidate(node, scratch.toByteArray())
+    val built = composite(format, sourceChildren, targetChildren, scratch, depth + 1)
+    return Candidate(built.node, scratch.toByteArray(), built.costs)
   }
 
   private fun packedCost(node: RegionNode, literals: ByteArray): Long =
@@ -225,6 +262,7 @@ internal class ContainerEncoder(
 
   private fun addPart(
     into: MutableList<RegionNode>,
+    costs: MutableList<RegionCost>,
     name: String,
     kind: RegionKind,
     sourceFrom: Int,
@@ -234,7 +272,18 @@ internal class ContainerEncoder(
     literals: ByteWriter
   ) {
     if (targetTo <= targetFrom) return
-    into.add(leaf(name, kind, sourceFrom, sourceTo, targetFrom, targetTo, literals))
+    val before = literals.size
+    val node = leaf(name, kind, sourceFrom, sourceTo, targetFrom, targetTo, literals)
+    into.add(node)
+    costs.add(
+      RegionCost(
+        name = name,
+        kind = kind,
+        targetBytes = (targetTo - targetFrom).toLong(),
+        instructionBytes = node.structureBytes(),
+        literalBytes = (literals.size - before).toLong()
+      )
+    )
   }
 
   /**
@@ -478,7 +527,14 @@ internal class ContainerEncoder(
   }
 
   /** A region and, when it is nothing but one copy, the source run it copies. */
-  private class Encoded(val node: RegionNode, val copy: CopyRun? = null)
+  private class Encoded(
+    val node: RegionNode,
+    val copy: CopyRun? = null,
+    val children: List<RegionCost> = emptyList()
+  )
+
+  /** A node and what the regions inside it cost, kept together until one of them is chosen. */
+  private class Built(val node: RegionNode, val costs: List<RegionCost>)
 
   private class CopyRun(val sourceFrom: Long, val length: Long)
 
@@ -489,7 +545,11 @@ internal class ContainerEncoder(
    * comparison systematically prefers whichever encoding emits fewer bytes over whichever emits
    * more compressible ones, and on real content those are rarely the same encoding.
    */
-  private class Candidate(val node: RegionNode, val literals: ByteArray) {
+  private class Candidate(
+    val node: RegionNode,
+    val literals: ByteArray,
+    val costs: List<RegionCost> = emptyList()
+  ) {
     fun packedCost(): Long =
       node.structureBytes() + if (literals.isEmpty()) 0 else Lzss.compress(literals).size
   }

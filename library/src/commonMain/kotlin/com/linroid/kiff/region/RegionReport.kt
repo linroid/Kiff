@@ -37,10 +37,24 @@ data class RegionCost(
   /** Bytes of instruction stream spent describing this region. */
   val instructionBytes: Long,
   /** Bytes of literal content this region contributed, before the literal stream is packed. */
-  val literalBytes: Long
+  val literalBytes: Long,
+  /**
+   * The regions this one was described as, when it was taken apart - a dex's sections, an inner
+   * archive's entries. Empty when it was described whole, which is most of the time.
+   *
+   * Their costs add up to this region's own, so a reader can go one level down without the sums
+   * stopping agreeing.
+   */
+  val children: List<RegionCost> = emptyList()
 ) {
   /** Everything the region added to the delta. */
   val patchBytes: Long get() = instructionBytes + literalBytes
+
+  /** This region and everything below it, deepest last. */
+  fun flatten(): List<RegionCost> = buildList {
+    add(this@RegionCost)
+    for (child in children) addAll(child.flatten())
+  }
 
   /** Patch bytes per target byte; near 0.0 for a region the patch merely points at. */
   val ratio: Double get() = if (targetBytes == 0L) 0.0 else patchBytes.toDouble() / targetBytes
@@ -78,6 +92,14 @@ data class RegionReport(
   /** Regions the patch only pointed at, paying an instruction and no content. */
   val referenced: List<RegionCost> get() = regions.filter { it.carriedNothing }
 
+  /** Every region at every depth, which is where a dex's sections show up. */
+  val allRegions: List<RegionCost> get() = regions.flatMap { it.flatten() }
+
+  /** The most expensive regions that were not taken apart further, deepest first. */
+  val leaves: List<RegionCost>
+    get() = allRegions.filter { it.children.isEmpty() && it.literalBytes > 0 }
+      .sortedByDescending { it.patchBytes }
+
   fun bytes(kind: RegionKind): Long =
     regions.filter { it.kind == kind }.sumOf { it.patchBytes }
 }
@@ -94,7 +116,8 @@ internal fun interface RegionRecorder {
     kind: RegionKind,
     targetBytes: Long,
     instructionBytes: Long,
-    literalBytes: Long
+    literalBytes: Long,
+    children: List<RegionCost>
   )
 }
 

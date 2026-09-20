@@ -39,7 +39,8 @@ class BinaryPatcher(
       RegionKind.WHOLE,
       target.size,
       node.structureBytes(),
-      (literals.size - literalsBefore).toLong()
+      (literals.size - literalsBefore).toLong(),
+      emptyList()
     )
     return node
   }
