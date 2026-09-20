@@ -65,6 +65,16 @@ internal object PatchPayload {
     val literalFlag = container.readByte()
     val storedLength = container.readVarInt()
 
+    // Unpacking is the one place a patch gets to name a size before anything has checked it, so
+    // the bound is worth stating: every content byte becomes at most one target byte - an ADD, a
+    // RAW region, the differences of a DIFF - so content longer than the target is a patch
+    // describing more than it could ever use, and a way to ask for an arbitrary allocation.
+    if (literalLength > targetSize) {
+      throw KiffException.InvalidPatch(
+        "Patch declares $literalLength bytes of content for a target of $targetSize"
+      )
+    }
+
     val tree = ByteReader(patch, container.offset)
     container.skip(treeLength)
     val storedLiterals = container.readBytes(storedLength)
