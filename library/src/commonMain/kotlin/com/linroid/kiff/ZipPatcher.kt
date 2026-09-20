@@ -8,10 +8,13 @@ import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.region.TextAwareRegionPlanner
+import com.linroid.kiff.container.ContainerEncoder
+import com.linroid.kiff.container.ContainerRegistry
+import com.linroid.kiff.container.ZipFormat
+import com.linroid.kiff.text.LineDiffAlgorithm
+import com.linroid.kiff.text.MyersDiffAlgorithm
 import com.linroid.kiff.zip.ZipDiffReport
-import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.analyzeArchives
-import com.linroid.kiff.zip.encodeArchive
 
 /**
  * Structure-aware diff for zip archives.
@@ -29,7 +32,10 @@ import com.linroid.kiff.zip.encodeArchive
 class ZipPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
   /** Chooses how each leaf region is described; see [RegionPlanner]. */
-  val planner: RegionPlanner = TextAwareRegionPlanner
+  val planner: RegionPlanner = TextAwareRegionPlanner,
+  /** Formats to look for *inside* the archive, so a zip within a zip is taken apart too. */
+  val containers: ContainerRegistry = NestedContainers,
+  val lineAlgorithm: LineDiffAlgorithm = MyersDiffAlgorithm()
 ) : DeltaPatcher() {
 
   override val id: PatcherId = PatcherId.ZIP
@@ -40,14 +46,9 @@ class ZipPatcher(
     target: ByteArraySource,
     literals: ByteWriter,
     recorder: RegionRecorder?
-  ): RegionNode = encodeArchive(
-    source,
-    target,
-    ZipEncodeOptions(planner = planner),
-    literals,
-    algorithm,
-    recorder
-  )
+  ): RegionNode = ContainerEncoder(
+    source, target, algorithm, planner, lineAlgorithm, containers
+  ).encode(ZipFormat(), literals, recorder)
 
   /**
    * Reports what changed entry by entry, without building a patch.
