@@ -50,7 +50,8 @@ open class ZipFormat : ContainerFormat {
             contentFrom = from + entry.dataOffset,
             contentTo = from + entry.dataOffset + entry.compressedSize,
             storage = if (entry.isStored) Storage.STORED else Storage.DEFLATED,
-            contentKey = ContentKey(entry.crc32, entry.compressedSize, entry.method)
+            contentKey = ContentKey(entry.crc32, entry.compressedSize, entry.method),
+            group = groupOf(entry.name)
           )
         }
         is ZipRegion.Gap -> Child(
@@ -68,6 +69,9 @@ open class ZipFormat : ContainerFormat {
       }
     }
   }
+
+  /** Entries content migrates between; a plain zip knows of none. */
+  protected open fun groupOf(name: String): String? = null
 
   private fun labelOfGap(key: ZipGapKey): String = when {
     key.beforeDirectory -> BEFORE_DIRECTORY
@@ -108,6 +112,17 @@ class ApkFormat : ZipFormat() {
 
   override val name: String get() = "apk"
 
+  /**
+   * Every dex is one group.
+   *
+   * A rebuild repartitions classes across them - on two real builds of one app the split went from
+   * 3.4 MB + 7.2 MB to 5.5 MB + 5.1 MB, roughly two megabytes of classes changing file while
+   * changing nothing else. Searching each dex only against the dex of the same name cannot find
+   * any of it.
+   */
+  override fun groupOf(name: String): String? =
+    if (ApkEntries.dexOrdinal(name) != null) DEX_GROUP else null
+
   override fun pairUnmatched(target: Child, source: List<Child>): Child? {
     val ordinal = ApkEntries.dexOrdinal(target.name) ?: return null
     var best: Child? = null
@@ -121,5 +136,9 @@ class ApkFormat : ZipFormat() {
       }
     }
     return best
+  }
+
+  private companion object {
+    const val DEX_GROUP = "dex"
   }
 }

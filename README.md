@@ -155,6 +155,14 @@ the same four kinds; the reader does not change, because a patch records the str
 rather than asking the reader to work it out; and patches written before the format existed still
 apply. A dex is an opaque leaf today and its sections tomorrow, with no format version in between.
 
+A format can also declare that some children are **interchangeable**, by giving them a shared
+`group`. Pairing decides which source child a target child is described *against*; a group decides
+which source bytes it can be *found in*, and those differ whenever a format moves content between
+siblings. Android does exactly that: classes are split across `classes.dex`, `classes2.dex` and so
+on, and a rebuild repartitions them, so a class can change file while changing nothing else. On two
+real builds the split went from 3.4 MB + 7.2 MB to 5.5 MB + 5.1 MB. `ApkFormat` puts every dex in
+one group, and the members are indexed together rather than one at a time.
+
 **The one rule**: children must tile their parent exactly, gaps included. Everything the format does
 not name - a preamble, alignment padding, an APK signing block, a trailer - is still a child, just
 an unnamed one. A patch restores byte for byte only because every byte belongs to something.

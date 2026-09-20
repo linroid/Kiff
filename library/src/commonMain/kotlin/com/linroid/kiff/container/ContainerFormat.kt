@@ -91,7 +91,21 @@ data class Child(
    * Identity for pairing, when the format can supply one that is cheaper or better than comparing
    * bytes - a zip's CRC and size, say. Children with equal keys are considered the same content.
    */
-  val contentKey: Any? = null
+  val contentKey: Any? = null,
+  /**
+   * Children that content migrates between, and so should be searched against one another.
+   *
+   * Pairing decides which source child a target child is *described against*; this decides which
+   * source bytes it can be *found in*, which is a different question whenever a format is free to
+   * move content between siblings. Android's is: the classes in an APK are split across
+   * `classes.dex`, `classes2.dex` and so on, and a rebuild repartitions them, so a class can leave
+   * one dex for another while changing not at all. Without a group, those bytes sit in the source
+   * file unreachable, because the search only ever indexed the counterpart.
+   *
+   * Members of a group are indexed together, over the span from the first to the last of them.
+   * That span may take in unrelated bytes lying between; it costs index size and can only help.
+   */
+  val group: String? = null
 ) {
   val size: Int get() = to - from
 
