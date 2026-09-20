@@ -5,6 +5,8 @@ import com.linroid.kiff.delta.DeltaSink
 import com.linroid.kiff.delta.DeltaScanner
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.region.RegionRecorder
 
 /**
  * Describes a target archive region by region.
@@ -29,8 +31,10 @@ internal class ZipEncoder(
   /** Built only if some target region has no counterpart to be indexed against. */
   private val wholeSourceScanner by lazy { algorithm.scanner(sourceSource) }
 
-  fun encode(writer: DeltaWriter) {
+  fun encode(writer: DeltaWriter, recorder: RegionRecorder? = null) {
     for (region in targetLayout.regions) {
+      val instructionsBefore = writer.instructionBytes
+      val literalsBefore = writer.literalBytes
       when (region) {
         is ZipRegion.Record -> encodeRecord(region.entry, writer)
         is ZipRegion.Gap -> encodeGap(region, writer)
@@ -42,7 +46,32 @@ internal class ZipEncoder(
           writer
         )
       }
+      recorder?.record(
+        labelOf(region),
+        kindOf(region),
+        region.size.toLong(),
+        writer.instructionBytes - instructionsBefore,
+        writer.literalBytes - literalsBefore
+      )
     }
+  }
+
+  private fun labelOf(region: ZipRegion): String = when (region) {
+    is ZipRegion.Record -> region.entry.name
+    is ZipRegion.Gap -> labelOfGap(region.key)
+    is ZipRegion.Directory -> CENTRAL_DIRECTORY
+  }
+
+  private fun labelOfGap(key: ZipGapKey): String = when {
+    key.beforeDirectory -> BEFORE_DIRECTORY
+    key.afterEntry == null -> PREAMBLE
+    else -> "(gap after ${key.afterEntry})"
+  }
+
+  private fun kindOf(region: ZipRegion): RegionKind = when (region) {
+    is ZipRegion.Record -> RegionKind.CONTENT
+    is ZipRegion.Gap -> RegionKind.GAP
+    is ZipRegion.Directory -> RegionKind.INDEX
   }
 
   private fun encodeRecord(entry: ZipEntry, writer: DeltaWriter) {
@@ -155,6 +184,12 @@ internal class ZipEncoder(
 
   private companion object {
     const val MIN_SEARCHABLE_RECORD = 64 * 1024
+
+    const val CENTRAL_DIRECTORY = "(central directory)"
+    const val PREAMBLE = "(preamble)"
+
+    /** In an APK this is where the signing block sits. */
+    const val BEFORE_DIRECTORY = "(gap before central directory)"
   }
 }
 

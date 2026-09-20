@@ -4,6 +4,9 @@ import com.linroid.kiff.KiffException
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.region.RegionRecorder
+import com.linroid.kiff.region.WHOLE_FILE_REGION
 
 /**
  * Shared by the zip and apk patchers: describe [target] using [source], walking the archive
@@ -15,15 +18,26 @@ internal fun encodeArchive(
   target: ByteArraySource,
   options: ZipEncodeOptions,
   writer: DeltaWriter,
-  algorithm: DeltaAlgorithm
+  algorithm: DeltaAlgorithm,
+  recorder: RegionRecorder? = null
 ) {
   val sourceLayout = ZipReader.parseOrNull(source.bytes)
   val targetLayout = ZipReader.parseOrNull(target.bytes)
   if (sourceLayout == null || targetLayout == null) {
+    val instructionsBefore = writer.instructionBytes
+    val literalsBefore = writer.literalBytes
     algorithm.scanner(source).scan(target, 0, target.size, writer)
+    recorder?.record(
+      WHOLE_FILE_REGION,
+      RegionKind.WHOLE,
+      target.size,
+      writer.instructionBytes - instructionsBefore,
+      writer.literalBytes - literalsBefore
+    )
     return
   }
-  ZipEncoder(source, sourceLayout, target, targetLayout, options, algorithm).encode(writer)
+  ZipEncoder(source, sourceLayout, target, targetLayout, options, algorithm)
+    .encode(writer, recorder)
 }
 
 internal fun parseArchive(bytes: ByteArray, label: String): ZipLayout =

@@ -74,6 +74,34 @@ unchanged=412  metadata_changed=3  modified=11  added=2  removed=1
 
 `kiff diff foo.txt bar.txt` prints a line-based (Myers) diff instead, for text files.
 
+`kiff changes` says what differs; `kiff explain` says what the difference *cost*, which is not the
+same question - a large entry can change and still be nearly free, and a small one can be expensive:
+
+```console
+$ kiff explain foo-1.0.apk foo-1.1.apk
+19.1 MiB target, 421 regions
+  Patch:        3.1 MiB (16.23% of target)
+  Content:      3.1 MiB carried, before it is packed
+  Instructions: 1.6 KiB of references
+  Referenced:   408 regions the patch only points at
+
+By kind
+  dex               2.4 MiB   77.3%   3 entries, 44.4% of their 5.4 MiB
+  native_library  612.0 KiB   19.2%   6 entries, 5.3% of their 11.2 MiB
+  resource         82.0 KiB    2.6%   402 entries, 4.2% of their 1.9 MiB
+  resource_table   18.2 KiB    0.6%   1 entry, 8.7% of their 208.1 KiB
+  gaps              8.0 KiB    0.3%
+  directory         1.4 KiB    0.0%
+
+Most expensive regions
+     2.3 MiB  classes2.dex (85.2% of 2.7 MiB)
+   612.0 KiB  lib/arm64-v8a/libfoo.so (8.9% of 6.7 MiB)
+```
+
+A region the patch only points at still costs the instruction that points at it, so `Instructions`
+is the floor an archive of mostly-unchanged entries cannot go below.
+
+
 ## How a patch is built
 
 A patch is a header plus a delta stream:

@@ -8,7 +8,7 @@ import com.linroid.kiff.io.fileSource
 /** Entry point: the bundled patchers plus file-level create/apply helpers. */
 object Kiff {
 
-  val binary: Patcher = BinaryPatcher()
+  val binary: BinaryPatcher = BinaryPatcher()
 
   val zip: ZipPatcher = ZipPatcher()
 

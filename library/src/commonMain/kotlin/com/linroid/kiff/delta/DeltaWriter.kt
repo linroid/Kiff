@@ -30,6 +30,17 @@ internal class DeltaWriter(
   /** Number of target bytes described so far. */
   val length: Long get() = targetSize
 
+  /**
+   * Bytes of instruction stream written so far.
+   *
+   * A pending ADD's tag is not written until the next instruction flushes it, so a few bytes land
+   * on whichever region triggers that flush.
+   */
+  val instructionBytes: Long get() = instructions.size.toLong()
+
+  /** Bytes of literal stream written so far, counted before [finish] packs them. */
+  val literalBytes: Long get() = literals.size.toLong()
+
   override fun add(bytes: ByteArray, from: Int, to: Int) {
     if (to <= from) return
     literals.writeBytes(bytes, from, to)

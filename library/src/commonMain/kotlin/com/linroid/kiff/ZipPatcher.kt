@@ -4,6 +4,7 @@ import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.zip.ZipDiffReport
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.analyzeArchives
@@ -29,8 +30,13 @@ class ZipPatcher(
   override val id: PatcherId = PatcherId.ZIP
   override val name: String = "zip"
 
-  override fun encode(source: ByteArraySource, target: ByteArraySource, sink: DeltaWriter) {
-    encodeArchive(source, target, ZipEncodeOptions(), sink, algorithm)
+  override fun encode(
+    source: ByteArraySource,
+    target: ByteArraySource,
+    sink: DeltaWriter,
+    recorder: RegionRecorder?
+  ) {
+    encodeArchive(source, target, ZipEncodeOptions(), sink, algorithm, recorder)
   }
 
   /**
