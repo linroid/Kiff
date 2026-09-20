@@ -3,6 +3,8 @@ package com.linroid.kiff.container
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.NestedContainers
 import com.linroid.kiff.ZipPatcher
+import com.linroid.kiff.apk.TestApkBuilder
+import com.linroid.kiff.ApkPatcher
 import com.linroid.kiff.assertRestores
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
@@ -99,6 +101,37 @@ class DexFormatTest {
       .createPatch(source, target).size
     assertTrue(aware <= unaware, "describing the dex cost size: $aware against $unaware")
   }
+
+  @Test
+  fun takingADexApartNeverCostsSizeEvenWhenTheDexAreGrouped() {
+    // Grouping lets a dex be searched against every dex, which makes describing it whole much
+    // better and so raises the bar its sections have to clear. They clear it or they are dropped;
+    // what must not happen is the two features costing size by working against each other.
+    val a = structuredBytes(50_000, seed = 60)
+    val b = structuredBytes(50_000, seed = 61)
+    val source = TestApkBuilder()
+      .manifest()
+      .dex("classes.dex", dexWith(a, seed = 62))
+      .dex("classes2.dex", dexWith(b, seed = 63))
+      .build()
+    val target = TestApkBuilder()
+      .manifest()
+      .dex("classes.dex", dexWith(a, seed = 64))
+      .dex("classes2.dex", dexWith(b, seed = 65))
+      .build()
+
+    val withDex = ApkPatcher(containers = NestedContainers)
+    val withoutDex = ApkPatcher(containers = ContainerRegistry(ZipFormat()))
+    val aware = assertRestores(withDex, source, target)
+    val unaware = assertRestores(withoutDex, source, target)
+    assertTrue(aware <= unaware, "describing the dex cost size: $aware against $unaware")
+  }
+
+  private fun dexWith(code: ByteArray, seed: Int) = TestDexBuilder()
+    .section(0x0001, structuredBytes(600, seed))
+    .section(0x2001, code)
+    .section(0x2002, structuredBytes(900, seed + 100))
+    .build()
 
   private fun u32(bytes: ByteArray, at: Int): Int {
     var value = 0

@@ -95,12 +95,35 @@ internal fun writeRegionTree(out: ByteWriter, node: RegionNode) {
   }
 }
 
-/** Bytes this node and its children spend on structure, as opposed to content. */
+/**
+ * Bytes this node and its children spend on structure, as opposed to content.
+ *
+ * This counts what [writeRegionTree] will actually write, its own framing included: a node costs a
+ * length and an encoding byte before it describes anything. Counting only the instructions would
+ * make every node look free to add, which would bias each weigh-in in favour of taking a region
+ * apart - by exactly the framing the comparison forgot.
+ */
 internal fun RegionNode.structureBytes(): Long = when (this) {
-  is RegionNode.Composite -> children.sumOf { it.structureBytes() }
-  is RegionNode.Delta -> instructions.size.toLong()
-  is RegionNode.Text -> edits.size.toLong()
-  is RegionNode.Raw -> 0L
+  is RegionNode.Composite ->
+    varSize(targetLength) + 1 + varSize(children.size.toLong()) +
+      children.sumOf { it.structureBytes() }
+  is RegionNode.Delta ->
+    varSize(targetLength) + 1 + varSize(instructions.size.toLong()) + instructions.size
+  is RegionNode.Text ->
+    varSize(targetLength) + 1 + varSize(sourceFrom) + varSize(sourceLength) +
+      varSize(edits.size.toLong()) + edits.size
+  is RegionNode.Raw -> varSize(targetLength) + 1
+}
+
+/** Bytes a varint of [value] occupies: seven bits at a time. */
+private fun varSize(value: Long): Long {
+  var remaining = value
+  var bytes = 1L
+  while (remaining >= 0x80) {
+    remaining = remaining ushr 7
+    bytes++
+  }
+  return bytes
 }
 
 /**

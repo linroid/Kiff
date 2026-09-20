@@ -105,10 +105,11 @@ internal class ContainerEncoder(
     sourceChildren: List<Child>,
     targetChildren: List<Child>,
     literals: ByteWriter,
-    depth: Int
+    depth: Int,
+    inherited: DeltaScanner? = null
   ): Built {
     val pairing = Pairing(format, sourceChildren)
-    val groups = Groups(sourceChildren)
+    val groups = Groups(sourceChildren, inherited)
     val encoded = ArrayList<Encoded>(targetChildren.size)
     val costs = ArrayList<RegionCost>(targetChildren.size)
     for (child in targetChildren) {
@@ -216,7 +217,7 @@ internal class ContainerEncoder(
       counterpart.storage == Storage.STORED &&
       depth + 1 < MAX_REGION_DEPTH
     ) {
-      decompose(sourceFrom, sourceTo, targetFrom, targetTo, depth)
+      decompose(sourceFrom, sourceTo, targetFrom, targetTo, depth, groups.scannerFor(child.group))
     } else {
       null
     }
@@ -244,7 +245,8 @@ internal class ContainerEncoder(
     sourceTo: Int,
     targetFrom: Int,
     targetTo: Int,
-    depth: Int
+    depth: Int,
+    inherited: DeltaScanner?
   ): Candidate? {
     val format = registry.formatFor(target, targetFrom, targetTo) ?: return null
     val targetChildren = format.decompose(target, targetFrom, targetTo)
@@ -253,7 +255,7 @@ internal class ContainerEncoder(
     if (sourceChildren.isEmpty()) return null
 
     val scratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
-    val built = composite(format, sourceChildren, targetChildren, scratch, depth + 1)
+    val built = composite(format, sourceChildren, targetChildren, scratch, depth + 1, inherited)
     return Candidate(built.node, scratch.toByteArray(), built.costs)
   }
 
@@ -481,7 +483,7 @@ internal class ContainerEncoder(
    * point is that several children search the same bytes: building it per child would index the
    * same megabytes again for each one.
    */
-  private inner class Groups(sourceChildren: List<Child>) {
+  private inner class Groups(sourceChildren: List<Child>, private val inherited: DeltaScanner?) {
     private val spans: Map<String, IntRange> = buildMap {
       for (child in sourceChildren) {
         val group = child.group ?: continue
@@ -495,8 +497,18 @@ internal class ContainerEncoder(
     }
     private val scanners = HashMap<String, DeltaScanner>()
 
+    /**
+     * The index a child should search, which is its own group's when it has one and its parent's
+     * otherwise.
+     *
+     * Inheritance is what keeps decomposition and grouping from working against each other. A dex
+     * inside an APK is searched against every dex; without this, taking that dex apart would
+     * narrow each of its sections back down to the section of the same name, and the sections
+     * would lose to the undecomposed form for no better reason than that.
+     */
     fun scannerFor(group: String?): DeltaScanner? {
-      val span = spans[group ?: return null] ?: return null
+      if (group == null) return inherited
+      val span = spans[group] ?: return inherited
       return scanners.getOrPut(group) {
         algorithm.scanner(sourceSource, span.first.toLong(), span.last.toLong())
       }
