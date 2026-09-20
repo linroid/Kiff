@@ -117,6 +117,27 @@ internal object PatchPayload {
         literals.copyInto(target, at, cursor.value, cursor.value + length)
         cursor.value += length
       }
+      RegionEncoding.COLUMNS -> {
+        val sourceFrom = tree.readVarLong().toIntIndex("Column source offset")
+        val sourceLength = tree.readVarLong().toIntIndex("Column source length")
+        val count = tree.readByte()
+        val widths = List(count) { tree.readByte() }
+        if (!ColumnTransform.suits(widths, length)) {
+          throw KiffException.InvalidPatch("Column region declares a row this cannot describe")
+        }
+        if (sourceFrom < 0 || sourceFrom + sourceLength > source.size) {
+          throw KiffException.InvalidPatch("Column region names a source range outside the source")
+        }
+        // Both sides are rearranged the same way; the region inside describes one against the
+        // other, and the result is rearranged back.
+        val rearranged = ColumnTransform.forward(source, sourceFrom, sourceFrom + sourceLength, widths)
+        val scratch = ByteArray(length)
+        val written = applyNode(tree, rearranged, literals, cursor, scratch, 0, depth + 1)
+        if (written != length) {
+          throw KiffException.InvalidPatch("Column region produced $written of $length bytes")
+        }
+        ColumnTransform.inverse(scratch, widths, length).copyInto(target, at)
+      }
       RegionEncoding.TEXT -> {
         val sourceFrom = tree.readVarLong().toIntIndex("Text source offset")
         val sourceLength = tree.readVarLong().toIntIndex("Text source length")

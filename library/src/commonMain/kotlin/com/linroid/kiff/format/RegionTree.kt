@@ -20,7 +20,10 @@ enum class RegionEncoding(internal val code: Int) {
   RAW(2),
 
   /** A line-level edit script, for regions that are text. */
-  TEXT(3);
+  TEXT(3),
+
+  /** A table of fixed-width rows, rearranged into columns of differences before being described. */
+  COLUMNS(4);
 
   internal companion object {
     fun fromCode(code: Int): RegionEncoding = entries.firstOrNull { it.code == code }
@@ -68,6 +71,19 @@ internal sealed class RegionNode {
     val sourceLength: Long,
     val edits: ByteArray
   ) : RegionNode()
+
+  /**
+   * A region described in a rearranged form: both sides are transformed the same way, [inner]
+   * describes the target's transformed bytes against the source's, and the result is transformed
+   * back. The rearrangement is exact, so this costs nothing but the chance that it helps.
+   */
+  class Columns(
+    override val targetLength: Long,
+    val sourceFrom: Long,
+    val sourceLength: Long,
+    val widths: List<Int>,
+    val inner: RegionNode
+  ) : RegionNode()
 }
 
 /** How this node describes its bytes. */
@@ -75,6 +91,7 @@ internal fun RegionNode.encoding(): RegionEncoding = when (this) {
   is RegionNode.Composite -> RegionEncoding.COMPOSITE
   is RegionNode.Delta -> RegionEncoding.DELTA
   is RegionNode.Text -> RegionEncoding.TEXT
+  is RegionNode.Columns -> RegionEncoding.COLUMNS
   is RegionNode.Raw -> RegionEncoding.RAW
 }
 
@@ -100,6 +117,14 @@ internal fun writeRegionTree(out: ByteWriter, node: RegionNode) {
       out.writeVarInt(node.edits.size)
       out.writeBytes(node.edits)
     }
+    is RegionNode.Columns -> {
+      out.writeByte(RegionEncoding.COLUMNS.code)
+      out.writeVarLong(node.sourceFrom)
+      out.writeVarLong(node.sourceLength)
+      out.writeByte(node.widths.size)
+      for (width in node.widths) out.writeByte(width)
+      writeRegionTree(out, node.inner)
+    }
   }
 }
 
@@ -120,6 +145,9 @@ internal fun RegionNode.structureBytes(): Long = when (this) {
   is RegionNode.Text ->
     varSize(targetLength) + 1 + varSize(sourceFrom) + varSize(sourceLength) +
       varSize(edits.size.toLong()) + edits.size
+  is RegionNode.Columns ->
+    varSize(targetLength) + 1 + varSize(sourceFrom) + varSize(sourceLength) +
+      1 + widths.size + inner.structureBytes()
   is RegionNode.Raw -> varSize(targetLength) + 1
 }
 

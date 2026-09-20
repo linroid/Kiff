@@ -125,6 +125,7 @@ Each node of the tree covers a run of target bytes and says how it is described:
 | `COMPOSITE` | children, tiling this region in order |
 | `DELTA` | a byte-level instruction stream |
 | `TEXT` | a line-level edit script |
+| `COLUMNS` | a table of fixed-width rows, read as columns of differences |
 | `RAW` | the bytes verbatim |
 
 Nesting is what lets a region be described on its own terms. A zip is a composite of its entries,
@@ -174,11 +175,20 @@ more than it sounds: a byte search that copies from anywhere in the source is al
 finding moved and edited content, so on *stored* content today, decomposing mostly breaks even. It
 will earn its keep on compressed children, which cannot be compared at all without being decoded.
 
+`COLUMNS` is what a format's knowledge is worth. A table of ids is the renumbering problem in its
+purest form: every entry of a dex's `string_ids` is an offset into the file, so inserting one string
+shifts all of them and no matching run survives. The *gaps* between those offsets are the string
+lengths, and those barely change. Reading the table column by column as differences turns shifting
+absolutes into stable gaps. Only the format knows a region is a table, so a `Child` declares its row
+layout; the rearrangement itself is exact in both directions, so it risks nothing.
+
 `DexFormat` is a worked example, and an honest one. A dex is mostly tables of offsets into itself,
 so adding a method renumbers everything after it and a byte search finds nothing to match: on a real
 pair of builds the two dex files account for 98% of the patch while costing 90% of their own size.
-Splitting them by section, which their map list makes nearly free, recovers about 0.3%. Section
-boundaries are not the fix for renumbering - they are what a fix would be built on.
+Splitting them by section, which their map list makes nearly free, recovers about 0.3% on its own.
+Section boundaries are not the fix for renumbering - they are what a fix is built on. Declaring the
+row layout of the sections that are tables is the fix, and takes the same pair from 7.5% of the
+target to 6.5%.
 
 Every leaf is chosen by measurement, not by guess. Whatever a `RegionPlanner` nominates, the encoder
 builds it, builds the byte-level encoding too, and keeps whichever packs smaller - and keeps neither

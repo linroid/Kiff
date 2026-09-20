@@ -105,7 +105,16 @@ data class Child(
    * Members of a group are indexed together, over the span from the first to the last of them.
    * That span may take in unrelated bytes lying between; it costs index size and can only help.
    */
-  val group: String? = null
+  val group: String? = null,
+  /**
+   * The byte widths of each field in a row, when this child is a table of fixed-width rows.
+   *
+   * Only the format knows that a region is a table, and the difference it makes is large: a table
+   * of ids renumbers wholesale between versions and so cannot be matched at all as it stands,
+   * while the gaps between its entries barely move. Declaring the layout lets the encoder try
+   * reading it in columns of differences instead. Null for anything that is not a table.
+   */
+  val columns: List<Int>? = null
 ) {
   val size: Int get() = to - from
 

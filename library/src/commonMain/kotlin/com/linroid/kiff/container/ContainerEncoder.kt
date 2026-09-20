@@ -4,6 +4,7 @@ import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.DeltaScanner
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.ColumnTransform
 import com.linroid.kiff.format.Lzss
 import com.linroid.kiff.format.MAX_REGION_DEPTH
 import com.linroid.kiff.format.RegionNode
@@ -11,6 +12,7 @@ import com.linroid.kiff.format.beatsStoring
 import com.linroid.kiff.format.encoding
 import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.io.asSource
 import com.linroid.kiff.region.RegionAlgorithm
 import com.linroid.kiff.region.RegionCost
 import com.linroid.kiff.region.RegionInfo
@@ -223,7 +225,7 @@ internal class ContainerEncoder(
     val flatScratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
     val flat = leaf(
       name, kind, sourceFrom, sourceTo, targetFrom, targetTo, flatScratch,
-      groups.scannerFor(child.group)
+      groups.scannerFor(child.group), child.columns
     )
     val flatBytes = flatScratch.toByteArray()
 
@@ -302,7 +304,8 @@ internal class ContainerEncoder(
     targetFrom: Int,
     targetTo: Int,
     literals: ByteWriter,
-    shared: DeltaScanner? = null
+    shared: DeltaScanner? = null,
+    columns: List<Int>? = null
   ): RegionNode {
     val span = targetTo - targetFrom
     if (identical(sourceFrom, targetFrom, span, sourceTo - sourceFrom)) {
@@ -319,12 +322,15 @@ internal class ContainerEncoder(
     val plan = planner.plan(info)
     if (plan == RegionAlgorithm.RAW) return raw(targetFrom, targetTo, literals)
 
-    val binary = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
-    val best = if (plan == RegionAlgorithm.TEXT) {
+    var best = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
+    if (plan == RegionAlgorithm.TEXT) {
       val text = textCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo)
-      if (text != null && text.packedCost() < binary.packedCost()) text else binary
-    } else {
-      binary
+      if (text != null && text.packedCost() < best.packedCost()) best = text
+    }
+    // A table only its format could recognise gets one more way of being read.
+    if (columns != null) {
+      val rearranged = columnsCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, columns)
+      if (rearranged != null && rearranged.packedCost() < best.packedCost()) best = rearranged
     }
 
     if (!beatsStoring(best.node.structureBytes(), best.literals, target, targetFrom, targetTo)) {
@@ -358,6 +364,41 @@ internal class ContainerEncoder(
     }
     return Candidate(
       RegionNode.Delta(span.toLong(), writer.finishInstructions()),
+      scratch.toByteArray()
+    )
+  }
+
+  /**
+   * Reads both sides as columns of differences and describes one against the other.
+   *
+   * The rearrangement is exact in both directions, so this risks nothing: it either packs smaller
+   * than reading the bytes as they lie, or it is discarded like any other candidate.
+   */
+  private fun columnsCandidate(
+    span: Int,
+    sourceFrom: Int,
+    sourceTo: Int,
+    targetFrom: Int,
+    targetTo: Int,
+    widths: List<Int>
+  ): Candidate? {
+    if (!ColumnTransform.suits(widths, span) || sourceTo <= sourceFrom) return null
+    val rearrangedSource = ColumnTransform.forward(source, sourceFrom, sourceTo, widths)
+    val rearrangedTarget = ColumnTransform.forward(target, targetFrom, targetTo, widths)
+    val scratch = ByteWriter(span.coerceIn(64, 1 shl 16))
+    val writer = DeltaWriter(rearrangedSource, scratch)
+    val asSource = rearrangedSource.asSource()
+    algorithm.scanner(asSource).use { scanner ->
+      scanner.scan(rearrangedTarget.asSource(), 0, rearrangedTarget.size.toLong(), writer, 0)
+    }
+    return Candidate(
+      RegionNode.Columns(
+        targetLength = span.toLong(),
+        sourceFrom = sourceFrom.toLong(),
+        sourceLength = (sourceTo - sourceFrom).toLong(),
+        widths = widths,
+        inner = RegionNode.Delta(span.toLong(), writer.finishInstructions())
+      ),
       scratch.toByteArray()
     )
   }
