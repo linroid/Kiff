@@ -8,9 +8,9 @@ import com.linroid.kiff.format.ByteWriter
  * The TEXT region encoding: a line-level edit script over raw bytes.
  *
  * A line here is *bytes up to and including its newline*, and the final line may have none. That is
- * the whole trick, and it is what the CLI's [TextFile] cannot do: splitting on `"\n"` and dropping
- * empty trailing entries loses whether the file ended in a newline, so it can show a diff but never
- * restore one. Carrying the terminator inside the line means concatenating lines reproduces the
+ * the whole trick. Splitting on `"\n"` and dropping empty trailing entries - which is what the
+ * CLI's reader used to do - loses whether the file ended in a newline, so it can show a diff but
+ * never restore one. Carrying the terminator inside the line means concatenating lines reproduces the
  * region byte for byte, which is what [com.linroid.kiff.Patcher] promises. CRLF needs no special
  * case: the `\r` simply belongs to the line it ends.
  *
