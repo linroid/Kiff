@@ -1,39 +1,13 @@
 package com.linroid.kiff.apk
 
 import com.linroid.kiff.zip.ZipEntryStatus
-import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.ZipEntry
 import com.linroid.kiff.zip.ZipLayout
-import com.linroid.kiff.region.BinaryRegionPlanner
 import com.linroid.kiff.region.RegionKind
-import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionReport
 import com.linroid.kiff.zip.ZipReader
 import com.linroid.kiff.zip.analyzeLayouts
 import com.linroid.kiff.zip.parseArchive
-import kotlin.math.abs
-
-internal fun apkEncodeOptions(planner: RegionPlanner = BinaryRegionPlanner) =
-  ZipEncodeOptions(pairUnmatched = ::pairDexByOrdinal, planner = planner)
-
-/**
- * A build that gains or loses a dex file renumbers the rest, so a `classes4.dex` with no
- * counterpart is still far closer to the source's highest-numbered dex than to nothing.
- */
-private fun pairDexByOrdinal(entry: ZipEntry, sourceLayout: ZipLayout): ZipEntry? {
-  val ordinal = ApkEntries.dexOrdinal(entry.name) ?: return null
-  var best: ZipEntry? = null
-  var bestDistance = Int.MAX_VALUE
-  for (candidate in sourceLayout.entries) {
-    val candidateOrdinal = ApkEntries.dexOrdinal(candidate.name) ?: continue
-    val distance = abs(candidateOrdinal - ordinal)
-    if (distance < bestDistance) {
-      bestDistance = distance
-      best = candidate
-    }
-  }
-  return best
-}
 
 internal fun analyzeApk(source: ByteArray, target: ByteArray): ApkDiffReport {
   val sourceLayout = parseArchive(source, "Source")

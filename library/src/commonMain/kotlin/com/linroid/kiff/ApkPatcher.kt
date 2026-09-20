@@ -5,8 +5,12 @@ import com.linroid.kiff.apk.ApkEntries
 import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.ApkPatchReport
 import com.linroid.kiff.apk.analyzeApk
-import com.linroid.kiff.apk.apkEncodeOptions
 import com.linroid.kiff.apk.groupApkCost
+import com.linroid.kiff.container.ApkFormat
+import com.linroid.kiff.container.ContainerEncoder
+import com.linroid.kiff.container.ContainerRegistry
+import com.linroid.kiff.text.LineDiffAlgorithm
+import com.linroid.kiff.text.MyersDiffAlgorithm
 import com.linroid.kiff.apk.looksLikeApk
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.format.ByteWriter
@@ -16,7 +20,6 @@ import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.region.TextAwareRegionPlanner
-import com.linroid.kiff.zip.encodeArchive
 
 /**
  * Structure-aware diff for Android packages.
@@ -34,7 +37,10 @@ import com.linroid.kiff.zip.encodeArchive
 class ApkPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
   /** Chooses how each leaf region is described; see [RegionPlanner]. */
-  val planner: RegionPlanner = TextAwareRegionPlanner
+  val planner: RegionPlanner = TextAwareRegionPlanner,
+  /** Formats to look for *inside* the package, so a bundled archive is taken apart too. */
+  val containers: ContainerRegistry = NestedContainers,
+  val lineAlgorithm: LineDiffAlgorithm = MyersDiffAlgorithm()
 ) : DeltaPatcher() {
 
   override val id: PatcherId = PatcherId.APK
@@ -45,8 +51,9 @@ class ApkPatcher(
     target: ByteArraySource,
     literals: ByteWriter,
     recorder: RegionRecorder?
-  ): RegionNode =
-    encodeArchive(source, target, apkEncodeOptions(planner), literals, algorithm, recorder)
+  ): RegionNode = ContainerEncoder(
+    source, target, algorithm, planner, lineAlgorithm, containers
+  ).encode(ApkFormat(), literals, recorder)
 
   /**
    * Reports what changed, entry by entry and grouped by kind, without building a patch.

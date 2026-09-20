@@ -133,6 +133,36 @@ the *data* can pick an encoding without the header bytes around it having a say.
 format later - treating a dex as sections rather than as one opaque leaf - adds nodes to the tree
 and changes neither the node set nor the reader.
 
+## Teaching Kiff a new container
+
+A container is taken apart by a `ContainerFormat`, and that is the whole extension point:
+
+```kotlin
+class DexFormat : ContainerFormat {
+  override val name = "dex"
+  override fun detect(bytes: ByteArray, from: Int, to: Int) = /* magic */
+  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* sections */
+}
+
+val patcher = ApkPatcher(containers = NestedContainers + DexFormat())
+```
+
+Nothing else moves. The patch format does not change, because a decomposed region is more nodes of
+the same four kinds; the reader does not change, because a patch records the structure it used
+rather than asking the reader to work it out; and patches written before the format existed still
+apply. A dex is an opaque leaf today and its sections tomorrow, with no format version in between.
+
+**The one rule**: children must tile their parent exactly, gaps included. Everything the format does
+not name - a preamble, alignment padding, an APK signing block, a trailer - is still a child, just
+an unnamed one. A patch restores byte for byte only because every byte belongs to something.
+`ContainerFormatTiling.describe(format, bytes)` asserts this; call it from your tests.
+
+Decomposing is weighed, not assumed. A nested region is encoded both ways and the bigger result is
+discarded, so a format that does not pay off costs encode time and never patch size. That matters
+more than it sounds: a byte search that copies from anywhere in the source is already good at
+finding moved and edited content, so on *stored* content today, decomposing mostly breaks even. It
+will earn its keep on compressed children, which cannot be compared at all without being decoded.
+
 Every leaf is chosen by measurement, not by guess. Whatever a `RegionPlanner` nominates, the encoder
 builds it, builds the byte-level encoding too, and keeps whichever packs smaller - and keeps neither
 if storing the bytes outright would have been smaller still. A planner can therefore only ever cost
