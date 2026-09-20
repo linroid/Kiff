@@ -25,6 +25,17 @@ import com.linroid.kiff.text.TextRegion
  * paying for it: the bytes a patch carries stay contiguous and compress as one block, while the
  * tree holds only shape and instructions.
  *
+ * One stream rather than several is a decision that has been measured, because the obvious
+ * objection to it is right about the statistics. What a patch carries has two very different
+ * populations: the differences a DIFF region emits pack to 18% of themselves, being mostly zero,
+ * while the literals an ADD region emits only reach 56%, and one Huffman tree has to straddle
+ * both. Splitting them into streams of their own and packing each separately was worth **3.6%** of
+ * a real patch - the tree fits each population better, but the matcher had already found the long
+ * runs of zeroes whichever tree coded them, which is where most of that compressibility was
+ * already going. Against the format change it would take - several cursors, an order to consume
+ * them in, and both halves of the codec knowing about it - that is not a trade worth making.
+ * [LzHuffman] records where the remaining compression actually is.
+ *
  * Applying one holds neither file. The source is addressed through a [SeekableSource], the target
  * is written out as it is produced, and only what a single region needs at once is buffered - which
  * is what lets a device with far less memory than the machine that built the patch apply it.

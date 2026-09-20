@@ -14,6 +14,32 @@ import com.linroid.kiff.KiffException
  * to the patch format, which is what makes it a few hundred lines rather than a few thousand. The
  * bucket tables are deflate's, though, because they are well chosen and there is nothing to gain by
  * inventing others.
+ *
+ * ## What is left, measured on the content stream of a real patch
+ *
+ * ```
+ * this codec          3,873,349   40.9% of the raw stream
+ * gzip -9             3,694,413   -4.6% against this
+ * zstd -19            3,244,018  -16.2%
+ * brotli -q 11        3,054,043  -21.2%
+ * xz -9e              2,999,532  -22.6%
+ * ```
+ *
+ * Three things follow, and each of them cost an experiment to learn.
+ *
+ * Being within 4.6% of gzip is the Huffman layer doing its job; closing the rest means lazy
+ * matching, deeper chains, and coding the code lengths rather than writing them flat, which is
+ * fiddly work for very little.
+ *
+ * A larger window is not the lever, however tempting it looks with a 1 MiB window over a 9 MB
+ * stream. Giving zstd a 128 MB window instead of its usual one is worth 0.04%: a patch's content
+ * is differences and literals, which repeat locally and not across megabytes.
+ *
+ * The remaining fifth is the entropy coder itself. What xz, brotli and zstd have that this does
+ * not is a range coder driven by context models, rather than one static Huffman tree per alphabet.
+ * That is a substantially larger codec than this one, and it is where the next 20% is - not in the
+ * matching, not in the window, and not in splitting the stream up, which [PatchPayload] records
+ * the measurement for.
  */
 internal object LzHuffman {
 
