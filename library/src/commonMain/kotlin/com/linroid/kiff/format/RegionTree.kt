@@ -211,7 +211,7 @@ internal fun beatsStoring(
 ): Boolean {
   if (structure + candidate.size <= to - from) return true
   val raw = target.copyOfRange(from, to)
-  return structure + Lzss.compress(candidate).size < Lzss.compress(raw).size
+  return structure + LzHuffman.compress(candidate).size < LzHuffman.compress(raw).size
 }
 
 /**
