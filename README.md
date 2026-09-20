@@ -3,6 +3,17 @@
 Kotlin Multiplatform file diffing: turn two versions of a file into a patch, and rebuild the second
 file byte for byte from the first one plus that patch.
 
+## Using it
+
+```kotlin
+dependencies {
+  implementation("com.linroid.kiff:kiff:0.1.0")
+}
+```
+
+Published for JVM, JS, iOS, macOS, Linux and Windows from one source set. `./gradlew
+publishToMavenLocal` puts it in `~/.m2` if you want to try a change against your own build first.
+
 ## Patchers
 
 | Patcher | `PatcherId` | Best for |
@@ -402,3 +413,7 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 Patchers address both files through `SeekableSource` rather than reading them as streams, because a
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
 peak memory is still roughly source + target + patch + index.
+
+## License
+
+Apache 2.0. See [LICENSE](LICENSE).
