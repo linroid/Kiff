@@ -2,9 +2,6 @@ plugins {
   alias(libs.plugins.kotlin.multiplatform)
 }
 
-group = "com.linroid.kiff"
-version = "0.1.0"
-
 kotlin {
   jvm()
 

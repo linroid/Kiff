@@ -3,9 +3,6 @@ plugins {
   application
 }
 
-group = "com.linroid.kiff"
-version = "0.1.0"
-
 dependencies {
   implementation(projects.library)
   implementation(libs.clikt)
