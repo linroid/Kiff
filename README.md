@@ -104,6 +104,11 @@ is the floor an archive of mostly-unchanged entries cannot go below.
 
 ## How a patch is built
 
+[`FORMAT.md`](FORMAT.md) is the full specification, and `FormatVectorsTest` is what keeps it honest:
+patches frozen at this version of the format, with the inputs they were built from, asserting only
+that they still apply. Prose cannot fail; those can.
+
+
 A patch is a header, a tree of regions, and one stream of content:
 
 ```
