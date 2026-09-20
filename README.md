@@ -147,7 +147,7 @@ version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
 tree    region tree, each region checksummed
-content literals, packed with a small built-in LZ77 codec
+content literals, packed with a built-in LZ77 + Huffman codec
 ```
 
 Sizes and the source offsets inside the tree are 64-bit varints, so a patch can describe inputs

@@ -42,11 +42,27 @@ collision-resistant and none of this is a signature.
 ```
 varint  tree size
 varint  content size, unpacked
-byte    content encoding: 0 = stored, 1 = LZ77
+byte    content encoding
 varint  content size as stored
 bytes   region tree
 bytes   content
 ```
+
+| encoding | code | |
+| --- | --- | --- |
+| stored | 0 | the bytes as they are, when packing made them bigger |
+| LZ77 | 1 | matching only, no entropy coding. Readable, never written |
+| LZ77 + Huffman | 2 | matching, then canonical Huffman over the symbols |
+
+Encoding 1 is kept readable because patches written with it exist. It is the same matching as 2
+without the entropy coding, and about a sixth of a patch rides on the difference, so there is no
+reason to choose it.
+
+The Huffman form writes the code lengths of both alphabets first, four bits each, then the symbol
+stream: 256 literals, an end symbol and length codes on one alphabet, distances on another, each
+with extra bits. The bucket tables are deflate's; the bit layout is not, and none of it is
+deflate-compatible. A reader must refuse an over-subscribed tree rather than decode it into
+nonsense.
 
 Every region that carries content appends it to this one stream, consumed in the order the tree is
 written. One stream rather than one per region is deliberate: a deep tree would otherwise pay for

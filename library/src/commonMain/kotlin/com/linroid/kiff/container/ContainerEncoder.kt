@@ -5,7 +5,7 @@ import com.linroid.kiff.delta.DeltaScanner
 import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.format.ColumnTransform
-import com.linroid.kiff.format.Lzss
+import com.linroid.kiff.format.LzHuffman
 import com.linroid.kiff.format.MAX_REGION_DEPTH
 import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.format.beatsStoring
@@ -260,7 +260,7 @@ internal class ContainerEncoder(
   }
 
   private fun packedCost(node: RegionNode, literals: ByteArray): Long =
-    node.structureBytes() + if (literals.isEmpty()) 0 else Lzss.compress(literals).size
+    node.structureBytes() + if (literals.isEmpty()) 0 else LzHuffman.compress(literals).size
 
   private fun addPart(
     into: MutableList<RegionNode>,
@@ -603,7 +603,7 @@ internal class ContainerEncoder(
     val costs: List<RegionCost> = emptyList()
   ) {
     fun packedCost(): Long =
-      node.structureBytes() + if (literals.isEmpty()) 0 else Lzss.compress(literals).size
+      node.structureBytes() + if (literals.isEmpty()) 0 else LzHuffman.compress(literals).size
   }
 
   private companion object {

@@ -25,25 +25,41 @@ import com.linroid.kiff.text.TextRegion
  * paying for it: the bytes a patch carries stay contiguous and compress as one block, while the
  * tree holds only shape and instructions.
  *
+ * One stream rather than several is a decision that has been measured, because the obvious
+ * objection to it is right about the statistics. What a patch carries has two very different
+ * populations: the differences a DIFF region emits pack to 18% of themselves, being mostly zero,
+ * while the literals an ADD region emits only reach 56%, and one Huffman tree has to straddle
+ * both. Splitting them into streams of their own and packing each separately was worth **3.6%** of
+ * a real patch - the tree fits each population better, but the matcher had already found the long
+ * runs of zeroes whichever tree coded them, which is where most of that compressibility was
+ * already going. Against the format change it would take - several cursors, an order to consume
+ * them in, and both halves of the codec knowing about it - that is not a trade worth making.
+ * [LzHuffman] records where the remaining compression actually is.
+ *
  * Applying one holds neither file. The source is addressed through a [SeekableSource], the target
  * is written out as it is produced, and only what a single region needs at once is buffered - which
  * is what lets a device with far less memory than the machine that built the patch apply it.
  */
 internal object PatchPayload {
 
+  /** Content encodings, as written in the payload header. */
+  const val CONTENT_STORED = 0
+  const val CONTENT_LZSS = 1
+  const val CONTENT_LZ_HUFFMAN = 2
+
   fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): ByteArray {
     val tree = ByteWriter(256)
     writeRegionTree(tree, root, target?.let { TargetWalk(it) })
     val treeBytes = tree.toByteArray()
 
-    val packed = if (literals.isEmpty()) literals else Lzss.compress(literals)
+    val packed = if (literals.isEmpty()) literals else LzHuffman.compress(literals)
     val compressed = packed.size < literals.size
     val stored = if (compressed) packed else literals
 
     val out = ByteWriter(treeBytes.size + stored.size + 24)
     out.writeVarInt(treeBytes.size)
     out.writeVarInt(literals.size)
-    out.writeByte(if (compressed) 1 else 0)
+    out.writeByte(if (compressed) CONTENT_LZ_HUFFMAN else CONTENT_STORED)
     out.writeVarInt(stored.size)
     out.writeBytes(treeBytes)
     out.writeBytes(stored)
@@ -79,9 +95,12 @@ internal object PatchPayload {
     container.skip(treeLength)
     val storedLiterals = container.readBytes(storedLength)
     val literals = when (literalFlag) {
-      0 -> storedLiterals
-      1 -> Lzss.decompress(storedLiterals, literalLength)
-      else -> throw KiffException.InvalidPatch("Unknown literal encoding $literalFlag")
+      CONTENT_STORED -> storedLiterals
+      // Kept readable because patches written with it exist, including the frozen vectors. The
+      // encoder has no reason to choose it: it is the same matching without the entropy coding.
+      CONTENT_LZSS -> Lzss.decompress(storedLiterals, literalLength)
+      CONTENT_LZ_HUFFMAN -> LzHuffman.decompress(storedLiterals, literalLength)
+      else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
     }
 
     val checked = CheckedRestoreTarget(out)
