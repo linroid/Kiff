@@ -138,19 +138,30 @@ and changes neither the node set nor the reader.
 A container is taken apart by a `ContainerFormat`, and that is the whole extension point:
 
 ```kotlin
-class DexFormat : ContainerFormat {
-  override val name = "dex"
+class TarFormat : ContainerFormat {
+  override val name = "tar"
   override fun detect(bytes: ByteArray, from: Int, to: Int) = /* magic */
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* sections */
+  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* members */
 }
 
-val patcher = ApkPatcher(containers = NestedContainers + DexFormat())
+val patcher = ApkPatcher(containers = NestedContainers + TarFormat())
 ```
+
+`NestedContainers` already holds `ZipFormat` and `DexFormat`, so an archive inside an archive, and
+a dex inside either, are taken apart without being asked.
 
 Nothing else moves. The patch format does not change, because a decomposed region is more nodes of
 the same four kinds; the reader does not change, because a patch records the structure it used
 rather than asking the reader to work it out; and patches written before the format existed still
 apply. A dex is an opaque leaf today and its sections tomorrow, with no format version in between.
+
+A format can also declare that some children are **interchangeable**, by giving them a shared
+`group`. Pairing decides which source child a target child is described *against*; a group decides
+which source bytes it can be *found in*, and those differ whenever a format moves content between
+siblings. Android does exactly that: classes are split across `classes.dex`, `classes2.dex` and so
+on, and a rebuild repartitions them, so a class can change file while changing nothing else. On two
+real builds the split went from 3.4 MB + 7.2 MB to 5.5 MB + 5.1 MB. `ApkFormat` puts every dex in
+one group, and the members are indexed together rather than one at a time.
 
 **The one rule**: children must tile their parent exactly, gaps included. Everything the format does
 not name - a preamble, alignment padding, an APK signing block, a trailer - is still a child, just
@@ -162,6 +173,12 @@ discarded, so a format that does not pay off costs encode time and never patch s
 more than it sounds: a byte search that copies from anywhere in the source is already good at
 finding moved and edited content, so on *stored* content today, decomposing mostly breaks even. It
 will earn its keep on compressed children, which cannot be compared at all without being decoded.
+
+`DexFormat` is a worked example, and an honest one. A dex is mostly tables of offsets into itself,
+so adding a method renumbers everything after it and a byte search finds nothing to match: on a real
+pair of builds the two dex files account for 98% of the patch while costing 90% of their own size.
+Splitting them by section, which their map list makes nearly free, recovers about 0.3%. Section
+boundaries are not the fix for renumbering - they are what a fix would be built on.
 
 Every leaf is chosen by measurement, not by guess. Whatever a `RegionPlanner` nominates, the encoder
 builds it, builds the byte-level encoding too, and keeps whichever packs smaller - and keeps neither

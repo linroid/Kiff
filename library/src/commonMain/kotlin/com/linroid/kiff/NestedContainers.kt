@@ -1,6 +1,7 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.container.ContainerRegistry
+import com.linroid.kiff.container.DexFormat
 import com.linroid.kiff.container.ZipFormat
 
 /**
@@ -21,4 +22,4 @@ import com.linroid.kiff.container.ZipFormat
  * as one opaque leaf is more nodes of the same four kinds, so a decoder that has never heard of
  * dex still applies the patch.
  */
-val NestedContainers: ContainerRegistry = ContainerRegistry(ZipFormat())
+val NestedContainers: ContainerRegistry = ContainerRegistry(ZipFormat(), DexFormat())

@@ -92,10 +92,11 @@ internal class ContainerEncoder(
     depth: Int
   ): RegionNode {
     val pairing = Pairing(format, sourceChildren)
+    val groups = Groups(sourceChildren)
     val encoded = ArrayList<Encoded>(targetChildren.size)
     for (child in targetChildren) {
       val literalsBefore = literals.size
-      val node = encodeChild(child, pairing.counterpartOf(child), literals, depth)
+      val node = encodeChild(child, pairing.counterpartOf(child), groups, literals, depth)
       encoded.add(node)
       recorder?.record(
         child.name,
@@ -105,12 +106,14 @@ internal class ContainerEncoder(
         (literals.size - literalsBefore).toLong()
       )
     }
+    groups.close()
     return RegionNode.Composite(coalesce(encoded))
   }
 
   private fun encodeChild(
     child: Child,
     counterpart: Child?,
+    groups: Groups,
     literals: ByteWriter,
     depth: Int
   ): Encoded {
@@ -132,21 +135,19 @@ internal class ContainerEncoder(
 
     // A child with no framing is just its payload, and needs no composite around it.
     if (child.isBare && counterpart.isBare) {
-      return Encoded(
-        describe(child.name, child.kind, counterpart, child, literals, depth)
-      )
+      return Encoded(describe(child, counterpart, groups, literals, depth))
     }
 
     // Framing is compared as the bytes it is; only the payload gets to choose for itself.
     val parts = ArrayList<RegionNode>(3)
     addPart(
       parts, "${child.name} (header)", RegionKind.INDEX,
-      counterpart.from, counterpart.contentFrom, child.from, child.contentFrom, literals, depth
+      counterpart.from, counterpart.contentFrom, child.from, child.contentFrom, literals
     )
-    parts.add(describe(child.name, child.kind, counterpart, child, literals, depth))
+    parts.add(describe(child, counterpart, groups, literals, depth))
     addPart(
       parts, "${child.name} (descriptor)", RegionKind.INDEX,
-      counterpart.contentTo, counterpart.to, child.contentTo, child.to, literals, depth
+      counterpart.contentTo, counterpart.to, child.contentTo, child.to, literals
     )
     return Encoded(RegionNode.Composite(parts))
   }
@@ -159,13 +160,14 @@ internal class ContainerEncoder(
    * yet, so it is described as the opaque bytes it is.
    */
   private fun describe(
-    name: String,
-    kind: RegionKind,
-    counterpart: Child,
     child: Child,
+    counterpart: Child,
+    groups: Groups,
     literals: ByteWriter,
     depth: Int
   ): RegionNode {
+    val name = child.name
+    val kind = child.kind
     val targetFrom = child.contentFrom
     val targetTo = child.contentTo
     val sourceFrom = counterpart.contentFrom
@@ -183,7 +185,10 @@ internal class ContainerEncoder(
     }
 
     val flatScratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
-    val flat = leaf(name, kind, sourceFrom, sourceTo, targetFrom, targetTo, flatScratch)
+    val flat = leaf(
+      name, kind, sourceFrom, sourceTo, targetFrom, targetTo, flatScratch,
+      groups.scannerFor(child.group)
+    )
     val flatBytes = flatScratch.toByteArray()
 
     if (decomposed != null && packedCost(decomposed.node, decomposed.literals) <
@@ -226,8 +231,7 @@ internal class ContainerEncoder(
     sourceTo: Int,
     targetFrom: Int,
     targetTo: Int,
-    literals: ByteWriter,
-    depth: Int
+    literals: ByteWriter
   ) {
     if (targetTo <= targetFrom) return
     into.add(leaf(name, kind, sourceFrom, sourceTo, targetFrom, targetTo, literals))
@@ -247,7 +251,8 @@ internal class ContainerEncoder(
     sourceTo: Int,
     targetFrom: Int,
     targetTo: Int,
-    literals: ByteWriter
+    literals: ByteWriter,
+    shared: DeltaScanner? = null
   ): RegionNode {
     val span = targetTo - targetFrom
     if (identical(sourceFrom, targetFrom, span, sourceTo - sourceFrom)) {
@@ -264,7 +269,7 @@ internal class ContainerEncoder(
     val plan = planner.plan(info)
     if (plan == RegionAlgorithm.RAW) return raw(targetFrom, targetTo, literals)
 
-    val binary = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo)
+    val binary = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
     val best = if (plan == RegionAlgorithm.TEXT) {
       val text = textCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo)
       if (text != null && text.packedCost() < binary.packedCost()) text else binary
@@ -279,17 +284,27 @@ internal class ContainerEncoder(
     return best.node
   }
 
+  /**
+   * [shared] is the index for this region's group, when it has one. The alignment still points at
+   * the counterpart, so a region that mostly did not change is still difference-encoded from the
+   * right place; the wider index only adds somewhere else to look for what did move.
+   */
   private fun binaryCandidate(
     span: Int,
     sourceFrom: Int,
     sourceTo: Int,
     targetFrom: Int,
-    targetTo: Int
+    targetTo: Int,
+    shared: DeltaScanner?
   ): Candidate {
     val scratch = ByteWriter(span.coerceIn(64, 1 shl 16))
     val writer = DeltaWriter(source, scratch)
-    algorithm.scanner(sourceSource, sourceFrom.toLong(), sourceTo.toLong()).use { scanner ->
-      scan(scanner, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
+    if (shared != null) {
+      scan(shared, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
+    } else {
+      algorithm.scanner(sourceSource, sourceFrom.toLong(), sourceTo.toLong()).use { scanner ->
+        scan(scanner, targetFrom, targetTo, writer, alignment = sourceFrom - targetFrom)
+      }
     }
     return Candidate(
       RegionNode.Delta(span.toLong(), writer.finishInstructions()),
@@ -408,6 +423,40 @@ internal class ContainerEncoder(
       if (source[sourceFrom + i] != target[targetFrom + i]) return false
     }
     return true
+  }
+
+  /**
+   * One index per group of source children, spanning the first to the last of them.
+   *
+   * Built on first use and kept for as long as the composite is being encoded, because the whole
+   * point is that several children search the same bytes: building it per child would index the
+   * same megabytes again for each one.
+   */
+  private inner class Groups(sourceChildren: List<Child>) {
+    private val spans: Map<String, IntRange> = buildMap {
+      for (child in sourceChildren) {
+        val group = child.group ?: continue
+        val seen = get(group)
+        put(
+          group,
+          if (seen == null) child.from..child.to
+          else minOf(seen.first, child.from)..maxOf(seen.last, child.to)
+        )
+      }
+    }
+    private val scanners = HashMap<String, DeltaScanner>()
+
+    fun scannerFor(group: String?): DeltaScanner? {
+      val span = spans[group ?: return null] ?: return null
+      return scanners.getOrPut(group) {
+        algorithm.scanner(sourceSource, span.first.toLong(), span.last.toLong())
+      }
+    }
+
+    fun close() {
+      for (scanner in scanners.values) scanner.close()
+      scanners.clear()
+    }
   }
 
   /** Pairs target children to source children: by name, then by content, then by the format. */

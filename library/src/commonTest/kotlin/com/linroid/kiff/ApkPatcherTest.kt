@@ -52,6 +52,34 @@ class ApkPatcherTest {
   }
 
   @Test
+  fun classesThatMoveBetweenDexFilesAreStillFound() {
+    // A rebuild repartitions classes across the dex files, so a class can change file while
+    // changing not at all. Searching each dex only against the dex of the same name cannot find
+    // those bytes even though they sit in the source; grouping the dex entries can.
+    val a = structuredBytes(60_000, seed = 40)
+    val b = structuredBytes(60_000, seed = 41)
+    val c = structuredBytes(60_000, seed = 42)
+    val source = apk {
+      manifest()
+      dex("classes.dex", a + b)
+      dex("classes2.dex", c)
+    }
+    val target = apk {
+      manifest()
+      dex("classes.dex", a)
+      dex("classes2.dex", b + c)
+    }
+
+    val grouped = assertRestores(Kiff.apk, source, target)
+    // The zip patcher describes the same archive without knowing the dex files belong together.
+    val ungrouped = assertRestores(Kiff.zip, source, target)
+    assertTrue(
+      grouped < ungrouped / 2,
+      "grouping the dex entries should find the moved classes: $grouped against $ungrouped"
+    )
+  }
+
+  @Test
   fun aRenumberedDexIsPairedWithItsNeighbour() {
     // A build that gains a dex renumbers the rest: classes3.dex has no counterpart by name and its
     // bytes are new, so only the ordinal says which source dex it belongs next to.
