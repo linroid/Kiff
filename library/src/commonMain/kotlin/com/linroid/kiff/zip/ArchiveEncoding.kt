@@ -2,7 +2,10 @@ package com.linroid.kiff.zip
 
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.delta.encodeWhole
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.RegionNode
+import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.region.RegionRecorder
@@ -17,27 +20,26 @@ internal fun encodeArchive(
   source: ByteArraySource,
   target: ByteArraySource,
   options: ZipEncodeOptions,
-  writer: DeltaWriter,
+  literals: ByteWriter,
   algorithm: DeltaAlgorithm,
   recorder: RegionRecorder? = null
-) {
+): RegionNode {
   val sourceLayout = ZipReader.parseOrNull(source.bytes)
   val targetLayout = ZipReader.parseOrNull(target.bytes)
   if (sourceLayout == null || targetLayout == null) {
-    val instructionsBefore = writer.instructionBytes
-    val literalsBefore = writer.literalBytes
-    algorithm.scanner(source).scan(target, 0, target.size, writer)
+    val literalsBefore = literals.size
+    val node = encodeWhole(source, target, algorithm, literals)
     recorder?.record(
       WHOLE_FILE_REGION,
       RegionKind.WHOLE,
       target.size,
-      writer.instructionBytes - instructionsBefore,
-      writer.literalBytes - literalsBefore
+      node.structureBytes(),
+      (literals.size - literalsBefore).toLong()
     )
-    return
+    return node
   }
-  ZipEncoder(source, sourceLayout, target, targetLayout, options, algorithm)
-    .encode(writer, recorder)
+  return ZipEncoder(source, sourceLayout, target, targetLayout, options, algorithm)
+    .encode(literals, recorder)
 }
 
 internal fun parseArchive(bytes: ByteArray, label: String): ZipLayout =

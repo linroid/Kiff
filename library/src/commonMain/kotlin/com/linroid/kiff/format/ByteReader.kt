@@ -8,6 +8,9 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
   val offset: Int get() = position
   val remaining: Int get() = data.size - position
 
+  /** The buffer being read, so a nested block can be decoded in place rather than copied out. */
+  val bytes: ByteArray get() = data
+
   fun readByte(): Int {
     ensure(1)
     return data[position++].toInt() and 0xFF

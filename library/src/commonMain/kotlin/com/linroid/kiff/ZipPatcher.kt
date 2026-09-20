@@ -1,10 +1,13 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.delta.DeltaWriter
+import com.linroid.kiff.format.ByteWriter
+import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.delta.RollingHashAlgorithm
 import com.linroid.kiff.io.ByteArraySource
+import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionRecorder
+import com.linroid.kiff.region.TextAwareRegionPlanner
 import com.linroid.kiff.zip.ZipDiffReport
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.analyzeArchives
@@ -24,7 +27,9 @@ import com.linroid.kiff.zip.encodeArchive
  * Falls back to a whole-file byte scan when either input is not a readable zip.
  */
 class ZipPatcher(
-  override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
+  override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
+  /** Chooses how each leaf region is described; see [RegionPlanner]. */
+  val planner: RegionPlanner = TextAwareRegionPlanner
 ) : DeltaPatcher() {
 
   override val id: PatcherId = PatcherId.ZIP
@@ -33,11 +38,16 @@ class ZipPatcher(
   override fun encode(
     source: ByteArraySource,
     target: ByteArraySource,
-    sink: DeltaWriter,
+    literals: ByteWriter,
     recorder: RegionRecorder?
-  ) {
-    encodeArchive(source, target, ZipEncodeOptions(), sink, algorithm, recorder)
-  }
+  ): RegionNode = encodeArchive(
+    source,
+    target,
+    ZipEncodeOptions(planner = planner),
+    literals,
+    algorithm,
+    recorder
+  )
 
   /**
    * Reports what changed entry by entry, without building a patch.

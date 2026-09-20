@@ -4,14 +4,17 @@ import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.zip.ZipEncodeOptions
 import com.linroid.kiff.zip.ZipEntry
 import com.linroid.kiff.zip.ZipLayout
+import com.linroid.kiff.region.BinaryRegionPlanner
 import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.region.RegionPlanner
 import com.linroid.kiff.region.RegionReport
 import com.linroid.kiff.zip.ZipReader
 import com.linroid.kiff.zip.analyzeLayouts
 import com.linroid.kiff.zip.parseArchive
 import kotlin.math.abs
 
-internal fun apkEncodeOptions() = ZipEncodeOptions(pairUnmatched = ::pairDexByOrdinal)
+internal fun apkEncodeOptions(planner: RegionPlanner = BinaryRegionPlanner) =
+  ZipEncodeOptions(pairUnmatched = ::pairDexByOrdinal, planner = planner)
 
 /**
  * A build that gains or loses a dex file renumbers the rest, so a `classes4.dex` with no

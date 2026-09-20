@@ -1,27 +1,24 @@
 package com.linroid.kiff.delta
 
 import com.linroid.kiff.format.ByteWriter
-import com.linroid.kiff.format.Lzss
 import com.linroid.kiff.io.toIntIndex
 
 /**
- * The bundled [DeltaSink]: builds an instruction stream plus a literal stream.
+ * The bundled [DeltaSink]: builds the instruction stream for one region.
  *
- * Literals live in their own stream so they stay contiguous and compress well, and so adjacent
- * [add] calls collapse into a single ADD instruction.
+ * Instructions belong to the region; literals do not. Content goes into the stream the whole patch
+ * shares, passed in here, so that every region's content ends up contiguous and compresses as one
+ * block - and so adjacent [add] calls still collapse into a single ADD instruction.
  *
  * Instruction lengths and source offsets are written as 64-bit varints, so the format addresses
  * inputs beyond 2 GB.
  */
 internal class DeltaWriter(
   private val source: ByteArray,
-  estimatedTargetSize: Long = 1024
+  private val literals: ByteWriter
 ) : DeltaSink {
 
   private val instructions = ByteWriter(64)
-  private val literals = ByteWriter(
-    (estimatedTargetSize / 8).coerceIn(64, 1L shl 20).toInt()
-  )
 
   private var pendingAdd = 0L
   private var sourceCursor = 0L
@@ -38,7 +35,7 @@ internal class DeltaWriter(
    */
   val instructionBytes: Long get() = instructions.size.toLong()
 
-  /** Bytes of literal stream written so far, counted before [finish] packs them. */
+  /** Size of the shared literal stream, counted before the patch packs it. */
   val literalBytes: Long get() = literals.size.toLong()
 
   override fun add(bytes: ByteArray, from: Int, to: Int) {
@@ -79,24 +76,11 @@ internal class DeltaWriter(
     targetSize += length
   }
 
-  fun finish(): ByteArray {
+  /** Closes the instruction stream and hands it over; the literals are already in the shared one. */
+  fun finishInstructions(): ByteArray {
     flushAdd()
     instructions.writeVarInt(DeltaOp.END)
-
-    val instructionBytes = instructions.toByteArray()
-    val literalBytes = literals.toByteArray()
-    val packed = if (literalBytes.isEmpty()) literalBytes else Lzss.compress(literalBytes)
-    val compressed = packed.size < literalBytes.size
-
-    val out = ByteWriter(instructionBytes.size + minOf(packed.size, literalBytes.size) + 16)
-    out.writeVarInt(instructionBytes.size)
-    out.writeVarInt(literalBytes.size)
-    out.writeByte(if (compressed) 1 else 0)
-    val stored = if (compressed) packed else literalBytes
-    out.writeVarInt(stored.size)
-    out.writeBytes(instructionBytes)
-    out.writeBytes(stored)
-    return out.toByteArray()
+    return instructions.toByteArray()
   }
 
   private fun flushAdd() {

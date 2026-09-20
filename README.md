@@ -104,20 +104,45 @@ is the floor an archive of mostly-unchanged entries cannot go below.
 
 ## How a patch is built
 
-A patch is a header plus a delta stream:
+A patch is a header, a tree of regions, and one stream of content:
 
 ```
 "KIFF"  4 bytes
 version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
-delta   instruction stream + literal stream
+tree    region tree
+content literals, packed with a small built-in LZ77 codec
 ```
 
-Sizes and the source offsets inside the delta are 64-bit varints, so a patch can describe inputs
+Sizes and the source offsets inside the tree are 64-bit varints, so a patch can describe inputs
 beyond 2 GB.
 
-The delta stream is a sequence of four instructions:
+Each node of the tree covers a run of target bytes and says how it is described:
+
+| | |
+| --- | --- |
+| `COMPOSITE` | children, tiling this region in order |
+| `DELTA` | a byte-level instruction stream |
+| `TEXT` | a line-level edit script |
+| `RAW` | the bytes verbatim |
+
+Nesting is what lets a region be described on its own terms. A zip is a composite of its entries,
+gaps and directory; a changed entry is a composite of its header, its data and any descriptor, so
+the *data* can pick an encoding without the header bytes around it having a say. Adding a container
+format later - treating a dex as sections rather than as one opaque leaf - adds nodes to the tree
+and changes neither the node set nor the reader.
+
+Every leaf is chosen by measurement, not by guess. Whatever a `RegionPlanner` nominates, the encoder
+builds it, builds the byte-level encoding too, and keeps whichever packs smaller - and keeps neither
+if storing the bytes outright would have been smaller still. A planner can therefore only ever cost
+encode time, never patch size, which is what makes a speculative new encoding safe to try.
+
+Leaves share a single content stream rather than each packing their own, so a deep tree costs
+structure but never costs compression. Regions that are nothing but a copy from consecutive source
+bytes merge into one, so an archive of untouched entries does not pay per entry to say so.
+
+The delta instruction stream is a sequence of four instructions:
 
 | | |
 | --- | --- |
@@ -128,8 +153,11 @@ The delta stream is a sequence of four instructions:
 
 `DIFF` is what keeps patches small for recompiled code. Long stretches of a new build are identical
 to the old one except for embedded offsets, so the differences are mostly zero and collapse in the
-literal stream, where the same region emitted as literals would not compress at all. Literals and
-difference bytes share one stream, packed with a small built-in LZ77 codec.
+content stream, where the same region emitted as literals would not compress at all.
+
+`TEXT` splits a region into lines that carry their own terminators, so concatenating them reproduces
+the bytes exactly - a trailing newline, or its absence, survives. It wins where byte matches
+fragment and loses where they do not, which is why it competes rather than being chosen.
 
 The two checksums do real work: `applyPatch` refuses a source file that is not the one the patch was
 built against (`KiffException.SourceMismatch`) and refuses to hand back a target whose checksum does

@@ -1,12 +1,12 @@
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.delta.DeltaReader
-import com.linroid.kiff.delta.DeltaWriter
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.format.Crc32
 import com.linroid.kiff.format.PatchFormat
+import com.linroid.kiff.format.PatchPayload
+import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.format.toHex
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.SeekableSource
@@ -52,15 +52,15 @@ sealed class DeltaPatcher : Patcher {
     val sourceBytes = source.materialize("Source")
     val targetBytes = target.materialize("Target")
 
-    val writer = DeltaWriter(sourceBytes.bytes, target.size)
-    encode(sourceBytes, targetBytes, writer, recorder)
-    check(writer.length == target.size) {
-      "$name described ${writer.length} bytes but the target has ${target.size}"
+    val literals = ByteWriter((target.size / 8).coerceIn(64, 1L shl 20).toInt())
+    val root = encode(sourceBytes, targetBytes, literals, recorder)
+    check(root.targetLength == target.size) {
+      "$name described ${root.targetLength} bytes but the target has ${target.size}"
     }
-    val delta = writer.finish()
-    val out = ByteWriter(delta.size + HEADER_ESTIMATE)
+    val payload = PatchPayload.write(root, literals.toByteArray())
+    val out = ByteWriter(payload.size + HEADER_ESTIMATE)
     PatchFormat.writeHeader(out, id, source.size, sourceCrc, target.size, targetCrc)
-    out.writeBytes(delta)
+    out.writeBytes(payload)
     return out.toByteArray()
   }
 
@@ -84,7 +84,7 @@ sealed class DeltaPatcher : Patcher {
       )
     }
     val bytes = source.materialize("Source").bytes
-    val target = DeltaReader.apply(bytes, patch, reader.offset, header.targetSize)
+    val target = PatchPayload.read(bytes, patch, reader.offset, header.targetSize)
     val targetCrc = Crc32.compute(target)
     if (targetCrc != header.targetCrc32) {
       throw KiffException.VerificationFailed(
@@ -122,15 +122,15 @@ sealed class DeltaPatcher : Patcher {
   }
 
   /**
-   * Describes [target] in terms of [source] by driving [sink], reporting each region's cost to
-   * [recorder] when one is given.
+   * Describes [target] in terms of [source] as a region tree, appending whatever content the tree's
+   * leaves carry to the shared [literals] stream and reporting each region's cost to [recorder].
    */
   internal abstract fun encode(
     source: ByteArraySource,
     target: ByteArraySource,
-    sink: DeltaWriter,
+    literals: ByteWriter,
     recorder: RegionRecorder?
-  )
+  ): RegionNode
 
   private companion object {
     const val HEADER_ESTIMATE = 32
