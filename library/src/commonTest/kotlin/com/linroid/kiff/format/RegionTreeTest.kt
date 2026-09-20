@@ -93,6 +93,31 @@ class RegionTreeTest {
   }
 
   @Test
+  fun aRegionThatDoesNotRestoreSaysWhichOne() {
+    // The whole point of a checksum per region. Two whole-file checksums can say a patch did not
+    // restore; on seventy megabytes and several hundred regions, only this says where.
+    val source = TestZipBuilder()
+      .entry("a.bin", structuredBytes(4_000, seed = 40))
+      .entry("b.bin", structuredBytes(4_000, seed = 41))
+      .build()
+    val target = TestZipBuilder()
+      .entry("a.bin", structuredBytes(4_000, seed = 40))
+      .entry("b.bin", structuredBytes(4_000, seed = 42))
+      .build()
+    val patch = Kiff.zip.createPatch(source, target)
+
+    // Flip a byte late in the patch, where the content lives rather than the structure.
+    val corrupted = patch.copyOf().also { it[it.size - 40] = (it[it.size - 40] + 1).toByte() }
+    val failure = assertFailsWith<KiffException.VerificationFailed> {
+      Kiff.zip.applyPatch(source, corrupted)
+    }
+    assertTrue(
+      "Region [" in failure.message.orEmpty(),
+      "should name the region that failed: ${failure.message}"
+    )
+  }
+
+  @Test
   fun aTreeNestedTooDeeplyIsRefused() {
     val out = ByteWriter(64)
     // A composite that holds only itself, deeper than any real file nests.
@@ -111,7 +136,7 @@ class RegionTreeTest {
     payload.writeBytes(tree)
 
     val failure = assertFailsWith<KiffException.InvalidPatch> {
-      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 1)
+      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 1, checksums = false)
     }
     assertTrue("nests" in failure.message.orEmpty(), failure.message.orEmpty())
   }
@@ -131,7 +156,7 @@ class RegionTreeTest {
     payload.writeBytes(tree)
 
     assertFailsWith<KiffException.InvalidPatch> {
-      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 10)
+      PatchPayload.read(ByteArray(4), payload.toByteArray(), 0, 10, checksums = false)
     }
   }
 }

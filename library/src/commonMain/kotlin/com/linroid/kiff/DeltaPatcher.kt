@@ -57,9 +57,17 @@ sealed class DeltaPatcher : Patcher {
     check(root.targetLength == target.size) {
       "$name described ${root.targetLength} bytes but the target has ${target.size}"
     }
-    val payload = PatchPayload.write(root, literals.toByteArray())
+    // One decision, used twice: the flag in the header and the checksums in the tree have to
+    // agree, or a reader either misses them or reads past them.
+    val flags = PatchFormat.FLAG_REGION_CHECKSUMS
+    val checksummed = flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0
+    val payload = PatchPayload.write(
+      root,
+      literals.toByteArray(),
+      targetBytes.bytes.takeIf { checksummed }
+    )
     val out = ByteWriter(payload.size + HEADER_ESTIMATE)
-    PatchFormat.writeHeader(out, id, source.size, sourceCrc, target.size, targetCrc)
+    PatchFormat.writeHeader(out, id, source.size, sourceCrc, target.size, targetCrc, flags)
     out.writeBytes(payload)
     return out.toByteArray()
   }
@@ -84,7 +92,10 @@ sealed class DeltaPatcher : Patcher {
       )
     }
     val bytes = source.materialize("Source").bytes
-    val target = PatchPayload.read(bytes, patch, reader.offset, header.targetSize)
+    val target = PatchPayload.read(
+      bytes, patch, reader.offset, header.targetSize,
+      checksums = header.flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0
+    )
     val targetCrc = Crc32.compute(target)
     if (targetCrc != header.targetCrc32) {
       throw KiffException.VerificationFailed(

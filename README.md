@@ -111,7 +111,7 @@ A patch is a header, a tree of regions, and one stream of content:
 version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
-tree    region tree
+tree    region tree, each region checksummed
 content literals, packed with a small built-in LZ77 codec
 ```
 
@@ -216,7 +216,13 @@ content stream, where the same region emitted as literals would not compress at 
 the bytes exactly - a trailing newline, or its absence, survives. It wins where byte matches
 fragment and loses where they do not, which is why it competes rather than being chosen.
 
-The two checksums do real work: `applyPatch` refuses a source file that is not the one the patch was
+Every region that produces target bytes also carries a CRC-32 of them, which costs about 0.005% of
+a patch and is what turns "this did not restore" into "this region did not restore". On a package of
+seventy megabytes that is the difference between a bug you can find and one you can only stare at.
+A flag in the header says whether they are present, and a flag this build does not recognise is
+refused rather than guessed at.
+
+The two whole-file checksums do real work too: `applyPatch` refuses a source file that is not the one the patch was
 built against (`KiffException.SourceMismatch`) and refuses to hand back a target whose checksum does
 not match what was recorded at creation time (`KiffException.VerificationFailed`).
 

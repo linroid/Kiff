@@ -21,9 +21,9 @@ import com.linroid.kiff.text.TextRegion
  */
 internal object PatchPayload {
 
-  fun write(root: RegionNode, literals: ByteArray): ByteArray {
+  fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): ByteArray {
     val tree = ByteWriter(256)
-    writeRegionTree(tree, root)
+    writeRegionTree(tree, root, target?.let { TargetWalk(it) })
     val treeBytes = tree.toByteArray()
 
     val packed = if (literals.isEmpty()) literals else Lzss.compress(literals)
@@ -40,7 +40,13 @@ internal object PatchPayload {
     return out.toByteArray()
   }
 
-  fun read(source: ByteArray, patch: ByteArray, from: Int, targetSize: Long): ByteArray {
+  fun read(
+    source: ByteArray,
+    patch: ByteArray,
+    from: Int,
+    targetSize: Long,
+    checksums: Boolean
+  ): ByteArray {
     val size = targetSize.toIntIndex("Target size")
     val container = ByteReader(patch, from)
     val treeLength = container.readVarInt()
@@ -59,7 +65,7 @@ internal object PatchPayload {
 
     val target = ByteArray(size)
     val cursor = LiteralCursor()
-    val written = applyNode(tree, source, literals, cursor, target, at = 0, depth = 0)
+    val written = applyNode(tree, source, literals, cursor, target, 0, 0, checksums)
     if (written != size) {
       throw KiffException.InvalidPatch("Patch described $written of $size target bytes")
     }
@@ -74,7 +80,8 @@ internal object PatchPayload {
     cursor: LiteralCursor,
     target: ByteArray,
     at: Int,
-    depth: Int
+    depth: Int,
+    checksums: Boolean
   ): Int {
     if (depth > MAX_REGION_DEPTH) {
       throw KiffException.InvalidPatch("Region tree nests deeper than $MAX_REGION_DEPTH")
@@ -83,12 +90,18 @@ internal object PatchPayload {
     if (at + length > target.size) {
       throw KiffException.InvalidPatch("Region runs past the end of the target")
     }
-    when (RegionEncoding.fromCode(tree.readByte())) {
+    val encoding = RegionEncoding.fromCode(tree.readByte())
+    // A composite produces nothing itself; its children each carry their own.
+    val expected =
+      if (checksums && encoding != RegionEncoding.COMPOSITE) tree.readUInt32() else null
+    when (encoding) {
       RegionEncoding.COMPOSITE -> {
         val children = tree.readVarInt()
         var written = 0
         repeat(children) {
-          written += applyNode(tree, source, literals, cursor, target, at + written, depth + 1)
+          written += applyNode(
+            tree, source, literals, cursor, target, at + written, depth + 1, checksums
+          )
         }
         if (written != length) {
           throw KiffException.InvalidPatch(
@@ -132,7 +145,9 @@ internal object PatchPayload {
         // other, and the result is rearranged back.
         val rearranged = ColumnTransform.forward(source, sourceFrom, sourceFrom + sourceLength, widths)
         val scratch = ByteArray(length)
-        val written = applyNode(tree, rearranged, literals, cursor, scratch, 0, depth + 1)
+        // The region inside describes rearranged bytes, which are not target bytes, so it
+        // carries no checksum; this node's covers what the rearrangement finally produces.
+        val written = applyNode(tree, rearranged, literals, cursor, scratch, 0, depth + 1, false)
         if (written != length) {
           throw KiffException.InvalidPatch("Column region produced $written of $length bytes")
         }
@@ -154,6 +169,15 @@ internal object PatchPayload {
           target = target,
           at = at,
           length = length
+        )
+      }
+    }
+    if (expected != null) {
+      val actual = Crc32.compute(target, at, at + length)
+      if (actual != expected) {
+        throw KiffException.VerificationFailed(
+          "Region [$at, ${at + length}) described as ${encoding.name.lowercase()} restored to " +
+            "${actual.toHex()}, not the ${expected.toHex()} it was built from"
         )
       }
     }
