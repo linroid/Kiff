@@ -160,7 +160,10 @@ class BinaryPatcherTest {
       header.sourceSize,
       header.sourceCrc32,
       header.targetSize,
-      expected
+      expected,
+      // Carried through: the flags say how the payload is laid out, so dropping them would make
+      // this a test of misparsing rather than of the final check.
+      header.flags
     )
     out.writeBytes(patch.copyOfRange(reader.offset, patch.size))
 

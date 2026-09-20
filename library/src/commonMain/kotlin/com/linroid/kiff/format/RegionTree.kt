@@ -95,23 +95,35 @@ internal fun RegionNode.encoding(): RegionEncoding = when (this) {
   is RegionNode.Raw -> RegionEncoding.RAW
 }
 
+/**
+ * Walks the target alongside the tree, so each region can be checksummed against the bytes it is
+ * supposed to produce. Null when the patch carries no region checksums.
+ */
+internal class TargetWalk(val bytes: ByteArray, var at: Int = 0)
+
 /** Serializes a region tree. Depth-first, which is the order the literal stream is consumed in. */
-internal fun writeRegionTree(out: ByteWriter, node: RegionNode) {
+internal fun writeRegionTree(out: ByteWriter, node: RegionNode, walk: TargetWalk? = null) {
   out.writeVarLong(node.targetLength)
   when (node) {
     is RegionNode.Composite -> {
       out.writeByte(RegionEncoding.COMPOSITE.code)
       out.writeVarInt(node.children.size)
-      for (child in node.children) writeRegionTree(out, child)
+      // A composite produces nothing of its own; its children cover every byte of it.
+      for (child in node.children) writeRegionTree(out, child, walk)
     }
     is RegionNode.Delta -> {
       out.writeByte(RegionEncoding.DELTA.code)
+      writeRegionChecksum(out, walk, node.targetLength)
       out.writeVarInt(node.instructions.size)
       out.writeBytes(node.instructions)
     }
-    is RegionNode.Raw -> out.writeByte(RegionEncoding.RAW.code)
+    is RegionNode.Raw -> {
+      out.writeByte(RegionEncoding.RAW.code)
+      writeRegionChecksum(out, walk, node.targetLength)
+    }
     is RegionNode.Text -> {
       out.writeByte(RegionEncoding.TEXT.code)
+      writeRegionChecksum(out, walk, node.targetLength)
       out.writeVarLong(node.sourceFrom)
       out.writeVarLong(node.sourceLength)
       out.writeVarInt(node.edits.size)
@@ -119,13 +131,23 @@ internal fun writeRegionTree(out: ByteWriter, node: RegionNode) {
     }
     is RegionNode.Columns -> {
       out.writeByte(RegionEncoding.COLUMNS.code)
+      writeRegionChecksum(out, walk, node.targetLength)
       out.writeVarLong(node.sourceFrom)
       out.writeVarLong(node.sourceLength)
       out.writeByte(node.widths.size)
       for (width in node.widths) out.writeByte(width)
-      writeRegionTree(out, node.inner)
+      // The region inside works on rearranged bytes, which are not target bytes, so it carries no
+      // checksum of its own - this node's covers what it finally produces.
+      writeRegionTree(out, node.inner, null)
     }
   }
+}
+
+private fun writeRegionChecksum(out: ByteWriter, walk: TargetWalk?, length: Long) {
+  if (walk == null) return
+  val to = walk.at + length.toInt()
+  out.writeUInt32(Crc32.compute(walk.bytes, walk.at, to))
+  walk.at = to
 }
 
 /**
@@ -136,20 +158,29 @@ internal fun writeRegionTree(out: ByteWriter, node: RegionNode) {
  * make every node look free to add, which would bias each weigh-in in favour of taking a region
  * apart - by exactly the framing the comparison forgot.
  */
-internal fun RegionNode.structureBytes(): Long = when (this) {
-  is RegionNode.Composite ->
-    varSize(targetLength) + 1 + varSize(children.size.toLong()) +
-      children.sumOf { it.structureBytes() }
-  is RegionNode.Delta ->
-    varSize(targetLength) + 1 + varSize(instructions.size.toLong()) + instructions.size
-  is RegionNode.Text ->
-    varSize(targetLength) + 1 + varSize(sourceFrom) + varSize(sourceLength) +
-      varSize(edits.size.toLong()) + edits.size
-  is RegionNode.Columns ->
-    varSize(targetLength) + 1 + varSize(sourceFrom) + varSize(sourceLength) +
-      1 + widths.size + inner.structureBytes()
-  is RegionNode.Raw -> varSize(targetLength) + 1
+internal fun RegionNode.structureBytes(checksummed: Boolean = true): Long {
+  // Every region that produces target bytes carries a checksum of them, and a region that is only
+  // considered has to be priced with one, or taking a region apart looks cheaper than it is.
+  val checksum = if (checksummed) CHECKSUM_BYTES else 0
+  return when (this) {
+    is RegionNode.Composite ->
+      varSize(targetLength) + 1 + varSize(children.size.toLong()) +
+        children.sumOf { it.structureBytes(checksummed) }
+    is RegionNode.Delta ->
+      varSize(targetLength) + 1 + checksum +
+        varSize(instructions.size.toLong()) + instructions.size
+    is RegionNode.Text ->
+      varSize(targetLength) + 1 + checksum + varSize(sourceFrom) + varSize(sourceLength) +
+        varSize(edits.size.toLong()) + edits.size
+    is RegionNode.Columns ->
+      varSize(targetLength) + 1 + checksum + varSize(sourceFrom) + varSize(sourceLength) +
+        1 + widths.size + inner.structureBytes(checksummed = false)
+    is RegionNode.Raw -> varSize(targetLength) + 1 + checksum
+  }
 }
+
+/** A CRC-32 per region that produces target bytes. */
+private const val CHECKSUM_BYTES = 4L
 
 /** Bytes a varint of [value] occupies: seven bits at a time. */
 private fun varSize(value: Long): Long {
