@@ -119,13 +119,15 @@ class RegionReportTest {
       "nested regions should be reported as well as the top level"
     )
 
-    // Whatever the shape, a region's children account for exactly what the region itself cost.
+    // A region's children account for what it cost, short of the framing that holds them: a
+    // composite pays a length, an encoding byte and a child count before describing anything.
     for (region in report.allRegions) {
       if (region.children.isEmpty()) continue
-      assertEquals(
-        region.patchBytes,
-        region.children.sumOf { it.patchBytes },
-        "children of ${region.name} should add up to it"
+      val below = region.children.sumOf { it.patchBytes }
+      val framing = region.patchBytes - below
+      assertTrue(
+        framing in 0..32,
+        "children of ${region.name} should account for it: $below against ${region.patchBytes}"
       )
     }
   }

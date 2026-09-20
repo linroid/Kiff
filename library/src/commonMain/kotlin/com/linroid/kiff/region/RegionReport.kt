@@ -42,8 +42,8 @@ data class RegionCost(
    * The regions this one was described as, when it was taken apart - a dex's sections, an inner
    * archive's entries. Empty when it was described whole, which is most of the time.
    *
-   * Their costs add up to this region's own, so a reader can go one level down without the sums
-   * stopping agreeing.
+   * Their costs account for this region's own, short of the few bytes of framing that hold them
+   * together, so a reader can go a level down without the sums stopping agreeing.
    */
   val children: List<RegionCost> = emptyList()
 ) {
