@@ -40,7 +40,7 @@ The `cli` module is a small command-line front end for the library, installed as
 $ ./gradlew :cli:installDist
 $ ./cli/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
 Created foo.patch with the binary patcher
-  Patcher:     binary (format v2)
+  Patcher:     binary (format v1)
   Source:      67.4 MiB crc32=fa4b3b57
   Target:      71.7 MiB crc32=0d0e6723
   Patch:       13.7 MiB (19.19% of target)
@@ -87,8 +87,7 @@ delta   instruction stream + literal stream
 ```
 
 Sizes and the source offsets inside the delta are 64-bit varints, so a patch can describe inputs
-beyond 2 GB. For any value in `Int` range the encoding is byte for byte what v1 wrote, so v1
-patches still apply; only the declared ceiling moved.
+beyond 2 GB.
 
 The delta stream is a sequence of four instructions:
 

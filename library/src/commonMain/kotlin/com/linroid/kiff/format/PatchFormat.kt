@@ -16,19 +16,18 @@ import com.linroid.kiff.PatcherId
  * payload delta stream
  * ```
  *
- * Sizes and the source offsets inside the delta are 64-bit varints as of v2, so a patch can
- * describe inputs beyond 2 GB. The encoding of any value in `Int` range is unchanged, which is why
- * a v1 patch is still read correctly; only the declared ceiling moved.
+ * Sizes and the source offsets inside the delta are 64-bit varints, so a patch can describe
+ * inputs beyond 2 GB.
  *
  * The checksums are what let [Patcher.applyPatch] refuse the wrong source file and prove the
  * restored bytes are exactly the ones the patch was built from.
  */
 internal object PatchFormat {
 
-  const val VERSION = 2
+  const val VERSION = 1
 
-  /** Versions this build can read. v1 differs only in that it never wrote a value above 2 GB. */
-  private val SUPPORTED = setOf(1, 2)
+  /** Versions this build can read. */
+  private val SUPPORTED = setOf(VERSION)
 
   private val magic = byteArrayOf(0x4B, 0x49, 0x46, 0x46)
 
