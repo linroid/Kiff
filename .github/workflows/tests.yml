@@ -20,7 +20,7 @@ jobs:
     name: JVM Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
@@ -43,7 +43,7 @@ jobs:
     name: iOS Tests
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
@@ -66,7 +66,7 @@ jobs:
     name: JS Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
@@ -89,7 +89,7 @@ jobs:
     name: Linux Native Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
@@ -112,7 +112,7 @@ jobs:
     name: macOS Native Tests
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-java@v6
         with:
