@@ -71,29 +71,56 @@ class MalformedPatchTest {
     )
   )
 
-  /** Discards its bytes: what matters is whether the restore is refused, not what it produced. */
-  private object Discard : RestoreTarget {
-    override fun write(bytes: ByteArray, from: Int, to: Int) = Unit
+  /**
+   * Keeps what a streamed restore hands over, and counts past the target so an overrun still
+   * shows. The streaming path cannot check anything after the fact, so what it wrote is the only
+   * evidence of what it did.
+   */
+  private class Collecting(private val expected: ByteArray) : RestoreTarget {
+    private val kept = ByteArray(expected.size)
+    var count = 0L
+      private set
+
+    override fun write(bytes: ByteArray, from: Int, to: Int) {
+      for (i in from until to) {
+        if (count < kept.size) kept[count.toInt()] = bytes[i]
+        count++
+      }
+    }
+
+    fun holdsExactly(): Boolean = count == expected.size.toLong() && kept.contentEquals(expected)
   }
 
-  private fun check(label: String, patcher: Patcher, source: ByteArray, target: ByteArray, patch: ByteArray) {
-    val restored = try {
-      patcher.applyPatch(source, patch)
-    } catch (e: KiffException) {
-      return
-    } catch (e: Throwable) {
-      fail("$label raised ${e::class.simpleName} rather than a KiffException: ${e.message}")
+  /** Runs [restore], answering whether it was accepted; anything but a [KiffException] fails. */
+  private fun accepted(label: String, restore: () -> Unit): Boolean = try {
+    restore()
+    true
+  } catch (e: KiffException) {
+    false
+  } catch (e: Throwable) {
+    fail("$label raised ${e::class.simpleName} rather than a KiffException: ${e.message}")
+  }
+
+  private fun check(
+    label: String,
+    patcher: Patcher,
+    source: ByteArray,
+    target: ByteArray,
+    patch: ByteArray
+  ) {
+    var restored = ByteArray(0)
+    val collected = accepted(label) { restored = patcher.applyPatch(source, patch) }
+    if (collected && !restored.contentEquals(target)) {
+      fail("$label restored ${restored.size} bytes that are not the target, without complaining")
     }
-    if (!restored.contentEquals(target)) {
-      fail("$label restored $${restored.size} bytes that are not the target, without complaining")
+    // Both paths, for every corruption: the streaming one differs exactly where a refusal comes too
+    // late to take back what was written, so it cannot be skipped when the other one refuses.
+    val out = Collecting(target)
+    val streamed = accepted("$label streaming") {
+      patcher.applyPatch(ByteArraySource(source), patch, out)
     }
-    // The streaming path has to refuse the same things, and cannot check afterwards.
-    try {
-      patcher.applyPatch(ByteArraySource(source), patch, Discard)
-    } catch (e: KiffException) {
-      return
-    } catch (e: Throwable) {
-      fail("$label streaming raised ${e::class.simpleName}: ${e.message}")
+    if (streamed && !out.holdsExactly()) {
+      fail("$label streamed ${out.count} bytes that are not the target, without complaining")
     }
   }
 

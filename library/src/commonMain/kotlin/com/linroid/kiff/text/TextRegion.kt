@@ -149,7 +149,7 @@ internal object TextRegion {
         OP_INSERT -> {
           val span = edits.readVarInt()
           checkFits(produced, span, length)
-          if (span < 0 || literalPosition + span > literals.size) {
+          if (span > literals.size - literalPosition) {
             throw KiffException.InvalidPatch("Text region reads past the literal stream")
           }
           out.write(literals, literalPosition, literalPosition + span)
@@ -181,15 +181,16 @@ internal object TextRegion {
       chars.concatToString()
     }
 
+  // Both bounds are subtractions, so a count near Int.MAX_VALUE cannot wrap past them.
   private fun lineAt(starts: IntArray, line: Int, count: Int, lineCount: Int): Int {
-    if (count < 0 || line + count > lineCount) {
+    if (count < 0 || count > lineCount - line) {
       throw KiffException.InvalidPatch("Text region names lines outside the source region")
     }
     return starts[line]
   }
 
   private fun checkFits(produced: Int, span: Int, length: Int) {
-    if (span < 0 || produced + span > length) {
+    if (span < 0 || span > length - produced) {
       throw KiffException.InvalidPatch("Text region writes past the end of its region")
     }
   }

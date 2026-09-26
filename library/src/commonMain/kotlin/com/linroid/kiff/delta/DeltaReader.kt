@@ -41,7 +41,9 @@ internal class DeltaReader(private val buffer: ByteArray = ByteArray(CHUNK)) {
       val opcode = (tag and DeltaOp.MASK).toInt()
       if (opcode == DeltaOp.END) break
       val run = (tag ushr DeltaOp.SHIFT).toRunLength()
-      if (produced + run > length) {
+      // Every bound here is written as a subtraction: a run near Int.MAX_VALUE would wrap the sum
+      // negative and slip past the check it was meant to fail.
+      if (run > length - produced) {
         throw KiffException.InvalidPatch("Delta writes past the end of its region")
       }
       when (opcode) {
@@ -128,15 +130,15 @@ internal class DeltaReader(private val buffer: ByteArray = ByteArray(CHUNK)) {
   }
 
   private fun checkLiterals(position: Int, length: Int, available: Int) {
-    if (position < 0 || position + length > available) {
+    if (position < 0 || length > available - position) {
       throw KiffException.InvalidPatch("Delta reads past the literal stream")
     }
   }
 
   private fun checkInSource(offset: Long, length: Int, size: Long) {
-    if (offset < 0 || offset + length > size) {
+    if (offset < 0 || length > size - offset) {
       throw KiffException.InvalidPatch(
-        "Delta reads [$offset, ${offset + length}) outside the source"
+        "Delta reads $length byte(s) at $offset, outside a source of $size"
       )
     }
   }

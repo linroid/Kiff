@@ -88,12 +88,14 @@ internal object Lzss {
         position += count
       } else {
         val length = (tag ushr 1) + MIN_MATCH
-        val distance = reader.readVarInt() + 1
-        if (distance > position) {
-          throw KiffException.InvalidPatch("Literal back-reference $distance before start")
+        // Written as the distance less one, and compared that way: adding the one back first
+        // would wrap Int.MAX_VALUE round to a negative distance that passes the check.
+        val gap = reader.readVarInt()
+        if (gap >= position) {
+          throw KiffException.InvalidPatch("Literal back-reference ${gap + 1L} before start")
         }
         checkFits(position, length, expectedSize)
-        var from = position - distance
+        var from = position - gap - 1
         repeat(length) {
           result[position++] = result[from++]
         }
@@ -106,7 +108,7 @@ internal object Lzss {
   }
 
   private fun checkFits(position: Int, count: Int, expectedSize: Int) {
-    if (count < 0 || position + count > expectedSize) {
+    if (count < 0 || count > expectedSize - position) {
       throw KiffException.InvalidPatch("Literal stream overflows $expectedSize bytes")
     }
   }
