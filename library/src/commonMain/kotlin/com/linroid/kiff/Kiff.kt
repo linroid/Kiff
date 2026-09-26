@@ -57,14 +57,18 @@ object Kiff {
   /**
    * Restores a file from [sourcePath] and [patchPath] into [outputPath], using whichever patcher
    * created the patch.
+   *
+   * [outputPath] is replaced only by a restore that verified: a refused patch leaves it as it was.
+   * That also makes it safe to name the source itself, to update a file in place.
    */
   fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
     val patch = KiffFiles.readBytes(patchPath)
     val patchInfo = info(patch)
     // Neither file is held: the source is addressed on disk and the restore goes straight to the
-    // output, so this costs the same whether the package is eight megabytes or eight hundred.
-    fileSource(sourcePath).use { source ->
-      KiffFiles.writeStreaming(outputPath) { target ->
+    // output, so this costs the same whether the package is eight megabytes or eight hundred. The
+    // source is closed before the output is moved into place, which may be over the source.
+    KiffFiles.writeStreaming(outputPath) { target ->
+      fileSource(sourcePath).use { source ->
         patcher(patchInfo.patcher).applyPatch(source, patch, target)
       }
     }
