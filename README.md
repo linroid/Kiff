@@ -5,14 +5,8 @@ file byte for byte from the first one plus that patch.
 
 ## Using it
 
-```kotlin
-dependencies {
-  implementation("com.linroid.kiff:kiff:0.1.0")
-}
-```
-
-Published for JVM, JS, iOS, macOS, Linux and Windows from one source set. `./gradlew
-publishToMavenLocal` puts it in `~/.m2` if you want to try a change against your own build first.
+The library is not published yet. It targets JVM, JS, iOS, macOS, Linux and Windows from one source
+set. Run `./gradlew publishToMavenLocal` to publish it to `~/.m2` for local use.
 
 ## Patchers
 
