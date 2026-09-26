@@ -40,11 +40,15 @@ class DexFormat : ContainerFormat {
     // getting it wrong quietly would be worse than leaving it whole.
     if (u32(bytes, from + ENDIAN_TAG) != LITTLE_ENDIAN) return emptyList()
 
+    // Offsets are the file's own, so they are checked against its size rather than added to [from]
+    // first: a dex nested anywhere but the start would wrap that sum for an offset near
+    // Int.MAX_VALUE, and pass.
+    val size = to - from
     val mapOffset = u32(bytes, from + MAP_OFF)
-    if (mapOffset < HEADER_SIZE || from + mapOffset + 4 > to) return emptyList()
+    if (mapOffset < HEADER_SIZE || mapOffset > size - 4) return emptyList()
     val count = u32(bytes, from + mapOffset)
     if (count <= 0 || count > MAX_SECTIONS) return emptyList()
-    if (from + mapOffset + 4 + count * MAP_ITEM_SIZE > to) return emptyList()
+    if (count * MAP_ITEM_SIZE > size - mapOffset - 4) return emptyList()
 
     val offsets = IntArray(count)
     val types = IntArray(count)
@@ -56,7 +60,7 @@ class DexFormat : ContainerFormat {
       val offset = u32(bytes, at + MAP_ITEM_OFFSET)
       // The format requires the list sorted by offset and inside the file; anything else is not a
       // dex this can describe, and describing it wrongly would produce a patch that cannot restore.
-      if (offset <= previous || from + offset > to) return emptyList()
+      if (offset <= previous || offset > size) return emptyList()
       offsets[i] = offset
       previous = offset
     }
