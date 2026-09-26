@@ -72,6 +72,20 @@ class RegionTreeTest {
   }
 
   @Test
+  fun aRewrittenTextEntryIsLeftToTheByteSearch() {
+    // Every line changed is a line script of six thousand edits. The search for it used to hold
+    // memory in the square of that and ran out; past the edit budget the region is bytes instead.
+    val original = (1..3_000).joinToString("") { "key.$it = old value $it\n" }
+    val rewritten = (1..3_000).joinToString("") { "key.$it = new value ${it * 7}\n" }
+    val source = TestZipBuilder().entry("strings.txt", original).build()
+    val target = TestZipBuilder().entry("strings.txt", rewritten).build()
+
+    assertRestores(Kiff.zip, source, target)
+    val encodings = Kiff.zip.explain(source, target).allRegions.map { it.encoding }
+    assertTrue(RegionEncoding.TEXT !in encodings, "chose a line script anyway: $encodings")
+  }
+
+  @Test
   fun anUnrelatedEntryIsStoredRatherThanDeltaEncoded() {
     // Nothing in the source resembles it, so any delta would cost more than the bytes themselves.
     val source = TestZipBuilder().entry("a.bin", structuredBytes(40_000, seed = 20)).build()
