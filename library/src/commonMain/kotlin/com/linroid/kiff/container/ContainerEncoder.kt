@@ -67,8 +67,12 @@ internal class ContainerEncoder(
       ?.decompose(target, 0, target.size)
       .orEmpty()
       .takeIf { it.size > 1 }
+    // Both sides have to be the format, as they do for a nested region. Taken apart against a
+    // source that could not be, the target's parts would have nothing to pair with, and each would
+    // be stored or searched on its own - far larger than one search over the whole file.
+    val sourceChildren = children?.let { rootFormat!!.decompose(source, 0, source.size) }
 
-    if (children == null) {
+    if (children == null || sourceChildren.isNullOrEmpty()) {
       // Nothing claims it, so it is one region and gets described as one.
       val literalsBefore = literals.size
       val node = leaf(WHOLE_FILE, RegionKind.WHOLE, 0, source.size, 0, target.size, literals)
@@ -85,8 +89,7 @@ internal class ContainerEncoder(
       return node
     }
 
-    val sourceChildren = rootFormat!!.decompose(source, 0, source.size)
-    val built = composite(rootFormat, sourceChildren, children, literals, depth = 0)
+    val built = composite(rootFormat!!, sourceChildren, children, literals, depth = 0)
     if (recorder != null) for (cost in built.costs) recorder.record(cost)
     return built.node
   }
