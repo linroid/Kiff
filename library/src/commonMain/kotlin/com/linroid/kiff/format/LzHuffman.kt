@@ -102,7 +102,7 @@ internal object LzHuffman {
           if (distance > position) {
             throw KiffException.InvalidPatch("Content back-reference $distance before the start")
           }
-          if (position + length > expectedSize) overflow(expectedSize)
+          if (length > expectedSize - position) overflow(expectedSize)
           var from = position - distance
           repeat(length) { result[position++] = result[from++] }
         }

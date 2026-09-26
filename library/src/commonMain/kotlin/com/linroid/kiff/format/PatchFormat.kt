@@ -82,11 +82,17 @@ internal object PatchFormat {
       patcher = patcher,
       version = version,
       flags = flags,
-      sourceSize = reader.readVarLong(),
+      sourceSize = readSize(reader, "source"),
       sourceCrc32 = reader.readUInt32(),
-      targetSize = reader.readVarLong(),
+      targetSize = readSize(reader, "target"),
       targetCrc32 = reader.readUInt32()
     )
+  }
+
+  private fun readSize(reader: ByteReader, what: String): Long {
+    val size = reader.readVarLong()
+    if (size < 0) throw KiffException.InvalidPatch("Patch declares a $what of $size bytes")
+    return size
   }
 
   private const val UNKNOWN_FLAGS = FLAG_REGION_CHECKSUMS.inv()

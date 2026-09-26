@@ -4,6 +4,7 @@ import com.linroid.kiff.KiffException
 import com.linroid.kiff.delta.DeltaReader
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.CheckedRestoreTarget
+import com.linroid.kiff.io.CountingRestoreTarget
 import com.linroid.kiff.io.RestoreTarget
 import com.linroid.kiff.io.ScratchRestoreTarget
 import com.linroid.kiff.io.SeekableSource
@@ -103,7 +104,7 @@ internal object PatchPayload {
       else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
     }
 
-    val checked = CheckedRestoreTarget(out)
+    val checked = CheckedRestoreTarget(out, targetSize)
     val state = Restore(source, literals, checked, DeltaReader())
     val written = applyNode(tree, state, checked, targetSize, depth = 0, checksums = checksums)
     if (written != targetSize) {
@@ -118,11 +119,14 @@ internal object PatchPayload {
    * [Restore.checked] is the restore as a whole, which is where a region's checksum has to be
    * taken from; [out] is where this node's bytes actually go. The two differ only inside a columns
    * region, whose contents cannot be emitted until they are whole.
+   *
+   * A node is measured by what reached [out], not by what its decoder says it wrote, so no one
+   * decoder's arithmetic stands between a malformed patch and a region of the wrong length.
    */
   private fun applyNode(
     tree: ByteReader,
     state: Restore,
-    out: RestoreTarget,
+    out: CountingRestoreTarget,
     room: Long,
     depth: Int,
     checksums: Boolean
@@ -139,6 +143,7 @@ internal object PatchPayload {
     val expected =
       if (checksums && encoding != RegionEncoding.COMPOSITE) tree.readUInt32() else null
     val startedAt = state.checked.position
+    val before = out.position
     if (expected != null && onTheRestore) state.checked.startRegion()
 
     when (encoding) {
@@ -171,7 +176,7 @@ internal object PatchPayload {
 
       RegionEncoding.RAW -> {
         val span = length.toIntIndex("Region length")
-        if (state.literalCursor + span > state.literals.size) {
+        if (span > state.literals.size - state.literalCursor) {
           throw KiffException.InvalidPatch("Raw region reads past the literal stream")
         }
         out.write(state.literals, state.literalCursor, state.literalCursor + span)
@@ -218,6 +223,12 @@ internal object PatchPayload {
       }
     }
 
+    val produced = out.position - before
+    if (produced != length) {
+      throw KiffException.InvalidPatch(
+        "Region [$startedAt, ${startedAt + length}) produced $produced of its $length bytes"
+      )
+    }
     if (expected != null && onTheRestore) {
       val actual = state.checked.finishRegion()
       if (actual != expected) {
@@ -248,7 +259,7 @@ internal object PatchPayload {
 
     /** Reads a source range in, for the encodings that cannot work a chunk at a time. */
     fun read(from: Long, length: Long, what: String): ByteArray {
-      if (from < 0 || length < 0 || from + length > source.size) {
+      if (from < 0 || length < 0 || length > source.size - from) {
         throw KiffException.InvalidPatch("$what region names a source range outside the source")
       }
       val bytes = ByteArray(length.toIntIndex("$what source length"))

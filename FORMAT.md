@@ -162,6 +162,7 @@ of an error.
 
 - a magic that is not `KIFF`, or a version it does not implement
 - a flag bit it does not recognise
+- a varint wider than 64 bits, or a negative value where a size, count or length belongs
 - a tree nested deeper than 16
 - a region that runs past the end of the target, or a composite whose children do not add up to it
 - an instruction reading outside the source, or past the end of the content stream

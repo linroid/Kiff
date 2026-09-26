@@ -43,16 +43,24 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
     while (true) {
       if (shift > 63) throw KiffException.InvalidPatch("Malformed varint at offset $position")
       val byte = readByte()
+      // The tenth group has room for one bit; anything above it would be silently dropped.
+      if (shift == 63 && byte and 0x7E != 0) {
+        throw KiffException.InvalidPatch("Varint wider than 64 bits at offset $position")
+      }
       result = result or ((byte.toLong() and 0x7F) shl shift)
       if (byte and 0x80 == 0) return result
       shift += 7
     }
   }
 
+  /**
+   * A varint that has to be a size, a count or a length - so not negative, which a varint that
+   * sets the top bit of its 64 would otherwise be.
+   */
   fun readVarInt(): Int {
     val value = readVarLong()
-    if (value > Int.MAX_VALUE) {
-      throw KiffException.InvalidPatch("Varint $value exceeds Int range")
+    if (value < 0 || value > Int.MAX_VALUE) {
+      throw KiffException.InvalidPatch("Varint $value is not a length this can hold")
     }
     return value.toInt()
   }
@@ -63,7 +71,8 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
   }
 
   private fun ensure(count: Int) {
-    if (count < 0 || position + count > data.size) {
+    // Subtracted rather than added: a count near Int.MAX_VALUE would wrap the sum past the check.
+    if (count < 0 || count > data.size - position) {
       throw KiffException.InvalidPatch(
         "Patch truncated: need $count byte(s) at offset $position of ${data.size}"
       )
