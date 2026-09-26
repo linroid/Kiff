@@ -49,17 +49,28 @@ internal object TextRegion {
   /**
    * Largest number of lines either side may have.
    *
-   * Myers keeps a snapshot per edit step, so its memory grows with the product of the input
-   * lengths, not their sum. Past this many lines the line search is the wrong tool whatever the
-   * bytes look like, and declining is better than exhausting memory to find out.
+   * The line search takes time in proportion to the lines times the edits it finds. Past this many
+   * lines it is the wrong tool whatever the bytes look like, and declining is cheaper than finding
+   * out.
    */
   const val MAX_LINES = 20_000
+
+  /**
+   * Most lines a script may delete and insert before the region is left to the byte search.
+   *
+   * A changed line costs its whole length in a line script, where the byte search pays only for
+   * the bytes that differ, so a script this long is rarely the smallest candidate; and the search
+   * for it costs time in proportion to its length. Declining here costs nothing: the byte-level
+   * encoding is built for every region whatever the plan.
+   */
+  const val MAX_EDITS = 4_096
 
   /**
    * Builds the edit script turning `source[sourceFrom, sourceTo)` into `target[targetFrom,
    * targetTo)`, appending inserted bytes to the patch's shared [literals] stream.
    *
-   * Answers null when the region has too many lines to search; the caller falls back to bytes.
+   * Answers null when the region has too many lines to search, or needs too many edits; the caller
+   * falls back to bytes.
    */
   fun encode(
     algorithm: LineDiffAlgorithm,
@@ -77,11 +88,13 @@ internal object TextRegion {
     val sourceLines = keysOf(source, sourceStarts)
     val targetLines = keysOf(target, targetStarts)
 
+    val edits = algorithm.diffWithin(sourceLines, targetLines, MAX_EDITS) ?: return null
+
     val out = ByteWriter(64)
     var sourceLine = 0
     var targetLine = 0
 
-    for (edit in algorithm.diff(sourceLines, targetLines)) {
+    for (edit in edits) {
       when (edit) {
         is Edit.Equal -> {
           out.writeByte(OP_EQUAL)

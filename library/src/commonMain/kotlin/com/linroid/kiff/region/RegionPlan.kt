@@ -57,9 +57,9 @@ val BinaryRegionPlanner: RegionPlanner = RegionPlanner { RegionAlgorithm.BINARY 
  * Line-level for regions that look like text and are small enough to be worth it, byte-level
  * otherwise.
  *
- * The size cap is not about correctness. The line search is O((N+M)D) in the number of lines and
- * holds a snapshot per edit, so it is the wrong tool for a large region however text-like it looks;
- * past the cap the byte-level search is both faster and, on that much data, usually smaller too.
+ * The size cap is not about correctness. The line search takes O((N+M)D) time in the number of
+ * lines, so it is the wrong tool for a large region however text-like it looks; past the cap the
+ * byte-level search is both faster and, on that much data, usually smaller too.
  */
 val TextAwareRegionPlanner: RegionPlanner = RegionPlanner { region ->
   val withinCap = region.targetBytes <= TEXT_REGION_LIMIT && region.sourceBytes <= TEXT_REGION_LIMIT

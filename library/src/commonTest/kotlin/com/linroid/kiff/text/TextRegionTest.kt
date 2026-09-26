@@ -94,6 +94,28 @@ class TextRegionTest {
   }
 
   @Test
+  fun theSearchDeclinesWhenTheScriptWouldBeTooLong() {
+    // Well within the line cap, but every line changed: twice as many edits as lines.
+    fun lines(count: Int, word: String) =
+      (1..count).joinToString("") { "$word $it\n" }.encodeToByteArray()
+
+    val over = TextRegion.MAX_EDITS / 2 + 1
+    val source = lines(over, "old")
+    val target = lines(over, "new")
+    assertNull(
+      TextRegion.encode(
+        algorithm,
+        source, 0, source.size,
+        target, 0, target.size,
+        ByteWriter(64)
+      ),
+      "should leave a rewritten region to the byte search"
+    )
+    val within = TextRegion.MAX_EDITS / 2
+    roundTrip(lines(within, "old").decodeToString(), lines(within, "new").decodeToString())
+  }
+
+  @Test
   fun linesCarryTheirOwnTerminators() {
     val bytes = "a\nbb\nccc".encodeToByteArray()
     val starts = TextRegion.lineStarts(bytes, 0, bytes.size)

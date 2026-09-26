@@ -1,7 +1,10 @@
 package com.linroid.kiff.text
 
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MyersDiffAlgorithmTest {
@@ -162,6 +165,92 @@ class MyersDiffAlgorithmTest {
     for ((source, target) in cases) {
       assertRoundtrip(source, target)
     }
+  }
+
+  // --- Over inputs nobody wrote by hand ---
+
+  /** The length of a shortest edit script, from the textbook table of common subsequences. */
+  private fun shortestDistance(source: List<String>, target: List<String>): Int {
+    val common = Array(source.size + 1) { IntArray(target.size + 1) }
+    for (i in source.indices.reversed()) {
+      for (j in target.indices.reversed()) {
+        common[i][j] = if (source[i] == target[j]) {
+          common[i + 1][j + 1] + 1
+        } else {
+          maxOf(common[i + 1][j], common[i][j + 1])
+        }
+      }
+    }
+    return source.size + target.size - 2 * common[0][0]
+  }
+
+  private fun cost(edits: List<Edit>): Int = edits.sumOf {
+    when (it) {
+      is Edit.Delete -> it.count
+      is Edit.Insert -> it.lines.size
+      is Edit.Equal -> 0
+    }
+  }
+
+  /** Few distinct lines, so there is plenty in common and many shortest paths to choose from. */
+  private fun randomLines(random: Random, size: Int) = List(size) { "line ${random.nextInt(4)}" }
+
+  @Test
+  fun everyScriptIsAShortestOneAndRestores() {
+    val random = Random(42)
+    repeat(2_000) {
+      val source = randomLines(random, random.nextInt(0, 30))
+      val target = randomLines(random, random.nextInt(0, 30))
+      val edits = algorithm.diff(source, target)
+      assertEquals(shortestDistance(source, target), cost(edits), "source=$source target=$target")
+      assertRoundtrip(source, target)
+      for ((first, second) in edits.zipWithNext()) {
+        // Runs are whole, and within a run of changes deletions come first - the order a unified
+        // diff prints them in.
+        assertTrue(first::class != second::class, "split run in $edits")
+        assertTrue(first !is Edit.Insert || second !is Edit.Delete, "insert before delete: $edits")
+      }
+    }
+  }
+
+  @Test
+  fun aBudgetIsHonouredToTheEdit() {
+    val random = Random(7)
+    repeat(1_000) {
+      val source = randomLines(random, random.nextInt(0, 24))
+      val target = randomLines(random, random.nextInt(0, 24))
+      val distance = shortestDistance(source, target)
+      val within = assertNotNull(algorithm.diffWithin(source, target, distance), "at $distance")
+      assertEquals(distance, cost(within))
+      if (distance > 0) assertNull(algorithm.diffWithin(source, target, distance - 1))
+    }
+  }
+
+  @Test
+  fun thousandsOfChangedLinesTakeLittleMemory() {
+    // The textbook search kept its frontier for every edit, which is memory in the square of the
+    // edit count: six thousand edits ran a 512 MB heap out of memory.
+    val source = List(3_000) { "old $it" }
+    val target = List(3_000) { "new $it" }
+    assertEquals(6_000, cost(algorithm.diff(source, target)))
+    assertRoundtrip(source, target)
+
+    val interleaved = List(4_000) { if (it % 2 == 0) "kept $it" else "old $it" }
+    val edited = List(4_000) { if (it % 2 == 0) "kept $it" else "new $it" }
+    assertEquals(4_000, cost(algorithm.diff(interleaved, edited)))
+    assertRoundtrip(interleaved, edited)
+  }
+
+  @Test
+  fun anAlgorithmThatCannotGiveUpEarlyIsStillHeldToItsBudget() {
+    val wholeOnly = object : LineDiffAlgorithm {
+      override val name = "whole only"
+      override fun diff(source: List<String>, target: List<String>) = algorithm.diff(source, target)
+    }
+    val source = listOf("a", "b", "c")
+    val target = listOf("x", "b", "y")
+    assertNull(wholeOnly.diffWithin(source, target, 3))
+    assertEquals(algorithm.diff(source, target), wholeOnly.diffWithin(source, target, 4))
   }
 
   private fun assertRoundtrip(source: List<String>, target: List<String>) {
