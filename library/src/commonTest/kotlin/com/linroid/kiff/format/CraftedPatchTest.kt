@@ -225,6 +225,28 @@ class CraftedPatchTest {
   }
 
   @Test
+  fun aFewPackedBytesCannotDeclareAGigabyte() {
+    // The declared target is the only other bound, and it is the patch's own word: a patch can
+    // declare a gigabyte of both, and four stored bytes used to be enough to have it allocated.
+    val payload = payload(
+      bytes { raw(1L shl 30) },
+      content = ByteArray(4),
+      unpacked = 1 shl 30,
+      encoding = PatchPayload.CONTENT_LZ_HUFFMAN
+    )
+    assertRefused(payload, targetSize = 1L shl 30)
+  }
+
+  @Test
+  fun storedContentIsExactlyTheSizeItDeclares() {
+    // Declaring less than is stored restored the whole region and returned normally.
+    val content = "abcd".encodeToByteArray()
+    for (declared in listOf(2, 8)) {
+      assertRefused(payload(bytes { raw(4) }, content, unpacked = declared), targetSize = 4)
+    }
+  }
+
+  @Test
   fun aHeaderDeclaringANegativeSizeIsRefused() {
     val header = bytes {
       writeBytes("KIFF".encodeToByteArray())

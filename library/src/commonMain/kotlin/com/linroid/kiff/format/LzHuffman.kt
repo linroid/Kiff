@@ -69,6 +69,19 @@ internal object LzHuffman {
     return out.toByteArray()
   }
 
+  /**
+   * The most [packedSize] bytes of this codec's output can unpack to.
+   *
+   * The code lengths take a fixed number of bits up front, and after them every symbol costs at
+   * least one bit: a literal is one byte for that bit, and a match is at most [MAX_MATCH] bytes for
+   * two, its length and its distance. So a declared size past this cannot be what the stream
+   * holds, and a reader can refuse it before allocating for it.
+   */
+  fun maxUnpackedSize(packedSize: Int): Long {
+    val symbolBits = packedSize * 8L - (LITERAL_SYMBOLS + DISTANCE_SYMBOLS) * CODE_LENGTH_BITS
+    return if (symbolBits <= 0) 0 else symbolBits / 2 * MAX_MATCH
+  }
+
   fun decompress(data: ByteArray, expectedSize: Int): ByteArray {
     val result = ByteArray(expectedSize)
     if (expectedSize == 0) return result

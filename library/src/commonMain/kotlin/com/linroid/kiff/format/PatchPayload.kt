@@ -37,9 +37,11 @@ import com.linroid.kiff.text.TextRegion
  * them in, and both halves of the codec knowing about it - that is not a trade worth making.
  * [LzHuffman] records where the remaining compression actually is.
  *
- * Applying one holds neither file. The source is addressed through a [SeekableSource], the target
- * is written out as it is produced, and only what a single region needs at once is buffered - which
- * is what lets a device with far less memory than the machine that built the patch apply it.
+ * Applying one holds neither file. The source is addressed through a [SeekableSource] and the
+ * target is written out as it is produced, which is what lets a device with far less memory than
+ * the machine that built the patch apply it. What is held is the patch, its content stream unpacked
+ * whole, and what a single region needs at once - so a patch whose target is mostly new content
+ * costs about its target in memory, since that content is what the stream carries.
  */
 internal object PatchPayload {
 
@@ -89,6 +91,20 @@ internal object PatchPayload {
     if (literalLength > targetSize) {
       throw KiffException.InvalidPatch(
         "Patch declares $literalLength bytes of content for a target of $targetSize"
+      )
+    }
+    // The target size is the patch's own word too, so the stored bytes have to be able to account
+    // for the size as well - or a few of them could declare a gigabyte and have it allocated.
+    val possible = when (literalFlag) {
+      CONTENT_STORED -> storedLength.toLong()
+      CONTENT_LZ_HUFFMAN -> LzHuffman.maxUnpackedSize(storedLength)
+      // An LZSS match can be any length, so nothing follows from its stored size and the target is
+      // its only bound. An encoding this does not know is refused below.
+      else -> literalLength.toLong()
+    }
+    if (literalLength > possible || (literalFlag == CONTENT_STORED && literalLength < possible)) {
+      throw KiffException.InvalidPatch(
+        "Patch declares $literalLength bytes of content for $storedLength stored bytes"
       )
     }
 

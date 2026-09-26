@@ -155,6 +155,11 @@ rearranged and its own output built before either can be used. The checksums mak
 the first place: a streamed restore cannot be checked after the fact, because afterwards the bytes
 are gone.
 
+The content stream is the other thing a reader holds. Kiff's reader unpacks it whole before the
+first region, so a patch whose target is mostly new content costs about its target in memory, since
+that new content is what the stream carries. Regions consume the stream strictly in order, so a
+reader could unpack it as it goes instead; nothing in the format stands in the way.
+
 ## What a reader must refuse
 
 Not a list of nice-to-haves. Each of these is a way for a malformed patch to produce bytes instead
@@ -168,10 +173,15 @@ of an error.
 - an instruction reading outside the source, or past the end of the content stream
 - a `COLUMNS` field layout it cannot apply, or one naming a source range outside the source
 - content longer than the target, which no patch can use and which names its own allocation
+- content longer than its stored bytes can unpack to: exactly their own length when stored, and for
+  LZ77 + Huffman at most 4,119 bytes - the longest match - for every two bits after the code lengths
 - a region whose checksum does not match what it produced
 - a restored target whose checksum does not match the header
 
-One bound a reader cannot derive: the target size is declared in the header, and a reader returning
-the result as an array has to allocate that much before anything has corroborated it. Restoring
-into a `RestoreTarget` does not, which is the safer shape for a patch from somewhere you do not
-control; a caller who knows what it is expecting can also check `Kiff.info(patch).targetSize` first.
+One bound a reader cannot derive: the target size is declared in the header, and nothing
+corroborates it until the restore is done. A reader returning the result as an array allocates that
+much up front; restoring into a `RestoreTarget` does not, but the unpacked content and a `COLUMNS`
+region can each be as large as the target, and a patch can still name them. What this reader
+refuses keeps every allocation within the declared target size, or the source's own size for the
+range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do not control, check
+`Kiff.info(patch).targetSize` against what you are expecting before applying it.
