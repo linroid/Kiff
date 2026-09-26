@@ -189,6 +189,25 @@ class ZipPatcherTest {
   }
 
   @Test
+  fun anUnreadableSourceArchiveFallsBackToAByteScan() {
+    // Bytes after the end of the central directory make an archive unreadable here. The target
+    // was then taken apart against nothing, so every entry was stored or searched on its own.
+    val entries = (0 until 200).map { "res/entry$it.bin" to structuredBytes(2_000, seed = 100 + it) }
+    val readable = archive { for ((name, bytes) in entries) entry(name, bytes) }
+    val source = readable + ByteArray(25) { 0x5A }
+    val target = archive {
+      entries.forEachIndexed { i, (name, bytes) ->
+        entry(name, if (i == 100) structuredBytes(2_000, seed = 999) else bytes)
+      }
+    }
+    assertNull(ZipReader.parseOrNull(source))
+
+    val zip = assertRestores(patcher, source, target)
+    val binary = assertRestores(Kiff.binary, source, target)
+    assertTrue(zip <= binary + 64, "should cost what a byte scan does: $zip against $binary")
+  }
+
+  @Test
   fun anEntryPlacedNearIntMaxIsNotAnArchiveItDescribes() {
     // The directory names where each local header is. Checked as offset + header size, an offset
     // near Int.MAX_VALUE wrapped the sum negative, passed, and was read - where the reader should
