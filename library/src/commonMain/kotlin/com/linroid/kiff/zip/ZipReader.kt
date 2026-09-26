@@ -4,6 +4,10 @@ package com.linroid.kiff.zip
  * Minimal zip structure reader: enough to locate every byte range of an archive, not to decompress
  * it. Returns `null` for anything it cannot describe exactly - a non-zip file, zip64, an archive
  * with overlapping records - so callers can fall back to a plain byte-level diff.
+ *
+ * Every offset and length it reads comes from the archive, which may be anything at all, so no
+ * bound here is checked as an Int sum: an offset near Int.MAX_VALUE would wrap it negative and past
+ * the check it was meant to fail. Either the sum is taken in Long or the check is a subtraction.
  */
 internal object ZipReader {
 
@@ -81,7 +85,7 @@ internal object ZipReader {
 
   /** Returns the entry and the offset of the next central directory header. */
   private fun readCentralEntry(bytes: ByteArray, at: Int, limit: Int): Pair<ZipEntry, Int>? {
-    if (at < 0 || at + CENTRAL_HEADER_SIZE > limit) return null
+    if (at < 0 || CENTRAL_HEADER_SIZE > limit - at) return null
     if (u32(bytes, at) != CENTRAL_SIGNATURE.toLong()) return null
     val flags = u16(bytes, at + 8)
     val method = u16(bytes, at + 10)
@@ -92,7 +96,7 @@ internal object ZipReader {
     val extraLength = u16(bytes, at + 30)
     val commentLength = u16(bytes, at + 32)
     val localOffset = u32(bytes, at + 42)
-    val next = at + CENTRAL_HEADER_SIZE + nameLength + extraLength + commentLength
+    val next = at.toLong() + CENTRAL_HEADER_SIZE + nameLength + extraLength + commentLength
     if (next > limit) return null
     if (compressedSize == ZIP64_MARKER_32 ||
       uncompressedSize == ZIP64_MARKER_32 ||
@@ -109,19 +113,20 @@ internal object ZipReader {
 
     val name = bytes.decodeToString(at + CENTRAL_HEADER_SIZE, at + CENTRAL_HEADER_SIZE + nameLength)
     val localHeaderOffset = localOffset.toInt()
-    if (localHeaderOffset + LOCAL_HEADER_SIZE > limit) return null
+    if (localHeaderOffset > limit - LOCAL_HEADER_SIZE) return null
     if (u32(bytes, localHeaderOffset) != LOCAL_SIGNATURE.toLong()) return null
     val localNameLength = u16(bytes, localHeaderOffset + 26)
     val localExtraLength = u16(bytes, localHeaderOffset + 28)
-    val dataOffset = localHeaderOffset + LOCAL_HEADER_SIZE + localNameLength + localExtraLength
-    val dataEnd = dataOffset.toLong() + compressedSize
+    val dataOffset =
+      localHeaderOffset.toLong() + LOCAL_HEADER_SIZE + localNameLength + localExtraLength
+    val dataEnd = dataOffset + compressedSize
     if (dataEnd > limit) return null
 
     var recordEnd = dataEnd.toInt()
     if (flags and FLAG_DATA_DESCRIPTOR != 0) {
       val descriptorSize = when {
-        recordEnd + 16 <= limit && u32(bytes, recordEnd) == DESCRIPTOR_SIGNATURE.toLong() -> 16
-        recordEnd + 12 <= limit -> 12
+        16 <= limit - recordEnd && u32(bytes, recordEnd) == DESCRIPTOR_SIGNATURE.toLong() -> 16
+        12 <= limit - recordEnd -> 12
         else -> return null
       }
       recordEnd += descriptorSize
@@ -135,10 +140,10 @@ internal object ZipReader {
       compressedSize = compressedSize.toInt(),
       uncompressedSize = uncompressedSize.toInt(),
       localHeaderOffset = localHeaderOffset,
-      dataOffset = dataOffset,
+      dataOffset = dataOffset.toInt(),
       recordEnd = recordEnd
     )
-    return entry to next
+    return entry to next.toInt()
   }
 
   private fun findEocd(bytes: ByteArray): Int? {

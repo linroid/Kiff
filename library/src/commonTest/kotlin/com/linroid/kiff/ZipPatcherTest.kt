@@ -2,10 +2,12 @@ package com.linroid.kiff
 
 import com.linroid.kiff.zip.TestZipBuilder
 import com.linroid.kiff.zip.ZipEntryStatus
+import com.linroid.kiff.zip.ZipReader
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ZipPatcherTest {
@@ -184,6 +186,24 @@ class ZipPatcherTest {
     val zip = archive { entry("a.txt", "hello") }
     assertRestores(patcher, structuredBytes(5_000, seed = 21), zip)
     assertRestores(patcher, zip, structuredBytes(5_000, seed = 22))
+  }
+
+  @Test
+  fun anEntryPlacedNearIntMaxIsNotAnArchiveItDescribes() {
+    // The directory names where each local header is. Checked as offset + header size, an offset
+    // near Int.MAX_VALUE wrapped the sum negative, passed, and was read - where the reader should
+    // have answered that this is not an archive it can describe, and let the patch fall back.
+    val source = archive { entry("a.bin", structuredBytes(2_000, seed = 23)) }
+    val target = source.copyOf()
+    val entry = (target.size - 4 downTo 0).first {
+      target[it] == 0x50.toByte() && target[it + 1] == 0x4B.toByte() &&
+        target[it + 2] == 0x01.toByte() && target[it + 3] == 0x02.toByte()
+    }
+    for (i in 0 until 4) target[entry + 42 + i] = (0x7FFFFFF0 ushr (8 * i)).toByte()
+
+    assertNull(ZipReader.parseOrNull(target))
+    assertRestores(Kiff.zip, source, target)
+    assertRestores(Kiff.apk, target, source)
   }
 
   @Test

@@ -171,6 +171,33 @@ class DexFormatTest {
     )
   }
 
+  @Test
+  fun anOffsetNearIntMaxLeavesTheDexWhole() {
+    // Checked as from + offset, an offset near Int.MAX_VALUE wraps negative for any dex that does
+    // not start its range - every dex inside an archive - and so passed, and was read out of range.
+    // Neither of these describes a dex; each has to leave it an opaque leaf.
+    val bytes = dex(seed = 9)
+    val mapOffset = u32(bytes, 0x34)
+    val lastItem = mapOffset + 4 + (u32(bytes, mapOffset) - 1) * 12
+    val crafted = listOf(
+      "map_off" to withU32(bytes, 0x34, Int.MAX_VALUE),
+      "a section offset" to withU32(bytes, lastItem + 8, Int.MAX_VALUE - 7)
+    )
+    for ((field, broken) in crafted) {
+      val wrapped = ByteArray(64) + broken
+      assertTrue(format.decompose(wrapped, 64, wrapped.size).isEmpty(), "$field was trusted")
+
+      val source = TestZipBuilder().entry("classes.dex", bytes).build()
+      val target = TestZipBuilder().entry("classes.dex", broken).build()
+      assertRestores(Kiff.zip, source, target)
+      assertRestores(Kiff.apk, target, source)
+    }
+  }
+
+  private fun withU32(bytes: ByteArray, at: Int, value: Int): ByteArray = bytes.copyOf().also {
+    for (i in 0 until 4) it[at + i] = (value ushr (8 * i)).toByte()
+  }
+
   private fun u32(bytes: ByteArray, at: Int): Int {
     var value = 0
     for (i in 3 downTo 0) value = (value shl 8) or (bytes[at + i].toInt() and 0xFF)
