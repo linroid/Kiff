@@ -5,6 +5,7 @@ import com.linroid.kiff.structuredBytes
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -15,6 +16,21 @@ class LzHuffmanTest {
     val back = LzHuffman.decompress(packed, data.size)
     assertContentEquals(data, back, "$what did not come back")
     return packed.size
+  }
+
+  @Test
+  fun noStreamUnpacksToMoreThanItsBoundAllows() {
+    // The reader refuses a declared size past maxUnpackedSize before allocating it, so the bound
+    // has to hold for the most compressible input there is, or it would refuse real patches.
+    for (data in listOf(ByteArray(4_000_000), ByteArray(1_000_000) { (it % 3).toByte() })) {
+      val packed = LzHuffman.compress(data)
+      assertTrue(
+        LzHuffman.maxUnpackedSize(packed.size) >= data.size,
+        "${data.size} bytes packed to ${packed.size}, which the bound says hold only " +
+          "${LzHuffman.maxUnpackedSize(packed.size)}"
+      )
+    }
+    assertEquals(0L, LzHuffman.maxUnpackedSize(4), "four bytes cannot even hold the code lengths")
   }
 
   @Test
