@@ -1,5 +1,7 @@
 package com.linroid.kiff.text
 
+import com.linroid.kiff.KiffException
+
 /**
  * A text file as the lines a diff talks about, plus the one thing that is easy to lose.
  *
@@ -21,7 +23,26 @@ data class TextContent(val lines: List<String>, val endsWithNewline: Boolean) {
   }
 
   companion object {
-    fun of(bytes: ByteArray): TextContent = of(bytes.decodeToString())
+    /**
+     * Reads [bytes] as UTF-8 text.
+     *
+     * Bytes that are not UTF-8 are refused rather than replaced. One replacement character stands
+     * for every invalid sequence, so two different files could read as the same text and diff to
+     * nothing, and writing the text back would change lines no edit touched.
+     * [UnifiedDiff.formatBytes] diffs files in any encoding.
+     *
+     * @throws KiffException.UnsupportedInput if [bytes] are not valid UTF-8.
+     */
+    fun of(bytes: ByteArray): TextContent {
+      val text = try {
+        bytes.decodeToString(throwOnInvalidSequence = true)
+      } catch (e: CharacterCodingException) {
+        throw KiffException.UnsupportedInput(
+          "Text is not valid UTF-8; UnifiedDiff.formatBytes diffs bytes in any encoding"
+        )
+      }
+      return of(text)
+    }
 
     fun of(text: String): TextContent {
       if (text.isEmpty()) return TextContent(emptyList(), endsWithNewline = false)
