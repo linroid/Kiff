@@ -33,6 +33,42 @@ class LzHuffmanTest {
     assertEquals(0L, LzHuffman.maxUnpackedSize(4), "four bytes cannot even hold the code lengths")
   }
 
+  /**
+   * The stream that unpacks to the most bytes for its length: one literal, then [matches] matches
+   * of the longest length at distance one, each a one-bit length symbol, its ten extra bits and a
+   * one-bit distance symbol.
+   */
+  private fun densest(matches: Int): ByteArray {
+    val bits = StringBuilder()
+    // Code lengths, four bits each: literal 0 and the end symbol two bits, the longest length
+    // symbol one bit; distance 1 one bit. Every other symbol is unused.
+    for (symbol in 0 until 289) {
+      bits.append(lengthBits(if (symbol == 0 || symbol == 256) 2 else if (symbol == 288) 1 else 0))
+    }
+    for (symbol in 0 until 40) bits.append(lengthBits(if (symbol == 0) 1 else 0))
+    bits.append("10")
+    repeat(matches) { bits.append("0").append("1".repeat(10)).append("0") }
+    bits.append("11")
+    while (bits.length % 8 != 0) bits.append('0')
+    return ByteArray(bits.length / 8) { bits.substring(it * 8, it * 8 + 8).toInt(2).toByte() }
+  }
+
+  private fun lengthBits(length: Int) = length.toString(2).padStart(4, '0')
+
+  @Test
+  fun theBoundIsCloseToTheDensestStream() {
+    // The bound used to allow six times what any stream can hold: it priced a 4,119-byte match at
+    // two bits, when its length alone carries ten extra ones.
+    for (matches in listOf(1, 10, 1_000)) {
+      val stream = densest(matches)
+      val size = 1 + 4_119 * matches
+      assertContentEquals(ByteArray(size), LzHuffman.decompress(stream, size))
+      val bound = LzHuffman.maxUnpackedSize(stream.size)
+      assertTrue(bound >= size, "bound $bound refuses a stream of $size")
+      assertTrue(bound - size < 2 * 4_119, "bound $bound is loose for a stream of $size")
+    }
+  }
+
   @Test
   fun everyShapeOfInputRoundTrips() {
     roundTrip(ByteArray(0), "empty")

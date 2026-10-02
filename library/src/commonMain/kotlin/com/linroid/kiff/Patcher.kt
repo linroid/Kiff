@@ -25,6 +25,11 @@ interface Patcher {
   /**
    * Rebuilds the target bytes from [source] and [patch].
    *
+   * The result is held whole, at the size the patch's own header declares - and a patch of a few
+   * dozen bytes can validly declare gigabytes. For a patch you did not make, check
+   * `Kiff.info(patch).targetSize` against what you expect first, or restore into a [RestoreTarget].
+   *
+   * @throws KiffException.InvalidPatch if the patch is malformed or was built by another patcher.
    * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail the recorded checksum.
    */

@@ -17,17 +17,32 @@ interface RestoreTarget {
   fun write(bytes: ByteArray, from: Int, to: Int)
 }
 
-/** Collects a restore into a [ByteArray], for callers that wanted the bytes anyway. */
-class ByteArrayRestoreTarget(size: Int) : RestoreTarget {
-  private val bytes = ByteArray(size)
+/**
+ * Collects a restore into a [ByteArray] of [size] bytes, for callers that wanted the bytes anyway.
+ *
+ * The array is allocated when the first byte arrives rather than up front, so a restore refused
+ * before writing anything costs nothing, however large a size it declared.
+ */
+class ByteArrayRestoreTarget(private val size: Int) : RestoreTarget {
+  private var bytes: ByteArray? = null
   private var at = 0
 
+  init {
+    require(size >= 0) { "Size must not be negative: $size" }
+  }
+
   override fun write(bytes: ByteArray, from: Int, to: Int) {
-    bytes.copyInto(this.bytes, at, from, to)
+    if (to == from) return
+    val into = this.bytes ?: ByteArray(size).also { this.bytes = it }
+    bytes.copyInto(into, at, from, to)
     at += to - from
   }
 
-  fun toByteArray(): ByteArray = if (at == bytes.size) bytes else bytes.copyOf(at)
+  /** The bytes written so far: the array itself once it is full, otherwise a copy of them. */
+  fun toByteArray(): ByteArray {
+    val collected = bytes ?: return ByteArray(0)
+    return if (at == collected.size) collected else collected.copyOf(at)
+  }
 }
 
 /**

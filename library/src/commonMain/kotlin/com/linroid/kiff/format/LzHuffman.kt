@@ -72,14 +72,17 @@ internal object LzHuffman {
   /**
    * The most [packedSize] bytes of this codec's output can unpack to.
    *
-   * The code lengths take a fixed number of bits up front, and after them every symbol costs at
-   * least one bit: a literal is one byte for that bit, and a match is at most [MAX_MATCH] bytes for
-   * two, its length and its distance. So a declared size past this cannot be what the stream
-   * holds, and a reader can refuse it before allocating for it.
+   * The code lengths take a fixed number of bits up front and the end symbol at least one more.
+   * Every other symbol costs bits in proportion to what it produces: a literal is one byte for at
+   * least a bit, and the most a match produces per bit is [MAX_MATCH] bytes for the
+   * [DENSEST_MATCH_BITS] its length symbol, their extra bits and a distance symbol take. So a
+   * declared size past this cannot be what the stream holds, and a reader can refuse it before
+   * allocating for it.
    */
   fun maxUnpackedSize(packedSize: Int): Long {
-    val symbolBits = packedSize * 8L - (LITERAL_SYMBOLS + DISTANCE_SYMBOLS) * CODE_LENGTH_BITS
-    return if (symbolBits <= 0) 0 else symbolBits / 2 * MAX_MATCH
+    val header = (LITERAL_SYMBOLS + DISTANCE_SYMBOLS) * CODE_LENGTH_BITS + 1
+    val symbolBits = packedSize * 8L - header
+    return if (symbolBits <= 0) 0 else symbolBits * MAX_MATCH / DENSEST_MATCH_BITS
   }
 
   fun decompress(data: ByteArray, expectedSize: Int): ByteArray {
@@ -466,6 +469,23 @@ internal object LzHuffman {
     10, 10
   )
   private val MAX_MATCH = LENGTH_BASE.last() + (1 shl LENGTH_EXTRA.last()) - 1
+
+  /**
+   * Bits the densest match takes: one for its length symbol, the longest bucket's extra bits, and
+   * one for its distance symbol, whose shortest distance has none.
+   */
+  private val DENSEST_MATCH_BITS = 2 + LENGTH_EXTRA.last()
+
+  init {
+    // maxUnpackedSize relies on no length bucket producing more bytes per bit than the longest, so
+    // a change to the tables that broke that would make the bound refuse streams that decode.
+    for (i in LENGTH_BASE.indices) {
+      val longest = LENGTH_BASE[i] + (1 shl LENGTH_EXTRA[i]) - 1L
+      check(longest * DENSEST_MATCH_BITS <= MAX_MATCH * (2L + LENGTH_EXTRA[i])) {
+        "Length bucket $i packs more bytes per bit than the longest"
+      }
+    }
+  }
 
   private val DISTANCE_BASE = intArrayOf(
     1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
