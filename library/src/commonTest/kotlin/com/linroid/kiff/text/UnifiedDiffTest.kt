@@ -375,6 +375,47 @@ class UnifiedDiffTest {
   }
 
   @Test
+  fun bytesInAnyEncodingAreDiffedAsTheyAre() {
+    // Latin-1 é and è. Decoded as UTF-8 both became the replacement character, and two different
+    // files diffed to nothing.
+    val source = "caf".encodeToByteArray() + byteArrayOf(0xE9.toByte(), 0x0A)
+    val target = "caf".encodeToByteArray() + byteArrayOf(0xE8.toByte(), 0x0A)
+    val diff = UnifiedDiff.formatBytes(source, target)
+    assertTrue(diff.containsBytes("-caf".encodeToByteArray() + byteArrayOf(0xE9.toByte(), 0x0A)))
+    assertTrue(diff.containsBytes("+caf".encodeToByteArray() + byteArrayOf(0xE8.toByte(), 0x0A)))
+    assertTrue(!diff.containsBytes(byteArrayOf(0xEF.toByte(), 0xBF.toByte(), 0xBD.toByte())))
+  }
+
+  @Test
+  fun everyByteValueSurvivesTheRoundTrip() {
+    val target = ByteArray(512) { if (it % 2 == 1) '\n'.code.toByte() else (it / 2).toByte() }
+    for (sourceText in listOf("", "x\ty\n")) {
+      val source = sourceText.encodeToByteArray()
+      val diff = bytesAsChars(UnifiedDiff.formatBytes(source, target))
+      val applied = UnifiedDiff.apply(TextContent.of(sourceText), UnifiedDiff.parse(diff))
+      val text = applied.lines.joinToString("\n") + if (applied.endsWithNewline) "\n" else ""
+      assertContentEquals(target, charsAsBytes(text))
+    }
+  }
+
+  @Test
+  fun identicalBytesDiffToNothing() {
+    val bytes = "a\tb\n".encodeToByteArray() + byteArrayOf(0xFF.toByte())
+    assertEquals(0, UnifiedDiff.formatBytes(bytes, bytes.copyOf()).size)
+  }
+
+  @Test
+  fun textThatIsNotUtf8IsRefusedRatherThanReplaced() {
+    assertFailsWith<KiffException.UnsupportedInput> {
+      TextContent.of(byteArrayOf(0x63, 0xE9.toByte(), 0x0A))
+    }
+    assertEquals(listOf("café"), TextContent.of("café\n".encodeToByteArray()).lines)
+  }
+
+  private fun ByteArray.containsBytes(part: ByteArray): Boolean =
+    (0..size - part.size).any { at -> part.indices.all { this[at + it] == part[it] } }
+
+  @Test
   fun textContentRoundTripsAnyBytesItSplits() {
     for (text in listOf("", "\n", "\n\n\n", "a", "a\n", "a\nb", "a\nb\n", "\na\n")) {
       assertEquals(

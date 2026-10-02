@@ -54,6 +54,34 @@ object UnifiedDiff {
   }
 
   /**
+   * [format] for two files as bytes, giving the diff as bytes.
+   *
+   * Each byte stands for itself, so lines are compared and printed exactly as the files hold them
+   * whatever their encoding: a file that is not UTF-8 still diffs, and two that differ only in
+   * such bytes still differ. The result is what GNU diff prints for the same files. Names are
+   * written as UTF-8.
+   */
+  fun formatBytes(
+    source: ByteArray,
+    target: ByteArray,
+    sourceName: String = "a",
+    targetName: String = "b",
+    context: Int = DEFAULT_CONTEXT
+  ): ByteArray {
+    val a = TextContent.of(bytesAsChars(source))
+    val b = TextContent.of(bytesAsChars(target))
+    val diff = format(
+      a,
+      b,
+      MyersDiffAlgorithm().diff(a.lines, b.lines),
+      bytesAsChars(sourceName.encodeToByteArray()),
+      bytesAsChars(targetName.encodeToByteArray()),
+      context
+    )
+    return charsAsBytes(diff)
+  }
+
+  /**
    * Reads a unified diff of one file.
    *
    * Each hunk is read to exactly the line counts its header gives, as patch(1) and git apply read
