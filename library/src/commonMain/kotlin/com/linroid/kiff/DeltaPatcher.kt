@@ -4,9 +4,11 @@ import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.format.Crc32
+import com.linroid.kiff.format.MAX_REGION_DEPTH
 import com.linroid.kiff.format.PatchFormat
 import com.linroid.kiff.format.PatchPayload
 import com.linroid.kiff.format.RegionNode
+import com.linroid.kiff.format.height
 import com.linroid.kiff.format.toHex
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.ByteArrayRestoreTarget
@@ -59,6 +61,11 @@ sealed class DeltaPatcher : Patcher {
     val root = encode(sourceBytes, targetBytes, literals, recorder)
     check(root.targetLength == target.size) {
       "$name described ${root.targetLength} bytes but the target has ${target.size}"
+    }
+    // A tree deeper than readers accept would make a patch nobody can apply, which is worse than
+    // no patch: refused here, the failure points at the encoder rather than at every device.
+    check(root.height() <= MAX_REGION_DEPTH) {
+      "$name built a region tree ${root.height()} deep; readers accept $MAX_REGION_DEPTH"
     }
     // One decision, used twice: the flag in the header and the checksums in the tree have to
     // agree, or a reader either misses them or reads past them.

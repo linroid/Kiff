@@ -10,6 +10,7 @@ import com.linroid.kiff.format.MAX_REGION_DEPTH
 import com.linroid.kiff.format.RegionNode
 import com.linroid.kiff.format.beatsStoring
 import com.linroid.kiff.format.encoding
+import com.linroid.kiff.format.height
 import com.linroid.kiff.format.structureBytes
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.asSource
@@ -100,6 +101,8 @@ internal class ContainerEncoder(
    * The costs come back rather than going into a recorder, because a composite built here may yet
    * be thrown away - it is weighed against describing the same bytes whole. Reporting as it went
    * would attribute a patch to regions that are not in it.
+   *
+   * [depth] is where the composite sits in the tree, counted as a reader counts it.
    */
   private fun composite(
     format: ContainerFormat,
@@ -115,7 +118,7 @@ internal class ContainerEncoder(
     val costs = ArrayList<RegionCost>(targetChildren.size)
     for (child in targetChildren) {
       val before = literals.size
-      val one = encodeChild(child, pairing.counterpartOf(child), groups, literals, depth)
+      val one = encodeChild(child, pairing.counterpartOf(child), groups, literals, depth + 1)
       encoded.add(one)
       costs.add(
         RegionCost(
@@ -170,8 +173,9 @@ internal class ContainerEncoder(
       counterpart.from, counterpart.contentFrom, child.from, child.contentFrom, literals
     )
 
+    // The record is a composite of its parts, so its payload sits a level below it.
     val before = literals.size
-    val payload = describe(child, counterpart, groups, literals, depth)
+    val payload = describe(child, counterpart, groups, literals, depth + 1)
     parts.add(payload.node)
     costs.add(
       RegionCost(
@@ -199,6 +203,10 @@ internal class ContainerEncoder(
    * Only stored payloads can be recursed into. A compressed one would have to be decoded to be
    * compared and re-encoded byte for byte to be restored, and nothing here can do the second half
    * yet, so it is described as the opaque bytes it is.
+   *
+   * [depth] is where the payload sits in the tree. Nothing built here reaches deeper than a reader
+   * goes: taking the payload apart is only tried while its children would still fit, and kept only
+   * if everything it built does.
    */
   private fun describe(
     child: Child,
@@ -218,17 +226,20 @@ internal class ContainerEncoder(
     val decomposed = if (
       child.storage == Storage.STORED &&
       counterpart.storage == Storage.STORED &&
-      depth + 1 < MAX_REGION_DEPTH
+      depth + 1 <= MAX_REGION_DEPTH
     ) {
       decompose(sourceFrom, sourceTo, targetFrom, targetTo, depth, groups.scannerFor(child.group))
+        ?.takeIf { depth + it.node.height() <= MAX_REGION_DEPTH }
     } else {
       null
     }
 
+    // A columns region's node sits a level below it, so it needs room for one more.
+    val columns = child.columns?.takeIf { depth < MAX_REGION_DEPTH }
     val flatScratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
     val flat = leaf(
       name, kind, sourceFrom, sourceTo, targetFrom, targetTo, flatScratch,
-      groups.scannerFor(child.group), child.columns
+      groups.scannerFor(child.group), columns
     )
     val flatBytes = flatScratch.toByteArray()
 
@@ -258,7 +269,7 @@ internal class ContainerEncoder(
     if (sourceChildren.isEmpty()) return null
 
     val scratch = ByteWriter((targetTo - targetFrom).coerceIn(64, 1 shl 16))
-    val built = composite(format, sourceChildren, targetChildren, scratch, depth + 1, inherited)
+    val built = composite(format, sourceChildren, targetChildren, scratch, depth, inherited)
     return Candidate(built.node, scratch.toByteArray(), built.costs)
   }
 
