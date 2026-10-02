@@ -59,7 +59,8 @@ object Kiff {
    * created the patch.
    *
    * [outputPath] is replaced only by a restore that verified: a refused patch leaves it as it was.
-   * That also makes it safe to name the source itself, to update a file in place.
+   * That also makes it safe to name the source itself, to update a file in place; the file keeps
+   * its permissions, and a symlink is followed to the file it names.
    */
   fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
     val patch = KiffFiles.readBytes(patchPath)
