@@ -1,11 +1,14 @@
 package com.linroid.kiff.text
 
+import com.linroid.kiff.KiffException
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.io.ByteArrayRestoreTarget
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -127,5 +130,72 @@ class TextRegionTest {
     val bytes = "a\nb\n".encodeToByteArray()
     val starts = TextRegion.lineStarts(bytes, 0, bytes.size)
     assertEquals(listOf(0, 2, 4), starts.toList(), "two lines, not three")
+  }
+
+  /** Replays a hand-written script over [source] into a region of [length] bytes. */
+  private fun replay(source: ByteArray, length: Int, script: ByteWriter.() -> Unit): ByteArray {
+    val restored = ByteArrayRestoreTarget(length)
+    TextRegion.apply(
+      source = source,
+      edits = ByteReader(ByteWriter(16).apply(script).toByteArray()),
+      literals = ByteArray(0),
+      literalFrom = 0,
+      out = restored,
+      length = length
+    )
+    return restored.toByteArray()
+  }
+
+  @Test
+  fun aScriptFindsTheSameLinesTheIndexDoes() {
+    // The reader walks to each line rather than indexing them all, and has to land exactly where
+    // the index the encoder used says each line starts.
+    val random = Random(3)
+    repeat(2_000) {
+      val source = ByteArray(random.nextInt(0, 24)) { "ab\r\n"[random.nextInt(4)].code.toByte() }
+      val starts = TextRegion.lineStarts(source, 0, source.size)
+      val lines = starts.size - 1
+      val skipped = random.nextInt(0, lines + 1)
+      val kept = random.nextInt(0, lines - skipped + 1)
+      val expected = source.copyOfRange(starts[skipped], starts[skipped + kept])
+      val restored = replay(source, expected.size) {
+        writeByte(2) // delete
+        writeVarInt(skipped)
+        writeByte(1) // equal
+        writeVarInt(kept)
+        writeByte(0)
+      }
+      assertContentEquals(expected, restored, source.decodeToString())
+    }
+  }
+
+  @Test
+  fun everyLineOfALongRangeIsReachable() {
+    val source = ByteArray(1 shl 20) { '\n'.code.toByte() }
+    val restored = replay(source, source.size) {
+      writeByte(1)
+      writeVarInt(source.size)
+      writeByte(0)
+    }
+    assertContentEquals(source, restored)
+  }
+
+  @Test
+  fun aCountPastTheLastLineIsRefused() {
+    for (text in listOf("", "a", "a\n", "a\r\nb")) {
+      val source = text.encodeToByteArray()
+      val lines = TextRegion.lineStarts(source, 0, source.size).size - 1
+      for (count in listOf(lines + 1, Int.MAX_VALUE)) {
+        for (op in listOf(1, 2)) {
+          assertFailsWith<KiffException.InvalidPatch>("'$text' op $op count $count") {
+            replay(source, source.size) {
+              writeByte(op)
+              writeVarInt(count)
+              writeByte(0)
+            }
+          }
+        }
+      }
+    }
   }
 }

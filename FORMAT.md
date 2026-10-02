@@ -150,10 +150,10 @@ offsets. So a reader needs random access to the source and only somewhere to put
 either file in memory.
 
 Two encodings are the exceptions, and both are bounded by one region rather than by the file:
-`TEXT` needs its source range in memory to split into lines, and `COLUMNS` needs its source range
-rearranged and its own output built before either can be used. The checksums make this workable in
-the first place: a streamed restore cannot be checked after the fact, because afterwards the bytes
-are gone.
+`TEXT` needs its source range in memory, finding each line by walking forward to it rather than by
+indexing them all, and `COLUMNS` needs its source range rearranged and its own output built before
+either can be used. The checksums make this workable in the first place: a streamed restore cannot
+be checked after the fact, because afterwards the bytes are gone.
 
 The content stream is the other thing a reader holds. Kiff's reader unpacks it whole before the
 first region, so a patch whose target is mostly new content costs about its target in memory, since
@@ -185,3 +185,7 @@ region can each be as large as the target, and a patch can still name them. What
 refuses keeps every allocation within the declared target size, or the source's own size for the
 range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do not control, check
 `Kiff.info(patch).targetSize` against what you are expecting before applying it.
+
+Those bounds hold region by region. Each `TEXT` or `COLUMNS` region reads its source range afresh,
+and nothing limits how many regions name the same range, so the reading a restore does is bounded
+by the patch's size times the source's rather than by either alone.
