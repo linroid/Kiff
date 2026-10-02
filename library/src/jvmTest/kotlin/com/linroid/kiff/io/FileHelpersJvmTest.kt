@@ -6,6 +6,7 @@ import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.PatchFormat
 import java.io.File
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
@@ -191,5 +192,36 @@ class FileHelpersJvmTest {
     }
     assertContentEquals(source, input.readBytes())
     assertContentEquals(target, updated.readBytes())
+  }
+
+  /** A file of [size] bytes beginning with [start], almost all of it never written to disk. */
+  private fun sparse(name: String, size: Long, start: ByteArray = ByteArray(0)): File =
+    File(dir, name).apply {
+      RandomAccessFile(this, "rw").use {
+        it.write(start)
+        it.setLength(size)
+      }
+    }
+
+  @Test
+  fun aFileTooLargeToHoldIsRefusedBeforeAnyOfItIsRead() {
+    // Read whole and only then found too large, it failed with an IllegalArgumentException, or
+    // ran out of memory first.
+    val huge = sparse("huge.bin", Int.MAX_VALUE + 16L)
+    val failure = assertFailsWith<KiffException.UnsupportedInput> { KiffFiles.readBytes(huge.path) }
+    assertTrue(failure.message.orEmpty().startsWith(huge.path), failure.message)
+  }
+
+  @Test
+  fun infoReadsTheHeaderAlone() {
+    val bytes = Kiff.binary.createPatch(source, target)
+    val patch = write("delta.patch", bytes)
+    assertEquals(Kiff.info(bytes), Kiff.info(patch.path))
+
+    // A header followed by more than an array could hold: read whole, this never got as far as
+    // the header.
+    val huge = sparse("huge.patch", Int.MAX_VALUE + 16L, bytes.copyOf(PatchFormat.LONGEST_HEADER))
+    assertEquals(Int.MAX_VALUE + 16L, Kiff.info(huge.path).patchSize)
+    assertFailsWith<KiffException.InvalidPatch> { Kiff.info(write("not.patch", previous).path) }
   }
 }

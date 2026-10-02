@@ -1,5 +1,6 @@
 package com.linroid.kiff.io
 
+import com.linroid.kiff.KiffException
 import kotlin.random.Random
 import okio.BufferedSink
 import okio.IOException
@@ -27,8 +28,38 @@ import okio.use
  */
 object KiffFiles {
 
-  fun readBytes(path: String): ByteArray =
-    systemFileSystem.read(path.toPath()) { readByteArray() }
+  /**
+   * The whole of the file at [path].
+   *
+   * @throws KiffException.UnsupportedInput if the file is larger than an array can hold, which is
+   *   found from its size before any of it is read.
+   */
+  fun readBytes(path: String): ByteArray {
+    val file = path.toPath()
+    val size = systemFileSystem.metadataOrNull(file)?.size
+    if (size != null && size > LARGEST_ARRAY) throw tooLarge(path, size)
+    return try {
+      systemFileSystem.read(file) { readByteArray() }
+    } catch (e: IllegalArgumentException) {
+      // okio's refusal of a read past Int, when the file grew past it while it was being read.
+      throw tooLarge(path, null)
+    }
+  }
+
+  /** At most the first [count] bytes of the file at [path]. */
+  internal fun readPrefix(path: String, count: Int): ByteArray =
+    systemFileSystem.read(path.toPath()) {
+      request(count.toLong())
+      readByteArray(minOf(buffer.size, count.toLong()))
+    }
+
+  private fun tooLarge(path: String, size: Long?) = KiffException.UnsupportedInput(
+    "$path is ${size?.let { "$it bytes" } ?: "too large"}; at most $LARGEST_ARRAY bytes can be " +
+      "read whole"
+  )
+
+  /** The largest array every platform Kiff runs on can allocate. */
+  private const val LARGEST_ARRAY = Int.MAX_VALUE - 8
 
   fun writeBytes(path: String, bytes: ByteArray) {
     replace(path) { write(bytes) }

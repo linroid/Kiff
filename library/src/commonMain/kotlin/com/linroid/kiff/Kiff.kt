@@ -23,18 +23,30 @@ object Kiff {
     patchers.firstOrNull { it.name.equals(name, ignoreCase = true) }
 
   /** Reads the header of [patch] without applying it. */
-  fun info(patch: ByteArray): PatchInfo {
-    val header = PatchFormat.readHeader(ByteReader(patch))
-    return PatchInfo(
-      patcher = header.patcher,
-      formatVersion = header.version,
-      sourceSize = header.sourceSize,
-      sourceCrc32 = header.sourceCrc32,
-      targetSize = header.targetSize,
-      targetCrc32 = header.targetCrc32,
-      patchSize = patch.size.toLong()
-    )
+  fun info(patch: ByteArray): PatchInfo =
+    infoOf(PatchFormat.readHeader(ByteReader(patch)), patch.size.toLong())
+
+  /**
+   * Reads the header of the patch file at [patchPath], and nothing past it.
+   *
+   * A header is a few dozen bytes however large the patch, so this costs the same for any file -
+   * including one that turns out not to be a patch at all.
+   */
+  fun info(patchPath: String): PatchInfo {
+    val prefix = KiffFiles.readPrefix(patchPath, PatchFormat.LONGEST_HEADER)
+    val header = PatchFormat.readHeader(ByteReader(prefix))
+    return infoOf(header, KiffFiles.size(patchPath) ?: prefix.size.toLong())
   }
+
+  private fun infoOf(header: PatchFormat.Header, patchSize: Long) = PatchInfo(
+    patcher = header.patcher,
+    formatVersion = header.version,
+    sourceSize = header.sourceSize,
+    sourceCrc32 = header.sourceCrc32,
+    targetSize = header.targetSize,
+    targetCrc32 = header.targetCrc32,
+    patchSize = patchSize
+  )
 
   /**
    * Writes a patch that rebuilds [targetPath] from [sourcePath].
