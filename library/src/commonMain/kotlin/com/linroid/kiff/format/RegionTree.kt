@@ -96,6 +96,16 @@ internal fun RegionNode.encoding(): RegionEncoding = when (this) {
 }
 
 /**
+ * How many levels the deepest node below this one sits under it - the depth a reader counts, less
+ * this node's own.
+ */
+internal fun RegionNode.height(): Int = when (this) {
+  is RegionNode.Composite -> if (children.isEmpty()) 0 else 1 + children.maxOf { it.height() }
+  is RegionNode.Columns -> 1 + inner.height()
+  is RegionNode.Delta, is RegionNode.Raw, is RegionNode.Text -> 0
+}
+
+/**
  * Walks the target alongside the tree, so each region can be checksummed against the bytes it is
  * supposed to produce. Null when the patch carries no region checksums.
  */

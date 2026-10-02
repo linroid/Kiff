@@ -5,6 +5,7 @@ import com.linroid.kiff.NestedContainers
 import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.apk.TestApkBuilder
 import com.linroid.kiff.assertRestores
+import com.linroid.kiff.region.RegionAlgorithm
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
@@ -163,6 +164,35 @@ class ContainerFormatTest {
     val source = TestZipBuilder().entry("bundle.zip", inner).build()
     val target = TestZipBuilder().entry("bundle.zip", innerEdited).build()
     assertRestores(Kiff.zip, source, target)
+  }
+
+  @Test
+  fun anArchiveNestedDeeperThanTheReaderGoesStillRestores() {
+    // Each stored zip inside another adds two levels to the tree, its record and its contents, and
+    // the encoder counted one: from eight levels down it wrote patches every reader refused as
+    // nested deeper than 16. A planner that stores archives outright makes taking each one apart
+    // the smaller choice at every level, which is what drives the tree that deep.
+    val storesArchives = ZipPatcher(
+      planner = { if (it.name.endsWith(".zip")) RegionAlgorithm.RAW else RegionAlgorithm.BINARY }
+    )
+    for (levels in 1..12) {
+      fun nested(data: ByteArray): ByteArray {
+        var archive = TestZipBuilder()
+          .entry("pad.bin", structuredBytes(3_000, seed = 0))
+          .entry("data.bin", data)
+          .build()
+        for (level in 1 until levels) {
+          archive = TestZipBuilder()
+            .entry("pad.bin", structuredBytes(3_000, seed = level))
+            .entry("inner$level.zip", archive)
+            .build()
+        }
+        return archive
+      }
+      val data = structuredBytes(3_000, seed = 99)
+      val edited = data.copyOf().also { it[1_500] = (it[1_500] + 1).toByte() }
+      assertRestores(storesArchives, nested(data), nested(edited))
+    }
   }
 
   @Test

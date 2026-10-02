@@ -8,6 +8,7 @@ import com.linroid.kiff.io.CheckedRestoreTarget
 import com.linroid.kiff.io.RestoreTarget
 import com.linroid.kiff.io.ScratchRestoreTarget
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -92,6 +93,32 @@ class CraftedPatchTest {
     writeByte(RegionEncoding.RAW.code)
   }
 
+  /** A columns node over none of the source, read as one column a byte wide. */
+  private fun ByteWriter.columns(length: Long) {
+    writeVarLong(length)
+    writeByte(RegionEncoding.COLUMNS.code)
+    writeVarLong(0)
+    writeVarLong(0)
+    writeByte(1)
+    writeByte(1)
+  }
+
+  private fun ByteWriter.composite(length: Long, children: Int) {
+    writeVarLong(length)
+    writeByte(RegionEncoding.COMPOSITE.code)
+    writeVarInt(children)
+  }
+
+  /** A delta of [length] zero bytes. */
+  private fun ByteWriter.zeros(length: Long) = delta(
+    length,
+    bytes {
+      instruction(DeltaOp.RUN, length)
+      writeByte(0)
+      instruction(DeltaOp.END, 0)
+    }
+  )
+
   /** Four bytes already consumed, then a region of Int.MAX_VALUE: the shape that wraps a cursor. */
   private fun afterFourRawBytes(region: ByteWriter.() -> Unit): ByteArray = bytes {
     writeVarLong(4L + Int.MAX_VALUE)
@@ -122,6 +149,40 @@ class CraftedPatchTest {
       streamed.count <= targetSize,
       "wrote ${streamed.count} bytes for a target of $targetSize before refusing"
     )
+  }
+
+  @Test
+  fun aColumnsRegionInsideAnotherIsRefused() {
+    // Each level built a region's worth of scratch before emitting it, so nesting them multiplied
+    // what one region could make a reader hold. A composite in between used to hide the nesting.
+    assertRefused(payload(bytes { columns(64); columns(64); zeros(64) }), targetSize = 64)
+    assertRefused(
+      payload(bytes { columns(64); composite(64, 1); columns(64); zeros(64) }),
+      targetSize = 64
+    )
+  }
+
+  @Test
+  fun oneColumnsRegionStillRestores() {
+    val alone = bytes { columns(64); zeros(64) }
+    val inAComposite = bytes { composite(64, 1); columns(64); zeros(64) }
+    for (tree in listOf(alone, inAComposite)) {
+      val restored = ByteArrayRestoreTarget(64)
+      PatchPayload.apply(ByteArraySource(source), payload(tree), 0, 64, false, restored)
+      assertContentEquals(ByteArray(64), restored.toByteArray())
+    }
+  }
+
+  @Test
+  fun aTargetSizeTheTreeDoesNotCoverIsRefusedBeforeAnythingIsWritten() {
+    val streamed = Counting()
+    assertFailsWith<KiffException.InvalidPatch> {
+      PatchPayload.apply(
+        ByteArraySource(source), payload(bytes { raw(1) }, ByteArray(1)), 0,
+        Int.MAX_VALUE.toLong(), false, streamed
+      )
+    }
+    assertEquals(0L, streamed.count)
   }
 
   @Test

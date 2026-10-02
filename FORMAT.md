@@ -87,7 +87,7 @@ produces nothing of its own; its children cover every byte of it.
 | `DELTA` | 1 | `varint length`, then that many instruction bytes |
 | `RAW` | 2 | nothing: `targetLength` bytes are taken from the content stream |
 | `TEXT` | 3 | `varint sourceFrom`, `varint sourceLength`, `varint length`, edit bytes |
-| `COLUMNS` | 4 | `varint sourceFrom`, `varint sourceLength`, `byte fieldCount`, field widths, then one node |
+| `COLUMNS` | 4 | `varint sourceFrom`, `varint sourceLength`, `byte fieldCount`, field widths, then one node with no `COLUMNS` in it |
 
 ### DELTA
 
@@ -137,7 +137,9 @@ differences from the entry before it, in the field's own width and wrapping with
 partial row is copied across untouched.
 
 The node inside carries no checksum: it works on rearranged bytes, which are not target bytes, and
-the node around it covers what the rearrangement finally produces.
+the node around it covers what the rearrangement finally produces. It may not hold another `COLUMNS`
+node at any depth: each one builds its output whole before emitting it, so nesting them would hold a
+region's worth again for every level.
 
 This exists because a table of ids is the renumbering problem in its purest form — every entry of a
 dex's `string_ids` is an offset into the file, so inserting one string shifts all of them — while
@@ -150,10 +152,10 @@ offsets. So a reader needs random access to the source and only somewhere to put
 either file in memory.
 
 Two encodings are the exceptions, and both are bounded by one region rather than by the file:
-`TEXT` needs its source range in memory to split into lines, and `COLUMNS` needs its source range
-rearranged and its own output built before either can be used. The checksums make this workable in
-the first place: a streamed restore cannot be checked after the fact, because afterwards the bytes
-are gone.
+`TEXT` needs its source range in memory, finding each line by walking forward to it rather than by
+indexing them all, and `COLUMNS` needs its source range rearranged and its own output built before
+either can be used. The checksums make this workable in the first place: a streamed restore cannot
+be checked after the fact, because afterwards the bytes are gone.
 
 The content stream is the other thing a reader holds. Kiff's reader unpacks it whole before the
 first region, so a patch whose target is mostly new content costs about its target in memory, since
@@ -169,12 +171,16 @@ of an error.
 - a flag bit it does not recognise
 - a varint wider than 64 bits, or a negative value where a size, count or length belongs
 - a tree nested deeper than 16
-- a region that runs past the end of the target, or a composite whose children do not add up to it
+- a region that runs past the end of the target, a composite whose children do not add up to it, or
+  a tree whose root does not cover the declared target, refused before anything is written
 - an instruction reading outside the source, or past the end of the content stream
 - a `COLUMNS` field layout it cannot apply, or one naming a source range outside the source
+- a `COLUMNS` node inside another, directly or through a composite
 - content longer than the target, which no patch can use and which names its own allocation
 - content longer than its stored bytes can unpack to: exactly their own length when stored, and for
-  LZ77 + Huffman at most 4,119 bytes - the longest match - for every two bits after the code lengths
+  LZ77 + Huffman at most 4,119 bytes - the longest match - for every twelve bits after the code
+  lengths and the end symbol, which is what that match's length symbol, ten extra bits and distance
+  symbol take at the least
 - a region whose checksum does not match what it produced
 - a restored target whose checksum does not match the header
 
@@ -185,3 +191,7 @@ region can each be as large as the target, and a patch can still name them. What
 refuses keeps every allocation within the declared target size, or the source's own size for the
 range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do not control, check
 `Kiff.info(patch).targetSize` against what you are expecting before applying it.
+
+Those bounds hold region by region. Each `TEXT` or `COLUMNS` region reads its source range afresh,
+and nothing limits how many regions name the same range, so the reading a restore does is bounded
+by the patch's size times the source's rather than by either alone.

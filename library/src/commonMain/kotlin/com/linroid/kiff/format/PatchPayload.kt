@@ -84,6 +84,16 @@ internal object PatchPayload {
     val literalFlag = container.readByte()
     val storedLength = container.readVarInt()
 
+    // The root of the tree says how much target it describes, and that has to be the target the
+    // header declared. A patch whose two sizes disagree is refused here, before anything is
+    // unpacked or a byte written, rather than once its tree has run out.
+    val covered = ByteReader(patch, container.offset).readVarLong()
+    if (covered != targetSize) {
+      throw KiffException.InvalidPatch(
+        "Region tree covers $covered bytes of a $targetSize-byte target"
+      )
+    }
+
     // Unpacking is the one place a patch gets to name a size before anything has checked it, so
     // the bound is worth stating: every content byte becomes at most one target byte - an ADD, a
     // RAW region, the differences of a DIFF - so content longer than the target is a patch
@@ -216,6 +226,11 @@ internal object PatchPayload {
       }
 
       RegionEncoding.COLUMNS -> {
+        // A columns region builds its output whole before emitting it, so one inside another, at
+        // any depth, would hold a region's worth again for every level it nests.
+        if (!onTheRestore) {
+          throw KiffException.InvalidPatch("Column region nested inside another column region")
+        }
         val sourceFrom = tree.readVarLong()
         val sourceLength = tree.readVarLong()
         val count = tree.readByte()

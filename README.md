@@ -317,6 +317,10 @@ restore is written out as it is produced, and the source is addressed rather tha
 Kiff.apk.applyPatch(sourceFile, patch, target)   // target is a RestoreTarget
 ```
 
+A streamed restore can only be checked as it goes, so a target receives bytes before they are
+verified: write them somewhere you can discard if `applyPatch` throws. `Kiff.applyPatch` with paths
+does that for a file, moving it into place only once it verified.
+
 That is the difference between a restore a build server can do and one a phone can. Applying a
 4.6 MiB patch to a 71.8 MiB package needs about 32 MB of heap this way, against something over 170
 when both files are held - and what is left is the patch itself, not the files.
