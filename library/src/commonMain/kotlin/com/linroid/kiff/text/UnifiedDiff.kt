@@ -80,6 +80,8 @@ object UnifiedDiff {
     // Null until something settles it. The marker only ever says a file lacks a final newline, so
     // its absence where the diff reaches the end means the target has one.
     var targetEndsWithNewline: Boolean? = null
+    // The output line a marker said ends the target, which nothing may follow; -1 until one does.
+    var unterminated = -1
 
     for (hunk in patch.hunks) {
       // A range of no lines is numbered by the line it follows, so `-4,0` inserts after line 4 and
@@ -96,12 +98,26 @@ object UnifiedDiff {
       for (i in cursor until start) out.add(source.lines[i])
       cursor = start
 
-      var previous = ' '
+      var previous: Char? = null
       for (line in hunk.lines) {
         if (line == NO_NEWLINE) {
-          // The marker describes the line before it, so after a removed line it is a statement
-          // about the source and says nothing about what the target ends with.
-          if (previous != '-') targetEndsWithNewline = false
+          // The marker says the line before it ends its file without a newline: the source's after
+          // a removed line, the target's after an added one, and both after an unchanged one. A
+          // claim about the source is checked like any other context; one about the target is
+          // held to until the end, since only the very last line can lack a newline.
+          if (previous == null || previous == '\\') {
+            throw KiffException.InvalidPatch("No-newline marker follows no line")
+          }
+          if (previous != '+' && (cursor != source.lines.size || source.endsWithNewline)) {
+            throw KiffException.InvalidPatch(
+              "Hunk says source line $cursor ends the file without a newline, and it does not"
+            )
+          }
+          if (previous != '-') {
+            targetEndsWithNewline = false
+            unterminated = out.lastIndex
+          }
+          previous = '\\'
           continue
         }
         when {
@@ -122,6 +138,9 @@ object UnifiedDiff {
       }
     }
     for (i in cursor until source.lines.size) out.add(source.lines[i])
+    if (unterminated >= 0 && unterminated != out.lastIndex) {
+      throw KiffException.InvalidPatch("No-newline marker is not at the end of the file")
+    }
 
     if (targetEndsWithNewline == null && cursor >= source.lines.size) {
       // The diff described the file all the way to its end and never said otherwise.
@@ -170,35 +189,24 @@ object UnifiedDiff {
     // hunks are cut from. Each entry also records how many source and target lines precede it,
     // which is all a hunk header needs. An inserted line carries its own text, so nothing has to
     // stay in step with a separate list of them.
-    val tagged = mutableListOf<Tagged>()
+    val flat = mutableListOf<Tagged>()
     var sourceIndex = 0
     var targetIndex = 0
     for (edit in edits) {
       when (edit) {
         is Edit.Equal -> repeat(edit.count) {
-          tagged.add(Tagged(' ', sourceIndex++, targetIndex++, null))
+          flat.add(Tagged(' ', sourceIndex++, targetIndex++, null))
         }
         is Edit.Delete -> repeat(edit.count) {
-          tagged.add(Tagged('-', sourceIndex++, targetIndex, null))
+          flat.add(Tagged('-', sourceIndex++, targetIndex, null))
         }
         is Edit.Insert -> for (line in edit.lines) {
-          tagged.add(Tagged('+', sourceIndex, targetIndex++, line))
+          flat.add(Tagged('+', sourceIndex, targetIndex++, line))
         }
       }
     }
 
-    // A file that gained or lost its final newline has no changed *lines* at all, so without this
-    // two different files would diff to nothing. The last line is what changed: it is replaced by
-    // itself, and the marker says how.
-    val newlineChanged = source.endsWithNewline != target.endsWithNewline
-    if (newlineChanged && tagged.isNotEmpty() && tagged.last().marker == ' ') {
-      val last = tagged.removeAt(tagged.lastIndex)
-      tagged.add(Tagged('-', last.sourceIndex, last.targetIndex, null))
-      tagged.add(
-        Tagged('+', last.sourceIndex + 1, last.targetIndex, source.lines[last.sourceIndex])
-      )
-    }
-
+    val tagged = splitWhereTerminatorsDiffer(flat, source, target)
     val changed = tagged.indices.filter { tagged[it].marker != ' ' }
     if (changed.isEmpty()) return emptyList()
 
@@ -220,27 +228,26 @@ object UnifiedDiff {
       var targetLines = 0
       for (i in from..to) {
         val entry = tagged[i]
+        // The marker follows whichever printed line is the unterminated end of its file. After the
+        // split, an unchanged line that is one is the unterminated end of both.
         when (entry.marker) {
           ' ' -> {
             body.add(" " + source.lines[entry.sourceIndex])
             sourceLines++
             targetLines++
+            if (!terminated(source, entry.sourceIndex)) body.add(NO_NEWLINE)
           }
           '-' -> {
             body.add("-" + source.lines[entry.sourceIndex])
             sourceLines++
-            if (!source.endsWithNewline && entry.sourceIndex == source.lines.lastIndex) {
-              body.add(NO_NEWLINE)
-            }
+            if (!terminated(source, entry.sourceIndex)) body.add(NO_NEWLINE)
           }
           else -> {
             body.add("+" + entry.text)
             targetLines++
+            if (!terminated(target, entry.targetIndex)) body.add(NO_NEWLINE)
           }
         }
-      }
-      if (to == tagged.size - 1 && !target.endsWithNewline && body.last().startsWith("+")) {
-        body.add(NO_NEWLINE)
       }
 
       // A range is numbered by its first line, and a range of no lines by the line it follows, so
@@ -262,6 +269,52 @@ object UnifiedDiff {
     }
     return hunks
   }
+
+  /**
+   * Turns every unchanged line whose two copies disagree on ending in a newline into a removal and
+   * an insertion.
+   *
+   * Unified diff names lines without their terminators, so the last line of a file that lacks a
+   * final newline looks equal to the same text with one - and a diff that left it as context
+   * would describe two different files as one. Such a line did change. It is removed, together
+   * with any lines removed right after it, and put back after them, which is the order GNU diff
+   * prints; the markers then say which copy lacks the newline. Only a pair that touches the last
+   * line of a file can disagree.
+   */
+  private fun splitWhereTerminatorsDiffer(
+    flat: List<Tagged>,
+    source: TextContent,
+    target: TextContent
+  ): List<Tagged> {
+    val split = ArrayList<Tagged>(flat.size + 1)
+    var i = 0
+    while (i < flat.size) {
+      val entry = flat[i]
+      if (entry.marker != ' ' ||
+        terminated(source, entry.sourceIndex) == terminated(target, entry.targetIndex)
+      ) {
+        split.add(entry)
+        i++
+        continue
+      }
+      // The removals that follow now come before the line goes back in, so they precede it on the
+      // target side.
+      split.add(Tagged('-', entry.sourceIndex, entry.targetIndex, null))
+      var next = i + 1
+      while (next < flat.size && flat[next].marker == '-') {
+        split.add(Tagged('-', flat[next].sourceIndex, entry.targetIndex, null))
+        next++
+      }
+      val sourceAfter = entry.sourceIndex + (next - i)
+      split.add(Tagged('+', sourceAfter, entry.targetIndex, target.lines[entry.targetIndex]))
+      i = next
+    }
+    return split
+  }
+
+  /** Whether line [index] of [text] ends in a newline: every line but an unterminated last. */
+  private fun terminated(text: TextContent, index: Int) =
+    index < text.lines.lastIndex || text.endsWithNewline
 
   /**
    * One line of the flattened edit script. [sourceIndex] and [targetIndex] count the lines of each

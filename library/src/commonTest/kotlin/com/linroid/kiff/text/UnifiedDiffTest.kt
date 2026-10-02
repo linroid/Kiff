@@ -59,6 +59,54 @@ class UnifiedDiffTest {
   }
 
   @Test
+  fun aMissingFinalNewlineSurvivesWhereverTheChangeIs() {
+    // Each of these restored with a newline the target never had, or printed a diff that patch(1)
+    // and git apply refuse.
+    roundTrip("a\nb\nc\n", "a\nb")
+    roundTrip("a\nb\nc", "X\nb\nc")
+    roundTrip("a\nb\nc", "a\nX\nc")
+    roundTrip("a\nb", "a")
+    roundTrip("a\nb\n", "a")
+    roundTrip("a\nb", "a\nb\nc\n")
+    roundTrip("a\nb", "a\nb\nc")
+  }
+
+  @Test
+  fun theMarkerIsPrintedWhereGnuDiffPrintsIt() {
+    val marker = "\\ No newline at end of file"
+    assertTrue(roundTrip("a\nb\nc", "X\nb\nc").endsWith(" c\n$marker\n"))
+    assertEquals(
+      " a\n-b\n$marker\n+b\n+c\n",
+      body(roundTrip("a\nb", "a\nb\nc\n"))
+    )
+    assertEquals(
+      " a\n-b\n-c\n+b\n$marker\n",
+      body(roundTrip("a\nb\nc\n", "a\nb"))
+    )
+  }
+
+  @Test
+  fun aMarkerThatDoesNotDescribeTheEndOfAFileIsRefused() {
+    val marker = "\\ No newline at end of file"
+    val cases = listOf(
+      // After an added line in the middle: it used to strip the newline from the whole file.
+      "a\nb\nc\n" to "@@ -1,3 +1,4 @@\n a\n+x\n$marker\n b\n c\n",
+      // After a removed line the source does end with a newline.
+      "a\nb\n" to "@@ -1,2 +1 @@\n a\n-b\n$marker\n",
+      // After nothing at all.
+      "a\n" to "@@ -1 +1 @@\n$marker\n-a\n+b\n"
+    )
+    for ((source, hunks) in cases) {
+      assertFailsWith<KiffException.InvalidPatch>(hunks) {
+        UnifiedDiff.apply(TextContent.of(source), UnifiedDiff.parse("--- a\n+++ b\n$hunks"))
+      }
+    }
+  }
+
+  private fun body(diff: String) =
+    diff.lines().drop(3).joinToString("\n")
+
+  @Test
   fun carriageReturnsStayPartOfTheirLine() {
     roundTrip("alpha\r\nbeta\r\n", "alpha\r\ngamma\r\nbeta\r\n")
   }
@@ -160,7 +208,11 @@ class UnifiedDiffTest {
   fun everyContextRoundTripsAndNumbersBothSides() {
     val random = Random(1)
     val alphabet = listOf("a", "b", "c", "d", "e", "f")
-    fun text() = List(random.nextInt(0, 12)) { alphabet.random(random) }.joinToString("") { "$it\n" }
+    // Either side may lack a final newline, which is where most of the ways to get this wrong are.
+    fun text(): String {
+      val lines = List(random.nextInt(0, 12)) { alphabet.random(random) }
+      return lines.joinToString("\n") + if (lines.isNotEmpty() && random.nextBoolean()) "\n" else ""
+    }
     repeat(1_500) {
       val source = text()
       val target = text()
