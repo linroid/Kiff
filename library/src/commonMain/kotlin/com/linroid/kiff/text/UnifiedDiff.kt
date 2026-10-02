@@ -38,6 +38,7 @@ object UnifiedDiff {
     targetName: String = "b",
     context: Int = DEFAULT_CONTEXT
   ): String {
+    require(context >= 0) { "Context must not be negative: $context" }
     val hunks = hunksOf(source, target, edits, context)
     if (hunks.isEmpty()) return ""
     return buildString {
@@ -81,8 +82,12 @@ object UnifiedDiff {
     var targetEndsWithNewline: Boolean? = null
 
     for (hunk in patch.hunks) {
-      // A hunk that inserts into an empty source is numbered from zero by convention.
-      val start = if (hunk.sourceStart == 0) 0 else hunk.sourceStart - 1
+      // A range of no lines is numbered by the line it follows, so `-4,0` inserts after line 4 and
+      // `-0,0` at the very top; any other range is numbered by its first line.
+      if (hunk.sourceStart == 0 && hunk.sourceCount > 0) {
+        throw KiffException.InvalidPatch("Hunk at 0 claims ${hunk.sourceCount} source line(s)")
+      }
+      val start = if (hunk.sourceCount == 0) hunk.sourceStart else hunk.sourceStart - 1
       if (start < cursor || start > source.lines.size) {
         throw KiffException.InvalidPatch(
           "Hunk at ${hunk.sourceStart} is out of order or past the end"
@@ -162,15 +167,23 @@ object UnifiedDiff {
     context: Int
   ): List<Hunk> {
     // Flatten the edit script into one tagged line per source or target line, which is the shape
-    // hunks are cut from. An inserted line carries its own text, so nothing has to stay in step
-    // with a separate list of them.
+    // hunks are cut from. Each entry also records how many source and target lines precede it,
+    // which is all a hunk header needs. An inserted line carries its own text, so nothing has to
+    // stay in step with a separate list of them.
     val tagged = mutableListOf<Tagged>()
     var sourceIndex = 0
+    var targetIndex = 0
     for (edit in edits) {
       when (edit) {
-        is Edit.Equal -> repeat(edit.count) { tagged.add(Tagged(' ', sourceIndex++, null)) }
-        is Edit.Delete -> repeat(edit.count) { tagged.add(Tagged('-', sourceIndex++, null)) }
-        is Edit.Insert -> for (line in edit.lines) tagged.add(Tagged('+', -1, line))
+        is Edit.Equal -> repeat(edit.count) {
+          tagged.add(Tagged(' ', sourceIndex++, targetIndex++, null))
+        }
+        is Edit.Delete -> repeat(edit.count) {
+          tagged.add(Tagged('-', sourceIndex++, targetIndex, null))
+        }
+        is Edit.Insert -> for (line in edit.lines) {
+          tagged.add(Tagged('+', sourceIndex, targetIndex++, line))
+        }
       }
     }
 
@@ -180,36 +193,40 @@ object UnifiedDiff {
     val newlineChanged = source.endsWithNewline != target.endsWithNewline
     if (newlineChanged && tagged.isNotEmpty() && tagged.last().marker == ' ') {
       val last = tagged.removeAt(tagged.lastIndex)
-      tagged.add(Tagged('-', last.sourceIndex, null))
-      tagged.add(Tagged('+', -1, source.lines[last.sourceIndex]))
+      tagged.add(Tagged('-', last.sourceIndex, last.targetIndex, null))
+      tagged.add(
+        Tagged('+', last.sourceIndex + 1, last.targetIndex, source.lines[last.sourceIndex])
+      )
     }
 
     val changed = tagged.indices.filter { tagged[it].marker != ' ' }
     if (changed.isEmpty()) return emptyList()
 
+    // No hunk can use more context than there are lines, and the clamp keeps the arithmetic below
+    // clear of overflow however large a context is asked for.
+    val reach = minOf(context, tagged.size)
     val hunks = mutableListOf<Hunk>()
     var group = 0
     while (group < changed.size) {
+      // Changes share a hunk when the unchanged lines between them are few enough for the context
+      // of both to cover, which is where GNU diff and git draw the line too.
       var last = group
-      while (last + 1 < changed.size && changed[last + 1] - changed[last] <= context * 2) last++
-      val from = maxOf(0, changed[group] - context)
-      val to = minOf(tagged.size - 1, changed[last] + context)
+      while (last + 1 < changed.size && changed[last + 1] - changed[last] - 1 <= 2L * reach) last++
+      val from = maxOf(0, changed[group] - reach)
+      val to = minOf(tagged.size - 1, changed[last] + reach)
 
       val body = mutableListOf<String>()
       var sourceLines = 0
       var targetLines = 0
-      var firstSource = -1
       for (i in from..to) {
         val entry = tagged[i]
         when (entry.marker) {
           ' ' -> {
-            if (firstSource < 0) firstSource = entry.sourceIndex
             body.add(" " + source.lines[entry.sourceIndex])
             sourceLines++
             targetLines++
           }
           '-' -> {
-            if (firstSource < 0) firstSource = entry.sourceIndex
             body.add("-" + source.lines[entry.sourceIndex])
             sourceLines++
             if (!source.endsWithNewline && entry.sourceIndex == source.lines.lastIndex) {
@@ -226,12 +243,17 @@ object UnifiedDiff {
         body.add(NO_NEWLINE)
       }
 
+      // A range is numbered by its first line, and a range of no lines by the line it follows, so
+      // an insertion lands after whatever precedes it and at the top only when nothing does. Each
+      // side is counted on its own, so a hunk's target position includes every earlier hunk's
+      // change in length.
+      val sourceBefore = tagged[from].sourceIndex
+      val targetBefore = tagged[from].targetIndex
       hunks.add(
         Hunk(
-          // Zero when the hunk inserts into nothing, which is how unified diff spells it.
-          sourceStart = if (firstSource < 0) 0 else firstSource + 1,
+          sourceStart = if (sourceLines == 0) sourceBefore else sourceBefore + 1,
           sourceCount = sourceLines,
-          targetStart = if (firstSource < 0) 1 else firstSource + 1,
+          targetStart = if (targetLines == 0) targetBefore else targetBefore + 1,
           targetCount = targetLines,
           lines = body
         )
@@ -241,5 +263,14 @@ object UnifiedDiff {
     return hunks
   }
 
-  private class Tagged(val marker: Char, val sourceIndex: Int, val text: String?)
+  /**
+   * One line of the flattened edit script. [sourceIndex] and [targetIndex] count the lines of each
+   * side that come before it, which for a line that is on that side is also its own index.
+   */
+  private class Tagged(
+    val marker: Char,
+    val sourceIndex: Int,
+    val targetIndex: Int,
+    val text: String?
+  )
 }

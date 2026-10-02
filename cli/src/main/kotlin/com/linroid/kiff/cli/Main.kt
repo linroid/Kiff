@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
+import com.github.ajalt.clikt.parameters.types.restrictTo
 import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.text.LineDiffEngine
 import com.linroid.kiff.text.MyersDiffAlgorithm
@@ -24,7 +25,7 @@ class DiffCommand : KiffCommand(name = "diff") {
   private val context by option(
     "-U", "--unified",
     help = "Lines of context around each change"
-  ).int().default(3)
+  ).int().restrictTo(min = 0).default(3)
   private val sourceFile by argument(help = "Source file path")
   private val targetFile by argument(help = "Updated file path")
 

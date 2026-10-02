@@ -1,6 +1,7 @@
 package com.linroid.kiff.text
 
 import com.linroid.kiff.KiffException
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -12,10 +13,12 @@ class UnifiedDiffTest {
   private val engine = LineDiffEngine(MyersDiffAlgorithm())
 
   /** Diff two texts, print them, read them back, and check the target comes out. */
-  private fun roundTrip(source: String, target: String): String {
+  private fun roundTrip(source: String, target: String, context: Int = 3): String {
     val a = TextContent.of(source)
     val b = TextContent.of(target)
-    val diff = UnifiedDiff.format(a, b, engine.generatePatch(a.lines, b.lines).edits)
+    val diff = UnifiedDiff.format(
+      a, b, engine.generatePatch(a.lines, b.lines).edits, context = context
+    )
     if (source == target) {
       assertEquals("", diff, "identical files should produce no diff at all")
       return diff
@@ -75,6 +78,126 @@ class UnifiedDiffTest {
     val diff = roundTrip(source, target)
     assertEquals(1, diff.lines().count { it.startsWith("@@") }, diff)
   }
+
+  @Test
+  fun changesTwiceTheContextApartShareAHunk() {
+    // Six unchanged lines is exactly what two hunks' context would cover between them, so GNU diff
+    // and git print one hunk rather than two that touch.
+    val source = (1..10).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("9\n", "Y\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -1,10 +1,10 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun changesFurtherApartThanTwiceTheContextStaySeparate() {
+    val source = (1..11).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("10\n", "Y\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -1,5 +1,5 @@", "@@ -7,5 +7,5 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun anInsertionWithoutContextLandsWhereItWasMade() {
+    // A range of no lines is numbered by the line it follows. Numbered from zero, this insertion
+    // went to the top of the file, and patch(1) put it there without a word.
+    val diff = roundTrip("a\nb\nc\nd\ne\n", "a\nb\nc\nd\nINS\ne\n", context = 0)
+    assertEquals(listOf("@@ -4,0 +5 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun aReplacementWithoutContextIsOneHunk() {
+    val diff = roundTrip("1\n2\n3\n4\n5\n6\n", "1\n2\nX\nY\n5\n6\n", context = 0)
+    assertEquals(listOf("@@ -3,2 +3,2 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun aDeletionWithoutContextIsNumberedOnBothSides() {
+    val diff = roundTrip("a\nb\nc\nd\ne\n", "a\nb\nc\nd\n", context = 0)
+    assertEquals(listOf("@@ -5 +4,0 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun zeroCountHunksFromOtherToolsApplyInPlace() {
+    val source = TextContent.of("a\nb\nc\nd\ne\n")
+    fun applied(hunks: String): String {
+      val patch = UnifiedDiff.parse("--- a\n+++ b\n$hunks")
+      return UnifiedDiff.apply(source, patch).toBytes().decodeToString()
+    }
+
+    assertEquals("a\nb\nc\nd\nINS\ne\n", applied("@@ -4,0 +5 @@\n+INS\n"))
+    assertEquals("TOP\na\nb\nc\nd\ne\n", applied("@@ -0,0 +1 @@\n+TOP\n"))
+    assertEquals("a\nb\nc\nd\n", applied("@@ -5 +4,0 @@\n-e\n"))
+  }
+
+  @Test
+  fun aHunkNumberedZeroThatClaimsLinesIsRefused() {
+    assertFailsWith<KiffException.InvalidPatch> {
+      UnifiedDiff.apply(
+        TextContent.of("a\nb\n"),
+        UnifiedDiff.parse("--- a\n+++ b\n@@ -0,1 +0,0 @@\n-a\n")
+      )
+    }
+  }
+
+  @Test
+  fun laterHunksCountWhatEarlierOnesChanged() {
+    val source = (1..40).joinToString("") { "line $it\n" }
+    val target = source
+      .replace("line 5\n", "line 5\nnew 1\nnew 2\nnew 3\n")
+      .replace("line 30\n", "line 30 edited\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -3,6 +3,9 @@", "@@ -27,7 +30,7 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun anEmptiedFileIsNumberedFromZeroOnTheTargetSide() {
+    val diff = roundTrip("a\nb\nc\n", "")
+    assertEquals(listOf("@@ -1,3 +0,0 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun everyContextRoundTripsAndNumbersBothSides() {
+    val random = Random(1)
+    val alphabet = listOf("a", "b", "c", "d", "e", "f")
+    fun text() = List(random.nextInt(0, 12)) { alphabet.random(random) }.joinToString("") { "$it\n" }
+    repeat(1_500) {
+      val source = text()
+      val target = text()
+      val context = random.nextInt(0, 4)
+      val diff = roundTrip(source, target, context)
+      if (diff.isEmpty()) return@repeat
+      // Each side is numbered on its own, so the lines before a hunk differ between the sides by
+      // exactly what the hunks before it added or removed.
+      var shift = 0
+      for (hunk in UnifiedDiff.parse(diff).hunks) {
+        val sourceBefore = hunk.sourceStart - if (hunk.sourceCount == 0) 0 else 1
+        val targetBefore = hunk.targetStart - if (hunk.targetCount == 0) 0 else 1
+        assertEquals(shift, targetBefore - sourceBefore, diff)
+        shift += hunk.targetCount - hunk.sourceCount
+      }
+    }
+  }
+
+  @Test
+  fun aNegativeContextIsRefused() {
+    val a = TextContent.of("a\n")
+    val b = TextContent.of("b\n")
+    assertFailsWith<IllegalArgumentException> {
+      UnifiedDiff.format(a, b, engine.generatePatch(a.lines, b.lines).edits, context = -1)
+    }
+  }
+
+  @Test
+  fun aHugeContextIsTheWholeFile() {
+    val source = (1..10).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("9\n", "Y\n")
+    for (context in listOf(1 shl 30, Int.MAX_VALUE)) {
+      assertEquals(listOf("@@ -1,10 +1,10 @@"), headers(roundTrip(source, target, context)))
+    }
+  }
+
+  private fun headers(diff: String) = diff.lines().filter { it.startsWith("@@") }
 
   @Test
   fun identicalFilesProduceNothing() {
