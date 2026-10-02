@@ -96,7 +96,7 @@ $ kiff diff config.old config.new
 
 Lines carry their own terminators internally, so whether a file ended in a newline survives the
 round trip; `UnifiedDiff.parse` and `UnifiedDiff.apply` read the format back, refusing a hunk whose
-context does not match the source.
+body does not match its header's line counts or whose context does not match the source.
 
 `kiff changes` says what differs; `kiff explain` says what the difference *cost*, which is not the
 same question - a large entry can change and still be nearly free, and a small one can be expensive:

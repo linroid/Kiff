@@ -293,6 +293,88 @@ class UnifiedDiffTest {
   }
 
   @Test
+  fun aDiffThatDoesNotHoldTogetherIsRefused() {
+    val source = TextContent.of("a\nb\nc\n")
+    val cases = listOf(
+      // Numbers past Int used to escape as a NumberFormatException.
+      "@@ -99999999999 +1 @@\n+x\n",
+      "@@ -1,99999999999 +1 @@\n a\n",
+      "@@ -1 +99999999999 @@\n a\n",
+      "@@ -x +1 @@\n a\n",
+      "garbage\n",
+      // Cut short: this applied the two lines it had and returned a file that is neither side.
+      "@@ -1,3 +1,4 @@\n a\n+x\n",
+      // Lines past the counts, which patch(1) and git apply leave out: this applied them.
+      "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n+evil\n",
+      "@@ -1,99 +1 @@\n a\n",
+      "@@ -1 +1 @@\n?a\n",
+      "@@ -3 +3 @@\n-c\n+C\n@@ -1 +1 @@\n-a\n+A\n",
+      "@@ -9 +9 @@\n-z\n+Z\n"
+    )
+    for (hunks in cases) {
+      assertFailsWith<KiffException.InvalidPatch>(hunks) {
+        UnifiedDiff.apply(source, UnifiedDiff.parse("--- a\n+++ b\n$hunks"))
+      }
+    }
+  }
+
+  @Test
+  fun aHunkBuiltWithCountsItsBodyDoesNotHaveIsRefused() {
+    val patch = UnifiedDiff.Patch("a", "b", listOf(UnifiedDiff.Hunk(1, 2, 1, 2, listOf(" a"))))
+    assertFailsWith<KiffException.InvalidPatch> {
+      UnifiedDiff.apply(TextContent.of("a\nb\n"), patch)
+    }
+  }
+
+  @Test
+  fun diffsFromOtherToolsAreRead() {
+    fun applied(source: String, diff: String) =
+      UnifiedDiff.apply(TextContent.of(source), UnifiedDiff.parse(diff)).toBytes().decodeToString()
+
+    val git = """
+      |diff --git a/f b/f
+      |index 1234567..89abcde 100644
+      |--- a/f
+      |+++ b/f
+      |@@ -1,3 +1,3 @@
+      | a
+      |-b
+      |+B
+      | c
+      |
+    """.trimMargin()
+    assertEquals("a\nB\nc\n", applied("a\nb\nc\n", git))
+    assertEquals("a/f", UnifiedDiff.parse(git).sourceName)
+
+    // An empty context line that lost its leading space on the way.
+    assertEquals("a\n\nB\n", applied("a\n\nb\n", "--- a\n+++ b\n@@ -1,3 +1,3 @@\n a\n\n-b\n+B\n"))
+    // A marker in another language.
+    assertEquals(
+      "b\n",
+      applied("a", "--- a\n+++ b\n@@ -1 +1 @@\n-a\n\\ Kein Zeilenumbruch am Dateiende.\n+b\n")
+    )
+    val stamped = "--- a.txt\t2026-01-01 00:00:00.000000000 +0000\n" +
+      "+++ b.txt\t2026-01-02 00:00:00.000000000 +0000\n@@ -1 +1 @@\n-a\n+b\n"
+    assertEquals("a.txt", UnifiedDiff.parse(stamped).sourceName)
+    assertEquals("b.txt", UnifiedDiff.parse(stamped).targetName)
+  }
+
+  @Test
+  fun headerNamesSurviveTheirRoundTrip() {
+    val a = TextContent.of("a\n")
+    val b = TextContent.of("b\n")
+    val edits = engine.generatePatch(a.lines, b.lines).edits
+    val diff = UnifiedDiff.format(a, b, edits, "my file.txt", "odd\"na\\me\n")
+    // The tab is how patch(1) finds where a name with a space ends.
+    assertTrue(diff.startsWith("--- my file.txt\t\n+++ \"odd\\\"na\\\\me\\n\"\n"), diff)
+    val patch = UnifiedDiff.parse(diff)
+    assertEquals("my file.txt", patch.sourceName)
+    assertEquals("odd\"na\\me\n", patch.targetName)
+    val quoted = "--- \"\\303\\274n\\303\\257code\"\n+++ b\n"
+    assertEquals("ünïcode", UnifiedDiff.parse(quoted).sourceName)
+  }
+
+  @Test
   fun textContentRoundTripsAnyBytesItSplits() {
     for (text in listOf("", "\n", "\n\n\n", "a", "a\n", "a\nb", "a\nb\n", "\na\n")) {
       assertEquals(

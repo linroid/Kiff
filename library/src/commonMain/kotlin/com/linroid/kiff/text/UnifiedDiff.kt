@@ -13,6 +13,7 @@ object UnifiedDiff {
 
   private const val DEFAULT_CONTEXT = 3
   private const val NO_NEWLINE = "\\ No newline at end of file"
+  private val HUNK_HEADER = Regex("""^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@""")
 
   /** One run of changes, with the unchanged lines around it that let it be located. */
   data class Hunk(
@@ -42,8 +43,8 @@ object UnifiedDiff {
     val hunks = hunksOf(source, target, edits, context)
     if (hunks.isEmpty()) return ""
     return buildString {
-      append("--- ").append(sourceName).append('\n')
-      append("+++ ").append(targetName).append('\n')
+      append("--- ").append(headerName(sourceName)).append('\n')
+      append("+++ ").append(headerName(targetName)).append('\n')
       for (hunk in hunks) {
         append("@@ -").append(range(hunk.sourceStart, hunk.sourceCount))
         append(" +").append(range(hunk.targetStart, hunk.targetCount)).append(" @@\n")
@@ -52,13 +53,28 @@ object UnifiedDiff {
     }
   }
 
+  /**
+   * Reads a unified diff of one file.
+   *
+   * Each hunk is read to exactly the line counts its header gives, as patch(1) and git apply read
+   * it: a hunk that ends early was cut short and is refused rather than applied in part, and lines
+   * past its counts are not part of it. Anything before the `---`/`+++` pair, such as git's
+   * `diff --git` and `index` lines, is skipped.
+   */
   fun parse(text: String): Patch {
     val lines = text.split("\n")
     var at = 0
     var sourceName = "a"
     var targetName = "b"
-    if (at < lines.size && lines[at].startsWith("--- ")) sourceName = lines[at++].substring(4)
-    if (at < lines.size && lines[at].startsWith("+++ ")) targetName = lines[at++].substring(4)
+    val names = lines.indices.firstOrNull { i ->
+      lines[i].startsWith("@@") ||
+        (lines[i].startsWith("--- ") && i + 1 < lines.size && lines[i + 1].startsWith("+++ "))
+    }
+    if (names != null && !lines[names].startsWith("@@")) {
+      sourceName = nameOf(lines[names].substring(4))
+      targetName = nameOf(lines[names + 1].substring(4))
+      at = names + 2
+    }
 
     val hunks = mutableListOf<Hunk>()
     while (at < lines.size) {
@@ -84,6 +100,15 @@ object UnifiedDiff {
     var unterminated = -1
 
     for (hunk in patch.hunks) {
+      // A hunk built in code rather than parsed has not had its counts checked against its body.
+      val sourceLines = hunk.lines.count { it.startsWith(" ") || it.startsWith("-") }
+      val targetLines = hunk.lines.count { it.startsWith(" ") || it.startsWith("+") }
+      if (sourceLines != hunk.sourceCount || targetLines != hunk.targetCount) {
+        throw KiffException.InvalidPatch(
+          "Hunk at ${hunk.sourceStart} holds $sourceLines source and $targetLines target line(s) " +
+            "but declares ${hunk.sourceCount} and ${hunk.targetCount}"
+        )
+      }
       // A range of no lines is numbered by the line it follows, so `-4,0` inserts after line 4 and
       // `-0,0` at the very top; any other range is numbered by its first line.
       if (hunk.sourceStart == 0 && hunk.sourceCount > 0) {
@@ -100,7 +125,7 @@ object UnifiedDiff {
 
       var previous: Char? = null
       for (line in hunk.lines) {
-        if (line == NO_NEWLINE) {
+        if (isMarker(line)) {
           // The marker says the line before it ends its file without a newline: the source's after
           // a removed line, the target's after an added one, and both after an unchanged one. A
           // claim about the source is checked like any other context; one about the target is
@@ -155,26 +180,133 @@ object UnifiedDiff {
     bodyStart: Int,
     advance: (Int) -> Unit
   ): Hunk {
-    val marks = Regex("""@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@""").find(header)
+    val marks = HUNK_HEADER.find(header)
       ?: throw KiffException.InvalidPatch("Malformed hunk header: $header")
     val (s, sc, t, tc) = marks.destructured
+    val sourceCount = if (sc.isEmpty()) 1 else number(sc, header)
+    val targetCount = if (tc.isEmpty()) 1 else number(tc, header)
+
+    // Splitting text that ends in a newline leaves one empty string after it, which is not a line.
+    val end = if (lines.lastOrNull() == "") lines.lastIndex else lines.size
+    var sourceLeft = sourceCount
+    var targetLeft = targetCount
     val body = mutableListOf<String>()
     var at = bodyStart
-    while (at < lines.size) {
-      val line = lines[at]
-      if (line.startsWith("@@")) break
-      if (line.isEmpty() && at == lines.size - 1) { at++; break }
-      body.add(line)
+    while (sourceLeft > 0 || targetLeft > 0) {
+      if (at >= end || lines[at].startsWith("@@")) {
+        throw KiffException.InvalidPatch("Hunk ends before its counts: $header")
+      }
+      val line = lines[at++]
+      when {
+        isMarker(line) -> body.add(NO_NEWLINE)
+        // An empty line is a context line whose leading space an editor or a mailer removed, and
+        // it is read as one by patch(1) and git apply alike.
+        line.isEmpty() || line[0] == ' ' -> {
+          body.add(" " + line.drop(1))
+          sourceLeft--
+          targetLeft--
+        }
+        line[0] == '-' -> {
+          body.add(line)
+          sourceLeft--
+        }
+        line[0] == '+' -> {
+          body.add(line)
+          targetLeft--
+        }
+        else -> throw KiffException.InvalidPatch("Unknown diff line: $line")
+      }
+      if (sourceLeft < 0 || targetLeft < 0) {
+        throw KiffException.InvalidPatch("Hunk overruns its counts: $header")
+      }
+    }
+    // The hunk's last line may still carry its marker.
+    if (at < end && isMarker(lines[at])) {
+      body.add(NO_NEWLINE)
       at++
     }
     advance(at)
     return Hunk(
-      sourceStart = s.toInt(),
-      sourceCount = if (sc.isEmpty()) 1 else sc.toInt(),
-      targetStart = t.toInt(),
-      targetCount = if (tc.isEmpty()) 1 else tc.toInt(),
+      sourceStart = number(s, header),
+      sourceCount = sourceCount,
+      targetStart = number(t, header),
+      targetCount = targetCount,
       lines = body
     )
+  }
+
+  private fun number(digits: String, header: String): Int = digits.toIntOrNull()
+    ?: throw KiffException.InvalidPatch("Hunk header number is out of range: $header")
+
+  /** The marker is localised by some tools, so any line opening with a backslash is one. */
+  private fun isMarker(line: String) = line.startsWith("\\")
+
+  /**
+   * A name as a header line carries it.
+   *
+   * GNU diff and git end a name containing a space with a tab, which is how patch(1) tells it from
+   * a timestamp, and git quotes a name holding a quote, a backslash or a control character. Any
+   * other name is written as it is.
+   */
+  private fun headerName(name: String): String {
+    if (name.none { it == '"' || it == '\\' || it < ' ' || it == '\u007f' }) {
+      return if (' ' in name) "$name\t" else name
+    }
+    return buildString {
+      append('"')
+      for (c in name) {
+        when (c) {
+          '"' -> append("\\\"")
+          '\\' -> append("\\\\")
+          '\t' -> append("\\t")
+          '\n' -> append("\\n")
+          '\r' -> append("\\r")
+          else -> if (c < ' ' || c == '\u007f') {
+            append('\\').append(c.code.toString(8).padStart(3, '0'))
+          } else {
+            append(c)
+          }
+        }
+      }
+      append('"')
+    }
+  }
+
+  /** Reads a name back from a header line: unquoted as git quotes it, or up to the first tab. */
+  private fun nameOf(field: String): String {
+    if (!field.startsWith('"')) return field.substringBefore('\t')
+    // An octal escape is one byte of the name's UTF-8, so the name is rebuilt as bytes.
+    val bytes = mutableListOf<Byte>()
+    var i = 1
+    while (true) {
+      val plain = field.indexOfAny(charArrayOf('"', '\\'), i)
+      if (plain < 0) throw KiffException.InvalidPatch("Unterminated quoted name: $field")
+      bytes.addAll(field.substring(i, plain).encodeToByteArray().asList())
+      i = plain + 1
+      if (field[plain] == '"') break
+      if (i >= field.length) throw KiffException.InvalidPatch("Unterminated quoted name: $field")
+      val escaped = field[i++]
+      val byte = when (escaped) {
+        'a' -> 7
+        'b' -> 8
+        't' -> 9
+        'n' -> 10
+        'v' -> 11
+        'f' -> 12
+        'r' -> 13
+        '"', '\\' -> escaped.code
+        in '0'..'7' -> {
+          var value = escaped - '0'
+          repeat(2) {
+            if (i < field.length && field[i] in '0'..'7') value = value * 8 + (field[i++] - '0')
+          }
+          value
+        }
+        else -> throw KiffException.InvalidPatch("Unknown escape in quoted name: $field")
+      }
+      bytes.add(byte.toByte())
+    }
+    return bytes.toByteArray().decodeToString()
   }
 
   private fun range(start: Int, count: Int) = if (count == 1) "$start" else "$start,$count"
