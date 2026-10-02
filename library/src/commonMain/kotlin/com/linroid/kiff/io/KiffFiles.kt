@@ -54,6 +54,14 @@ object KiffFiles {
 
   fun exists(path: String): Boolean = systemFileSystem.exists(path.toPath())
 
+  /** Whether [first] and [second] name one existing file, through any symlinks. */
+  internal fun sameFile(first: String, second: String): Boolean {
+    val a = first.toPath()
+    val b = second.toPath()
+    if (!systemFileSystem.exists(a) || !systemFileSystem.exists(b)) return false
+    return systemFileSystem.canonicalize(a) == systemFileSystem.canonicalize(b)
+  }
+
   fun size(path: String): Long? = systemFileSystem.metadataOrNull(path.toPath())?.size
 
   /**

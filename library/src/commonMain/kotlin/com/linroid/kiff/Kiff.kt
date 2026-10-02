@@ -4,6 +4,7 @@ import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.PatchFormat
 import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.io.fileSource
+import okio.IOException
 
 /** Entry point: the bundled patchers plus file-level create/apply helpers. */
 object Kiff {
@@ -38,8 +39,9 @@ object Kiff {
   /**
    * Writes a patch that rebuilds [targetPath] from [sourcePath].
    *
-   * Both files are opened for random access rather than read whole, so the checksums are taken a
-   * chunk at a time.
+   * Each file is read into memory once - the search indexes arrays, so inputs over 2 GB are
+   * refused - and its checksum is taken from the same bytes. [patchPath] may not name either
+   * input.
    */
   fun createPatch(
     patcher: Patcher,
@@ -47,6 +49,13 @@ object Kiff {
     targetPath: String,
     patchPath: String
   ): PatchInfo {
+    // The patch is written once both inputs are read, so a patch path naming one of them would
+    // replace the very file the patch is for - the source, which it needs to be applied.
+    for ((input, role) in listOf(sourcePath to "source", targetPath to "target")) {
+      if (KiffFiles.sameFile(patchPath, input)) {
+        throw IOException("Cannot write $patchPath: it is the $role")
+      }
+    }
     val patch = fileSource(sourcePath).use { source ->
       fileSource(targetPath).use { target -> patcher.createPatch(source, target) }
     }

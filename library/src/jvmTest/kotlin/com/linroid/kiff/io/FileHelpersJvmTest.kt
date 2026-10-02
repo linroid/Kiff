@@ -176,4 +176,20 @@ class FileHelpersJvmTest {
     }
     assertNoTemporaryFilesLeft()
   }
+
+  @Test
+  fun aPatchIsNotWrittenOverItsOwnInput() {
+    // `kiff create old new old`: the source was read, and then replaced by the patch built from
+    // it, which can never be applied without it.
+    val input = write("old.bin", source)
+    val updated = write("new.bin", target)
+    for (patchPath in listOf(input.path, updated.path)) {
+      val failure = assertFailsWith<IOException> {
+        Kiff.createPatch(Kiff.binary, input.path, updated.path, patchPath)
+      }
+      assertTrue(failure.message.orEmpty().startsWith("Cannot write $patchPath"), failure.message)
+    }
+    assertContentEquals(source, input.readBytes())
+    assertContentEquals(target, updated.readBytes())
+  }
 }

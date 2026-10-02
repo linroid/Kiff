@@ -15,6 +15,7 @@ import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.toIntIndex
 import com.linroid.kiff.io.asSource
 import com.linroid.kiff.io.materialize
+import com.linroid.kiff.io.requireIndexable
 import com.linroid.kiff.region.RegionCost
 import com.linroid.kiff.region.RegionRecorder
 import com.linroid.kiff.region.RegionReport
@@ -24,9 +25,9 @@ import com.linroid.kiff.region.RegionReport
  * container, the checksum verification and the restore path are shared, so any patch restores the
  * target byte for byte no matter which patcher produced it.
  *
- * Checksums are computed straight off the [SeekableSource], a chunk at a time. The search still
- * indexes a [ByteArray], so both inputs are materialized once here and every scanner built during
- * the encode reuses those arrays.
+ * The search indexes a [ByteArray], so creating a patch reads both inputs into memory once and
+ * every scanner built during the encode reuses those arrays; their checksums are taken from them
+ * too. Applying one reads the source a chunk at a time and never holds it.
  */
 sealed class DeltaPatcher : Patcher {
 
@@ -50,15 +51,21 @@ sealed class DeltaPatcher : Patcher {
     target: SeekableSource,
     recorder: RegionRecorder?
   ): ByteArray {
-    val sourceCrc = Crc32.compute(source)
-    val targetCrc = Crc32.compute(target)
+    // Both sizes are checked before either input is read, so one too large costs nothing to refuse.
+    source.requireIndexable("Source")
+    target.requireIndexable("Target")
+    // Each input is read once, and its checksum taken from the very bytes the patch describes: two
+    // reads cost twice the I/O, and a file that changed between them gave a header for one version
+    // and a tree for the other, a patch that every apply refuses.
     val sourceBytes = source.materialize("Source")
     val targetBytes = target.materialize("Target")
+    val sourceCrc = Crc32.compute(sourceBytes.bytes)
+    val targetCrc = Crc32.compute(targetBytes.bytes)
 
     val literals = ByteWriter((target.size / 8).coerceIn(64, 1L shl 20).toInt())
     val root = encode(sourceBytes, targetBytes, literals, recorder)
-    check(root.targetLength == target.size) {
-      "$name described ${root.targetLength} bytes but the target has ${target.size}"
+    check(root.targetLength == targetBytes.size) {
+      "$name described ${root.targetLength} bytes but the target has ${targetBytes.size}"
     }
     // One decision, used twice: the flag in the header and the checksums in the tree have to
     // agree, or a reader either misses them or reads past them.
@@ -70,7 +77,9 @@ sealed class DeltaPatcher : Patcher {
       targetBytes.bytes.takeIf { checksummed }
     )
     val out = ByteWriter(payload.size + HEADER_ESTIMATE)
-    PatchFormat.writeHeader(out, id, source.size, sourceCrc, target.size, targetCrc, flags)
+    PatchFormat.writeHeader(
+      out, id, sourceBytes.size, sourceCrc, targetBytes.size, targetCrc, flags
+    )
     out.writeBytes(payload)
     return out.toByteArray()
   }

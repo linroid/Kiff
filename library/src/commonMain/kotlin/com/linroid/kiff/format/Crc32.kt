@@ -1,6 +1,7 @@
 package com.linroid.kiff.format
 
 import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readFully
 
 /** Standard CRC-32 (IEEE 802.3, the polynomial used by zip and gzip). */
 internal object Crc32 {
@@ -16,14 +17,20 @@ internal object Crc32 {
   fun compute(data: ByteArray, from: Int = 0, to: Int = data.size): UInt =
     update(-1, data, from, to).inv().toUInt()
 
-  /** Checksums a whole source a chunk at a time, so a file need not be held in memory for it. */
+  /**
+   * Checksums a whole source a chunk at a time, so a file need not be held in memory for it.
+   *
+   * Every byte the source claims is read or the call fails: a source that ended early used to stop
+   * the loop quietly, and a checksum of a prefix passes for one of the whole.
+   */
   fun compute(source: SeekableSource): UInt {
     val buffer = ByteArray(CHUNK)
     var crc = -1
     var position = 0L
-    while (position < source.size) {
-      val count = source.read(position, buffer, 0, CHUNK)
-      if (count <= 0) break
+    val size = source.size
+    while (position < size) {
+      val count = minOf(CHUNK.toLong(), size - position).toInt()
+      source.readFully(position, buffer, 0, count)
       crc = update(crc, buffer, 0, count)
       position += count
     }

@@ -21,14 +21,23 @@ interface SeekableSource : AutoCloseable {
   /**
    * Reads at most [length] bytes starting at [position] into [into] at [offset].
    *
-   * @return the number of bytes read, which may be fewer than requested, or -1 at end of input.
+   * Kiff asks only for a non-negative [position] and a range within [into]. While [position] is
+   * below [size], a read of a positive [length] reads at least one byte, waiting for it if it has
+   * to; one that cannot is taken as the source ending early. [size] must not change while Kiff is
+   * reading.
+   *
+   * @return the number of bytes read, which may be fewer than requested; 0 only when [length] is 0,
+   *   and -1 once [position] reaches [size].
    */
   fun read(position: Long, into: ByteArray, offset: Int = 0, length: Int = into.size - offset): Int
 
   override fun close() {}
 }
 
-/** Reads exactly [length] bytes at [position], failing if the source ends first. */
+/**
+ * Reads exactly [length] bytes at [position], failing if the source ends first - which a read of
+ * nothing, 0 or -1, before then is taken to mean.
+ */
 fun SeekableSource.readFully(
   position: Long,
   into: ByteArray,
