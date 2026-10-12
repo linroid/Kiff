@@ -1,6 +1,7 @@
 package com.linroid.kiff.text
 
 import com.linroid.kiff.KiffException
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -12,10 +13,12 @@ class UnifiedDiffTest {
   private val engine = LineDiffEngine(MyersDiffAlgorithm())
 
   /** Diff two texts, print them, read them back, and check the target comes out. */
-  private fun roundTrip(source: String, target: String): String {
+  private fun roundTrip(source: String, target: String, context: Int = 3): String {
     val a = TextContent.of(source)
     val b = TextContent.of(target)
-    val diff = UnifiedDiff.format(a, b, engine.generatePatch(a.lines, b.lines).edits)
+    val diff = UnifiedDiff.format(
+      a, b, engine.generatePatch(a.lines, b.lines).edits, context = context
+    )
     if (source == target) {
       assertEquals("", diff, "identical files should produce no diff at all")
       return diff
@@ -56,6 +59,54 @@ class UnifiedDiffTest {
   }
 
   @Test
+  fun aMissingFinalNewlineSurvivesWhereverTheChangeIs() {
+    // Each of these restored with a newline the target never had, or printed a diff that patch(1)
+    // and git apply refuse.
+    roundTrip("a\nb\nc\n", "a\nb")
+    roundTrip("a\nb\nc", "X\nb\nc")
+    roundTrip("a\nb\nc", "a\nX\nc")
+    roundTrip("a\nb", "a")
+    roundTrip("a\nb\n", "a")
+    roundTrip("a\nb", "a\nb\nc\n")
+    roundTrip("a\nb", "a\nb\nc")
+  }
+
+  @Test
+  fun theMarkerIsPrintedWhereGnuDiffPrintsIt() {
+    val marker = "\\ No newline at end of file"
+    assertTrue(roundTrip("a\nb\nc", "X\nb\nc").endsWith(" c\n$marker\n"))
+    assertEquals(
+      " a\n-b\n$marker\n+b\n+c\n",
+      body(roundTrip("a\nb", "a\nb\nc\n"))
+    )
+    assertEquals(
+      " a\n-b\n-c\n+b\n$marker\n",
+      body(roundTrip("a\nb\nc\n", "a\nb"))
+    )
+  }
+
+  @Test
+  fun aMarkerThatDoesNotDescribeTheEndOfAFileIsRefused() {
+    val marker = "\\ No newline at end of file"
+    val cases = listOf(
+      // After an added line in the middle: it used to strip the newline from the whole file.
+      "a\nb\nc\n" to "@@ -1,3 +1,4 @@\n a\n+x\n$marker\n b\n c\n",
+      // After a removed line the source does end with a newline.
+      "a\nb\n" to "@@ -1,2 +1 @@\n a\n-b\n$marker\n",
+      // After nothing at all.
+      "a\n" to "@@ -1 +1 @@\n$marker\n-a\n+b\n"
+    )
+    for ((source, hunks) in cases) {
+      assertFailsWith<KiffException.InvalidPatch>(hunks) {
+        UnifiedDiff.apply(TextContent.of(source), UnifiedDiff.parse("--- a\n+++ b\n$hunks"))
+      }
+    }
+  }
+
+  private fun body(diff: String) =
+    diff.lines().drop(3).joinToString("\n")
+
+  @Test
   fun carriageReturnsStayPartOfTheirLine() {
     roundTrip("alpha\r\nbeta\r\n", "alpha\r\ngamma\r\nbeta\r\n")
   }
@@ -75,6 +126,130 @@ class UnifiedDiffTest {
     val diff = roundTrip(source, target)
     assertEquals(1, diff.lines().count { it.startsWith("@@") }, diff)
   }
+
+  @Test
+  fun changesTwiceTheContextApartShareAHunk() {
+    // Six unchanged lines is exactly what two hunks' context would cover between them, so GNU diff
+    // and git print one hunk rather than two that touch.
+    val source = (1..10).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("9\n", "Y\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -1,10 +1,10 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun changesFurtherApartThanTwiceTheContextStaySeparate() {
+    val source = (1..11).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("10\n", "Y\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -1,5 +1,5 @@", "@@ -7,5 +7,5 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun anInsertionWithoutContextLandsWhereItWasMade() {
+    // A range of no lines is numbered by the line it follows. Numbered from zero, this insertion
+    // went to the top of the file, and patch(1) put it there without a word.
+    val diff = roundTrip("a\nb\nc\nd\ne\n", "a\nb\nc\nd\nINS\ne\n", context = 0)
+    assertEquals(listOf("@@ -4,0 +5 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun aReplacementWithoutContextIsOneHunk() {
+    val diff = roundTrip("1\n2\n3\n4\n5\n6\n", "1\n2\nX\nY\n5\n6\n", context = 0)
+    assertEquals(listOf("@@ -3,2 +3,2 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun aDeletionWithoutContextIsNumberedOnBothSides() {
+    val diff = roundTrip("a\nb\nc\nd\ne\n", "a\nb\nc\nd\n", context = 0)
+    assertEquals(listOf("@@ -5 +4,0 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun zeroCountHunksFromOtherToolsApplyInPlace() {
+    val source = TextContent.of("a\nb\nc\nd\ne\n")
+    fun applied(hunks: String): String {
+      val patch = UnifiedDiff.parse("--- a\n+++ b\n$hunks")
+      return UnifiedDiff.apply(source, patch).toBytes().decodeToString()
+    }
+
+    assertEquals("a\nb\nc\nd\nINS\ne\n", applied("@@ -4,0 +5 @@\n+INS\n"))
+    assertEquals("TOP\na\nb\nc\nd\ne\n", applied("@@ -0,0 +1 @@\n+TOP\n"))
+    assertEquals("a\nb\nc\nd\n", applied("@@ -5 +4,0 @@\n-e\n"))
+  }
+
+  @Test
+  fun aHunkNumberedZeroThatClaimsLinesIsRefused() {
+    assertFailsWith<KiffException.InvalidPatch> {
+      UnifiedDiff.apply(
+        TextContent.of("a\nb\n"),
+        UnifiedDiff.parse("--- a\n+++ b\n@@ -0,1 +0,0 @@\n-a\n")
+      )
+    }
+  }
+
+  @Test
+  fun laterHunksCountWhatEarlierOnesChanged() {
+    val source = (1..40).joinToString("") { "line $it\n" }
+    val target = source
+      .replace("line 5\n", "line 5\nnew 1\nnew 2\nnew 3\n")
+      .replace("line 30\n", "line 30 edited\n")
+    val diff = roundTrip(source, target)
+    assertEquals(listOf("@@ -3,6 +3,9 @@", "@@ -27,7 +30,7 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun anEmptiedFileIsNumberedFromZeroOnTheTargetSide() {
+    val diff = roundTrip("a\nb\nc\n", "")
+    assertEquals(listOf("@@ -1,3 +0,0 @@"), headers(diff), diff)
+  }
+
+  @Test
+  fun everyContextRoundTripsAndNumbersBothSides() {
+    val random = Random(1)
+    val alphabet = listOf("a", "b", "c", "d", "e", "f")
+    // Either side may lack a final newline, which is where most of the ways to get this wrong are.
+    fun text(): String {
+      val lines = List(random.nextInt(0, 12)) { alphabet.random(random) }
+      return lines.joinToString("\n") + if (lines.isNotEmpty() && random.nextBoolean()) "\n" else ""
+    }
+    repeat(1_500) {
+      val source = text()
+      val target = text()
+      val context = random.nextInt(0, 4)
+      val diff = roundTrip(source, target, context)
+      if (diff.isEmpty()) return@repeat
+      // Each side is numbered on its own, so the lines before a hunk differ between the sides by
+      // exactly what the hunks before it added or removed.
+      var shift = 0
+      for (hunk in UnifiedDiff.parse(diff).hunks) {
+        val sourceBefore = hunk.sourceStart - if (hunk.sourceCount == 0) 0 else 1
+        val targetBefore = hunk.targetStart - if (hunk.targetCount == 0) 0 else 1
+        assertEquals(shift, targetBefore - sourceBefore, diff)
+        shift += hunk.targetCount - hunk.sourceCount
+      }
+    }
+  }
+
+  @Test
+  fun aNegativeContextIsRefused() {
+    val a = TextContent.of("a\n")
+    val b = TextContent.of("b\n")
+    assertFailsWith<IllegalArgumentException> {
+      UnifiedDiff.format(a, b, engine.generatePatch(a.lines, b.lines).edits, context = -1)
+    }
+  }
+
+  @Test
+  fun aHugeContextIsTheWholeFile() {
+    val source = (1..10).joinToString("") { "$it\n" }
+    val target = source.replace("2\n", "X\n").replace("9\n", "Y\n")
+    for (context in listOf(1 shl 30, Int.MAX_VALUE)) {
+      assertEquals(listOf("@@ -1,10 +1,10 @@"), headers(roundTrip(source, target, context)))
+    }
+  }
+
+  private fun headers(diff: String) = diff.lines().filter { it.startsWith("@@") }
 
   @Test
   fun identicalFilesProduceNothing() {
@@ -116,6 +291,129 @@ class UnifiedDiffTest {
     val applied = UnifiedDiff.apply(TextContent.of("alpha\nbeta\ngamma\n"), patch)
     assertEquals("alpha\nBETA\ngamma\n", applied.toBytes().decodeToString())
   }
+
+  @Test
+  fun aDiffThatDoesNotHoldTogetherIsRefused() {
+    val source = TextContent.of("a\nb\nc\n")
+    val cases = listOf(
+      // Numbers past Int used to escape as a NumberFormatException.
+      "@@ -99999999999 +1 @@\n+x\n",
+      "@@ -1,99999999999 +1 @@\n a\n",
+      "@@ -1 +99999999999 @@\n a\n",
+      "@@ -x +1 @@\n a\n",
+      "garbage\n",
+      // Cut short: this applied the two lines it had and returned a file that is neither side.
+      "@@ -1,3 +1,4 @@\n a\n+x\n",
+      // Lines past the counts, which patch(1) and git apply leave out: this applied them.
+      "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n+evil\n",
+      "@@ -1,99 +1 @@\n a\n",
+      "@@ -1 +1 @@\n?a\n",
+      "@@ -3 +3 @@\n-c\n+C\n@@ -1 +1 @@\n-a\n+A\n",
+      "@@ -9 +9 @@\n-z\n+Z\n"
+    )
+    for (hunks in cases) {
+      assertFailsWith<KiffException.InvalidPatch>(hunks) {
+        UnifiedDiff.apply(source, UnifiedDiff.parse("--- a\n+++ b\n$hunks"))
+      }
+    }
+  }
+
+  @Test
+  fun aHunkBuiltWithCountsItsBodyDoesNotHaveIsRefused() {
+    val patch = UnifiedDiff.Patch("a", "b", listOf(UnifiedDiff.Hunk(1, 2, 1, 2, listOf(" a"))))
+    assertFailsWith<KiffException.InvalidPatch> {
+      UnifiedDiff.apply(TextContent.of("a\nb\n"), patch)
+    }
+  }
+
+  @Test
+  fun diffsFromOtherToolsAreRead() {
+    fun applied(source: String, diff: String) =
+      UnifiedDiff.apply(TextContent.of(source), UnifiedDiff.parse(diff)).toBytes().decodeToString()
+
+    val git = """
+      |diff --git a/f b/f
+      |index 1234567..89abcde 100644
+      |--- a/f
+      |+++ b/f
+      |@@ -1,3 +1,3 @@
+      | a
+      |-b
+      |+B
+      | c
+      |
+    """.trimMargin()
+    assertEquals("a\nB\nc\n", applied("a\nb\nc\n", git))
+    assertEquals("a/f", UnifiedDiff.parse(git).sourceName)
+
+    // An empty context line that lost its leading space on the way.
+    assertEquals("a\n\nB\n", applied("a\n\nb\n", "--- a\n+++ b\n@@ -1,3 +1,3 @@\n a\n\n-b\n+B\n"))
+    // A marker in another language.
+    assertEquals(
+      "b\n",
+      applied("a", "--- a\n+++ b\n@@ -1 +1 @@\n-a\n\\ Kein Zeilenumbruch am Dateiende.\n+b\n")
+    )
+    val stamped = "--- a.txt\t2026-01-01 00:00:00.000000000 +0000\n" +
+      "+++ b.txt\t2026-01-02 00:00:00.000000000 +0000\n@@ -1 +1 @@\n-a\n+b\n"
+    assertEquals("a.txt", UnifiedDiff.parse(stamped).sourceName)
+    assertEquals("b.txt", UnifiedDiff.parse(stamped).targetName)
+  }
+
+  @Test
+  fun headerNamesSurviveTheirRoundTrip() {
+    val a = TextContent.of("a\n")
+    val b = TextContent.of("b\n")
+    val edits = engine.generatePatch(a.lines, b.lines).edits
+    val diff = UnifiedDiff.format(a, b, edits, "my file.txt", "odd\"na\\me\n")
+    // The tab is how patch(1) finds where a name with a space ends.
+    assertTrue(diff.startsWith("--- my file.txt\t\n+++ \"odd\\\"na\\\\me\\n\"\n"), diff)
+    val patch = UnifiedDiff.parse(diff)
+    assertEquals("my file.txt", patch.sourceName)
+    assertEquals("odd\"na\\me\n", patch.targetName)
+    val quoted = "--- \"\\303\\274n\\303\\257code\"\n+++ b\n"
+    assertEquals("ünïcode", UnifiedDiff.parse(quoted).sourceName)
+  }
+
+  @Test
+  fun bytesInAnyEncodingAreDiffedAsTheyAre() {
+    // Latin-1 é and è. Decoded as UTF-8 both became the replacement character, and two different
+    // files diffed to nothing.
+    val source = "caf".encodeToByteArray() + byteArrayOf(0xE9.toByte(), 0x0A)
+    val target = "caf".encodeToByteArray() + byteArrayOf(0xE8.toByte(), 0x0A)
+    val diff = UnifiedDiff.formatBytes(source, target)
+    assertTrue(diff.containsBytes("-caf".encodeToByteArray() + byteArrayOf(0xE9.toByte(), 0x0A)))
+    assertTrue(diff.containsBytes("+caf".encodeToByteArray() + byteArrayOf(0xE8.toByte(), 0x0A)))
+    assertTrue(!diff.containsBytes(byteArrayOf(0xEF.toByte(), 0xBF.toByte(), 0xBD.toByte())))
+  }
+
+  @Test
+  fun everyByteValueSurvivesTheRoundTrip() {
+    val target = ByteArray(512) { if (it % 2 == 1) '\n'.code.toByte() else (it / 2).toByte() }
+    for (sourceText in listOf("", "x\ty\n")) {
+      val source = sourceText.encodeToByteArray()
+      val diff = bytesAsChars(UnifiedDiff.formatBytes(source, target))
+      val applied = UnifiedDiff.apply(TextContent.of(sourceText), UnifiedDiff.parse(diff))
+      val text = applied.lines.joinToString("\n") + if (applied.endsWithNewline) "\n" else ""
+      assertContentEquals(target, charsAsBytes(text))
+    }
+  }
+
+  @Test
+  fun identicalBytesDiffToNothing() {
+    val bytes = "a\tb\n".encodeToByteArray() + byteArrayOf(0xFF.toByte())
+    assertEquals(0, UnifiedDiff.formatBytes(bytes, bytes.copyOf()).size)
+  }
+
+  @Test
+  fun textThatIsNotUtf8IsRefusedRatherThanReplaced() {
+    assertFailsWith<KiffException.UnsupportedInput> {
+      TextContent.of(byteArrayOf(0x63, 0xE9.toByte(), 0x0A))
+    }
+    assertEquals(listOf("café"), TextContent.of("café\n".encodeToByteArray()).lines)
+  }
+
+  private fun ByteArray.containsBytes(part: ByteArray): Boolean =
+    (0..size - part.size).any { at -> part.indices.all { this[at + it] == part[it] } }
 
   @Test
   fun textContentRoundTripsAnyBytesItSplits() {

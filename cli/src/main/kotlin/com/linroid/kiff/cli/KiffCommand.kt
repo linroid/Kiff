@@ -32,9 +32,12 @@ abstract class KiffCommand(name: String) : CliktCommand(name = name) {
   /** Runs the command. See [run] for the failures that are reported rather than thrown. */
   protected abstract fun execute()
 
+  /** The exit status of a reported failure. */
+  protected open val troubleStatus: Int = 1
+
   /** Borrows Clikt's own `Error:` label and styling so a library failure looks like any other. */
   private fun reported(message: String?): CliktError {
     val label = currentContext.terminal.theme.danger(currentContext.localization.usageError())
-    return CliktError("$label $message")
+    return CliktError("$label $message", statusCode = troubleStatus)
   }
 }

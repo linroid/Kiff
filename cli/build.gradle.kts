@@ -6,6 +6,7 @@ plugins {
 dependencies {
   implementation(projects.library)
   implementation(libs.clikt)
+  testImplementation(libs.kotlin.test)
 }
 
 application {
