@@ -10,24 +10,52 @@ import com.linroid.kiff.format.Crc32
  * result in memory - only somewhere to put it. That matters most exactly where patches are applied:
  * a device installing an app update has far less room than the build server that made the patch.
  *
- * Implement this to send a restore straight to a file, a socket, or an installer.
+ * What a target receives is not yet verified. A region's checksum is compared when the region
+ * ends and the target's when its last byte has been written, so until `applyPatch` returns,
+ * everything written is provisional, and if it throws, the output must be discarded - it may hold
+ * part of the target and some bytes that are wrong. Write somewhere that can be thrown away, and
+ * leave anything that cannot be undone, such as committing an install, overwriting the source or
+ * telling a peer the transfer is complete, until `applyPatch` has returned.
+ * [Kiff.applyPatch][com.linroid.kiff.Kiff.applyPatch] does this for a file, writing to a temporary
+ * file it moves into place only once the restore verified.
  */
 interface RestoreTarget {
-  /** Appends `bytes[from, to)` to the end of the restored output. */
+  /**
+   * Appends `bytes[from, to)` to the end of the restored output.
+   *
+   * [bytes] is lent for the length of the call: Kiff reuses the array for later writes, so a
+   * target that needs the bytes afterwards copies them. Kiff has already checksummed them, so a
+   * target may change or clear the array in place.
+   */
   fun write(bytes: ByteArray, from: Int, to: Int)
 }
 
-/** Collects a restore into a [ByteArray], for callers that wanted the bytes anyway. */
-class ByteArrayRestoreTarget(size: Int) : RestoreTarget {
-  private val bytes = ByteArray(size)
+/**
+ * Collects a restore into a [ByteArray] of [size] bytes, for callers that wanted the bytes anyway.
+ *
+ * The array is allocated when the first byte arrives rather than up front, so a restore refused
+ * before writing anything costs nothing, however large a size it declared.
+ */
+class ByteArrayRestoreTarget(private val size: Int) : RestoreTarget {
+  private var bytes: ByteArray? = null
   private var at = 0
 
+  init {
+    require(size >= 0) { "Size must not be negative: $size" }
+  }
+
   override fun write(bytes: ByteArray, from: Int, to: Int) {
-    bytes.copyInto(this.bytes, at, from, to)
+    if (to == from) return
+    val into = this.bytes ?: ByteArray(size).also { this.bytes = it }
+    bytes.copyInto(into, at, from, to)
     at += to - from
   }
 
-  fun toByteArray(): ByteArray = if (at == bytes.size) bytes else bytes.copyOf(at)
+  /** The bytes written so far: the array itself once it is full, otherwise a copy of them. */
+  fun toByteArray(): ByteArray {
+    val collected = bytes ?: return ByteArray(0)
+    return if (at == collected.size) collected else collected.copyOf(at)
+  }
 }
 
 /**
@@ -72,9 +100,11 @@ internal class CheckedRestoreTarget(
   private var region: Crc32.Running? = null
 
   override fun accept(bytes: ByteArray, from: Int, to: Int) {
-    out.write(bytes, from, to)
+    // Checksummed before they are handed on, so the checksums describe what the restore produced
+    // rather than whatever a target left in the array.
     whole.update(bytes, from, to)
     region?.update(bytes, from, to)
+    out.write(bytes, from, to)
   }
 
   fun startRegion() {

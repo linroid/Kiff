@@ -35,15 +35,25 @@ internal object TextRegion {
    * `[starts[i], starts[i + 1])` and there are `size - 1` lines.
    */
   fun lineStarts(bytes: ByteArray, from: Int, to: Int): IntArray {
-    if (to <= from) return intArrayOf(from)
-    val starts = ArrayList<Int>(16)
-    starts.add(from)
-    for (i in from until to) {
-      // A newline at the very end terminates the last line; it does not open an empty one.
-      if (bytes[i] == NEWLINE && i + 1 < to) starts.add(i + 1)
+    val starts = IntArray(lineCount(bytes, from, to, Int.MAX_VALUE) + 1)
+    var line = 0
+    starts[line++] = from
+    // A newline at the very end terminates the last line; it does not open an empty one.
+    for (i in from until to - 1) {
+      if (bytes[i] == NEWLINE) starts[line++] = i + 1
     }
-    starts.add(to)
-    return starts.toIntArray()
+    if (to > from) starts[line] = to
+    return starts
+  }
+
+  /** Lines in `bytes[from, to)`, counted no further than one past [limit]. */
+  private fun lineCount(bytes: ByteArray, from: Int, to: Int, limit: Int): Int {
+    if (to <= from) return 0
+    var lines = 1
+    for (i in from until to - 1) {
+      if (bytes[i] == NEWLINE && ++lines > limit) return lines
+    }
+    return lines
   }
 
   /**
@@ -82,9 +92,15 @@ internal object TextRegion {
     targetTo: Int,
     literals: ByteWriter
   ): ByteArray? {
+    // Counted before anything is allocated, so a region with too many lines costs one pass to turn
+    // down rather than an index of all of them.
+    if (lineCount(source, sourceFrom, sourceTo, MAX_LINES) > MAX_LINES ||
+      lineCount(target, targetFrom, targetTo, MAX_LINES) > MAX_LINES
+    ) {
+      return null
+    }
     val sourceStarts = lineStarts(source, sourceFrom, sourceTo)
     val targetStarts = lineStarts(target, targetFrom, targetTo)
-    if (sourceStarts.size - 1 > MAX_LINES || targetStarts.size - 1 > MAX_LINES) return null
     val sourceLines = keysOf(source, sourceStarts)
     val targetLines = keysOf(target, targetStarts)
 
@@ -134,10 +150,9 @@ internal object TextRegion {
     out: RestoreTarget,
     length: Int
   ): Int {
-    val starts = lineStarts(source, 0, source.size)
-    val lineCount = starts.size - 1
-
-    var sourceLine = 0
+    // Lines are found as the script reaches them, walking forward from the last. An index of every
+    // line would cost several times the range in memory, and the range is the patch's to choose.
+    var cursor = 0
     var produced = 0
     var literalPosition = literalFrom
 
@@ -145,20 +160,14 @@ internal object TextRegion {
       when (val op = edits.readByte()) {
         OP_END -> break
         OP_EQUAL -> {
-          val lines = edits.readVarInt()
-          val from = lineAt(starts, sourceLine, lines, lineCount)
-          val to = starts[sourceLine + lines]
-          val span = to - from
+          val from = cursor
+          cursor = skipLines(source, cursor, edits.readVarInt())
+          val span = cursor - from
           checkFits(produced, span, length)
-          out.write(source, from, to)
+          out.write(source, from, cursor)
           produced += span
-          sourceLine += lines
         }
-        OP_DELETE -> {
-          val lines = edits.readVarInt()
-          lineAt(starts, sourceLine, lines, lineCount)
-          sourceLine += lines
-        }
+        OP_DELETE -> cursor = skipLines(source, cursor, edits.readVarInt())
         OP_INSERT -> {
           val span = edits.readVarInt()
           checkFits(produced, span, length)
@@ -194,12 +203,28 @@ internal object TextRegion {
       chars.concatToString()
     }
 
-  // Both bounds are subtractions, so a count near Int.MAX_VALUE cannot wrap past them.
-  private fun lineAt(starts: IntArray, line: Int, count: Int, lineCount: Int): Int {
-    if (count < 0 || count > lineCount - line) {
+  /**
+   * Where the line [count] lines after the one starting at [from] starts, or the end of [source]
+   * after its last line.
+   *
+   * A count past the last line is refused as soon as the walk reaches the end, so even one near
+   * Int.MAX_VALUE costs no more than a pass over the source.
+   */
+  private fun skipLines(source: ByteArray, from: Int, count: Int): Int {
+    if (count < 0) {
       throw KiffException.InvalidPatch("Text region names lines outside the source region")
     }
-    return starts[line]
+    var at = from
+    repeat(count) {
+      if (at >= source.size) {
+        throw KiffException.InvalidPatch("Text region names lines outside the source region")
+      }
+      // Up to and including the newline, or to the end when the last line has none.
+      while (at < source.size) {
+        if (source[at++] == NEWLINE) break
+      }
+    }
+    return at
   }
 
   private fun checkFits(produced: Int, span: Int, length: Int) {

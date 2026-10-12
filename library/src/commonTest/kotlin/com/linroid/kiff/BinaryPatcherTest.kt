@@ -143,6 +143,29 @@ class BinaryPatcherTest {
   }
 
   @Test
+  fun refusesATargetSizeItsTreeDoesNotCoverWithoutAllocatingIt() {
+    // A header naming almost 2 GB for a patch whose tree describes one byte: the array overload
+    // used to allocate the header's figure before the tree had a say.
+    val patch = patcher.createPatch(ByteArray(0), byteArrayOf(1))
+    val reader = ByteReader(patch)
+    val header = PatchFormat.readHeader(reader)
+    val out = ByteWriter(patch.size)
+    PatchFormat.writeHeader(
+      out,
+      header.patcher,
+      header.sourceSize,
+      header.sourceCrc32,
+      Int.MAX_VALUE - 8L,
+      header.targetCrc32,
+      header.flags
+    )
+    out.writeBytes(patch.copyOfRange(reader.offset, patch.size))
+    assertFailsWith<KiffException.InvalidPatch> {
+      patcher.applyPatch(ByteArray(0), out.toByteArray())
+    }
+  }
+
+  @Test
   fun rejectsARestoreThatFailsItsChecksum() {
     val source = structuredBytes(4096, seed = 17)
     val target = structuredBytes(4096, seed = 18)

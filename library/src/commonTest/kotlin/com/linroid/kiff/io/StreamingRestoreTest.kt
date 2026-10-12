@@ -2,6 +2,8 @@ package com.linroid.kiff.io
 
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
+import com.linroid.kiff.format.ByteReader
+import com.linroid.kiff.format.PatchFormat
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
@@ -114,5 +116,44 @@ class StreamingRestoreTest {
       failure is KiffException.VerificationFailed || failure is KiffException.InvalidPatch,
       "expected a refusal, got ${failure::class.simpleName}: ${failure.message}"
     )
+  }
+
+  /** Keeps a copy of what it is lent, then scribbles over the array it was handed. */
+  private class Scrambling : RestoreTarget {
+    val bytes = mutableListOf<Byte>()
+
+    override fun write(bytes: ByteArray, from: Int, to: Int) {
+      for (i in from until to) this.bytes.add(bytes[i])
+      bytes.fill(0x5A, from, to)
+    }
+  }
+
+  @Test
+  fun aTargetMayChangeWhatItWasLent() {
+    // The checksums were taken after the hand-off, so a target that reused or cleared the array
+    // turned a good restore into a VerificationFailed; and a long run was filled once and handed
+    // out again, so the second chunk was whatever the target left.
+    val plain = structuredBytes(300_000, seed = 3)
+    val updated = plain.copyOf().also { it.fill(7, 100_000, 300_000) }
+    val patch = Kiff.binary.createPatch(plain, updated)
+    val scrambled = Scrambling()
+    Kiff.binary.applyPatch(plain.asSource(), patch, scrambled)
+    assertContentEquals(updated, scrambled.bytes.toByteArray())
+  }
+
+  @Test
+  fun aRefusedRestoreHasAlreadyStreamedWhatItWrote() {
+    // The contract a streaming target has to live with: the final checksum is compared after the
+    // last byte, so a refusal can come once everything has been handed over.
+    val patch = Kiff.zip.createPatch(source, target)
+    val header = ByteReader(patch)
+    PatchFormat.readHeader(header)
+    patch[header.offset - 1] = (patch[header.offset - 1] + 1).toByte()
+
+    val recording = Recording()
+    assertFailsWith<KiffException.VerificationFailed> {
+      Kiff.zip.applyPatch(source.asSource(), patch, recording)
+    }
+    assertEquals(target.size, recording.bytes.size)
   }
 }

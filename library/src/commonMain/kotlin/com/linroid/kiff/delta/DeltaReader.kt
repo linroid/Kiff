@@ -112,11 +112,11 @@ internal class DeltaReader(private val buffer: ByteArray = ByteArray(CHUNK)) {
   }
 
   private fun fill(value: Byte, length: Int, out: RestoreTarget) {
-    val filled = minOf(buffer.size, length)
-    buffer.fill(value, 0, filled)
     var done = 0
     while (done < length) {
-      val step = minOf(filled, length - done)
+      // Filled again for every chunk: a target may change what it was lent.
+      val step = minOf(buffer.size, length - done)
+      buffer.fill(value, 0, step)
       out.write(buffer, 0, step)
       done += step
     }
