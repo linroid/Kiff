@@ -13,15 +13,20 @@ import com.linroid.kiff.KiffException
  */
 internal fun SeekableSource.materialize(label: String): ByteArraySource {
   if (this is ByteArraySource) return this
+  requireIndexable(label)
+  val bytes = ByteArray(size.toInt())
+  readFully(0, bytes)
+  return ByteArraySource(bytes)
+}
+
+/** Refuses a source [materialize] could not hold, without reading any of it. */
+internal fun SeekableSource.requireIndexable(label: String) {
   if (size > Int.MAX_VALUE) {
     throw KiffException.UnsupportedInput(
       "$label is ${size} bytes; the bundled algorithm indexes at most ${Int.MAX_VALUE}. " +
         "The patch format addresses more, but a streaming search is not implemented yet."
     )
   }
-  val bytes = ByteArray(size.toInt())
-  readFully(0, bytes)
-  return ByteArraySource(bytes)
 }
 
 /** Fails loudly rather than silently truncating when a 64-bit value has to index an array. */

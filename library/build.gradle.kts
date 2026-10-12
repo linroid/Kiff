@@ -21,7 +21,15 @@ kotlin {
     browser()
   }
 
-  applyDefaultHierarchyTemplate()
+  applyDefaultHierarchyTemplate {
+    // The POSIX file calls Apple and Linux share and Windows lacks.
+    common {
+      group("posix") {
+        withApple()
+        withLinux()
+      }
+    }
+  }
 
   sourceSets {
     commonMain.dependencies {

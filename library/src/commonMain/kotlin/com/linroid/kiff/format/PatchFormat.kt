@@ -40,6 +40,12 @@ internal object PatchFormat {
    */
   const val FLAG_REGION_CHECKSUMS = 1
 
+  /**
+   * The most bytes a header can take: the magic, three single bytes, and two sizes as varints of
+   * at most ten bytes, each with its four-byte checksum.
+   */
+  const val LONGEST_HEADER = 4 + 3 + 2 * (10 + 4)
+
   fun writeHeader(
     out: ByteWriter,
     patcher: PatcherId,

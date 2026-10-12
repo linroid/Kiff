@@ -62,7 +62,7 @@ class InfoCommand : KiffCommand(name = "info") {
 
   override fun execute() {
     requireFile(patch)
-    echoInfo(Kiff.info(KiffFiles.readBytes(patch)))
+    echoInfo(Kiff.info(patch))
   }
 }
 

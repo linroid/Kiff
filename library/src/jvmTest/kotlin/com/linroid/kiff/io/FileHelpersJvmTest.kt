@@ -5,6 +5,11 @@ import com.linroid.kiff.KiffException
 import com.linroid.kiff.format.ByteReader
 import com.linroid.kiff.format.PatchFormat
 import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -40,7 +45,7 @@ class FileHelpersJvmTest {
     File(dir, name).apply { writeBytes(bytes) }
 
   private fun assertNoTemporaryFilesLeft() {
-    val leftovers = dir.listFiles().orEmpty().filter { it.name.endsWith(".kiff-tmp") }
+    val leftovers = dir.listFiles().orEmpty().filter { it.name.startsWith(".kiff-") }
     assertTrue(leftovers.isEmpty(), "temporary files left behind: $leftovers")
   }
 
@@ -116,5 +121,107 @@ class FileHelpersJvmTest {
     assertContentEquals(Kiff.binary.createPatch(source, target), patch.readBytes())
     assertEquals(patch.length(), info.patchSize)
     assertNoTemporaryFilesLeft()
+  }
+
+  @Test
+  fun anUpdateInPlaceKeepsTheFileMode() {
+    // The replacement is a new file, and it used to get the default mode: an executable updated
+    // in place could no longer run, and a private file became readable by everyone.
+    if ("posix" !in FileSystems.getDefault().supportedFileAttributeViews()) return
+    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    for (mode in listOf("rwxr-x---", "rw-------", "r--r--r--")) {
+      val file = write("app-$mode.bin", source)
+      Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString(mode))
+
+      Kiff.applyPatch(file.path, patch.path, file.path)
+      val kept = PosixFilePermissions.toString(Files.getPosixFilePermissions(file.toPath()))
+      assertEquals(mode, kept)
+      assertContentEquals(target, file.readBytes())
+    }
+    assertNoTemporaryFilesLeft()
+  }
+
+  @Test
+  fun anUpdateThroughASymlinkUpdatesTheFileItNames() {
+    // The link itself used to be replaced by a regular file, leaving what it named unchanged.
+    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val real = write("app-1.0.bin", source)
+    val link = File(dir, "app.bin").toPath()
+    Files.createSymbolicLink(link, real.toPath().fileName)
+
+    Kiff.applyPatch(link.toString(), patch.path, link.toString())
+    assertTrue(Files.isSymbolicLink(link), "the link should still be a link")
+    assertContentEquals(target, real.readBytes())
+    assertNoTemporaryFilesLeft()
+  }
+
+  @Test
+  fun aNameNearTheLimitCanStillBeWritten() {
+    // The temporary file was the destination's name plus 26 characters, past the limit for a name
+    // that is itself within it.
+    val file = File(dir, "a".repeat(250))
+    KiffFiles.writeBytes(file.path, target)
+    assertContentEquals(target, file.readBytes())
+    assertNoTemporaryFilesLeft()
+  }
+
+  @Test
+  fun aDirectoryIsRefusedByTheNameItWasGiven() {
+    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val input = write("old.bin", source)
+    val folder = File(dir, "out").apply { mkdirs() }
+    for (name in listOf(folder.path, folder.path + "/")) {
+      val failure = assertFailsWith<IOException> { Kiff.applyPatch(input.path, patch.path, name) }
+      assertTrue(failure.message.orEmpty().startsWith("Cannot write $name"), failure.message)
+      assertTrue(folder.listFiles().orEmpty().isEmpty(), "nothing should be written inside it")
+    }
+    assertNoTemporaryFilesLeft()
+  }
+
+  @Test
+  fun aPatchIsNotWrittenOverItsOwnInput() {
+    // `kiff create old new old`: the source was read, and then replaced by the patch built from
+    // it, which can never be applied without it.
+    val input = write("old.bin", source)
+    val updated = write("new.bin", target)
+    for (patchPath in listOf(input.path, updated.path)) {
+      val failure = assertFailsWith<IOException> {
+        Kiff.createPatch(Kiff.binary, input.path, updated.path, patchPath)
+      }
+      assertTrue(failure.message.orEmpty().startsWith("Cannot write $patchPath"), failure.message)
+    }
+    assertContentEquals(source, input.readBytes())
+    assertContentEquals(target, updated.readBytes())
+  }
+
+  /** A file of [size] bytes beginning with [start], almost all of it never written to disk. */
+  private fun sparse(name: String, size: Long, start: ByteArray = ByteArray(0)): File =
+    File(dir, name).apply {
+      RandomAccessFile(this, "rw").use {
+        it.write(start)
+        it.setLength(size)
+      }
+    }
+
+  @Test
+  fun aFileTooLargeToHoldIsRefusedBeforeAnyOfItIsRead() {
+    // Read whole and only then found too large, it failed with an IllegalArgumentException, or
+    // ran out of memory first.
+    val huge = sparse("huge.bin", Int.MAX_VALUE + 16L)
+    val failure = assertFailsWith<KiffException.UnsupportedInput> { KiffFiles.readBytes(huge.path) }
+    assertTrue(failure.message.orEmpty().startsWith(huge.path), failure.message)
+  }
+
+  @Test
+  fun infoReadsTheHeaderAlone() {
+    val bytes = Kiff.binary.createPatch(source, target)
+    val patch = write("delta.patch", bytes)
+    assertEquals(Kiff.info(bytes), Kiff.info(patch.path))
+
+    // A header followed by more than an array could hold: read whole, this never got as far as
+    // the header.
+    val huge = sparse("huge.patch", Int.MAX_VALUE + 16L, bytes.copyOf(PatchFormat.LONGEST_HEADER))
+    assertEquals(Int.MAX_VALUE + 16L, Kiff.info(huge.path).patchSize)
+    assertFailsWith<KiffException.InvalidPatch> { Kiff.info(write("not.patch", previous).path) }
   }
 }
