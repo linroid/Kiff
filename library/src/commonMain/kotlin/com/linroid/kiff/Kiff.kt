@@ -22,6 +22,14 @@ object Kiff {
   fun patcherOrNull(name: String): Patcher? =
     patchers.firstOrNull { it.name.equals(name, ignoreCase = true) }
 
+  /**
+   * The [PatchInfo.formatVersion]s this build can read; every patch it writes is one of them.
+   *
+   * An updater offered patches in several formats - a manifest names each one's - can pass over
+   * those it would refuse before downloading them, rather than after.
+   */
+  val readableFormats: Set<Int> = PatchFormat.SUPPORTED
+
   /** Reads the header of [patch] without applying it. */
   fun info(patch: ByteArray): PatchInfo =
     infoOf(PatchFormat.readHeader(ByteReader(patch)), patch.size.toLong())

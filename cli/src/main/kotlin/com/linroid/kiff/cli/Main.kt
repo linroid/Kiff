@@ -17,6 +17,7 @@ import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.text.UnifiedDiff
 import java.io.IOException
 import java.io.OutputStream
+import java.util.Properties
 import kotlin.system.exitProcess
 
 class RootCommand : CliktCommand(name = "kiff") {
@@ -85,6 +86,13 @@ class DiffCommand(private val out: OutputStream = System.out) : KiffCommand(name
   }
 }
 
+/** This build's version, which Gradle writes into a resource beside this class. */
+internal val kiffVersion: String by lazy {
+  val properties = Properties()
+  RootCommand::class.java.getResourceAsStream("version.properties")?.use { properties.load(it) }
+  properties.getProperty("version") ?: "unknown"
+}
+
 internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
   .subcommands(
     DiffCommand(out),
@@ -92,7 +100,8 @@ internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
     ApplyCommand(),
     InfoCommand(),
     ChangesCommand(),
-    ExplainCommand()
+    ExplainCommand(),
+    ReleaseCommand()
   )
 
 /** Runs the command line [args] describe and answers the exit status, as Clikt's `main` would. */

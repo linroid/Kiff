@@ -36,7 +36,7 @@ abstract class KiffCommand(name: String) : CliktCommand(name = name) {
   protected open val troubleStatus: Int = 1
 
   /** Borrows Clikt's own `Error:` label and styling so a library failure looks like any other. */
-  private fun reported(message: String?): CliktError {
+  protected fun reported(message: String?): CliktError {
     val label = currentContext.terminal.theme.danger(currentContext.localization.usageError())
     return CliktError("$label $message", statusCode = troubleStatus)
   }
