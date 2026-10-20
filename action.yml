@@ -1,0 +1,143 @@
+name: Kiff Release Patches
+description: >-
+  Make delta patches from earlier releases to a new one, check that each restores the new file
+  exactly, and attach them with a manifest that an app's updater reads.
+author: linroid
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  assets:
+    description: >-
+      Glob patterns for the names of the release's files to patch, one per line. Each must match
+      one file of the release, and at most one of each earlier release.
+    required: true
+  tag:
+    description: >-
+      Tag of the release to make patches for, which may be a draft. Defaults to the release
+      event's tag, or else the pushed tag.
+    required: false
+    default: ''
+  previous:
+    description: >-
+      How many earlier releases to make patches from: the closest ones in version order that have
+      the file.
+    required: false
+    default: '3'
+  from:
+    description: Tags of the releases to make patches from, one per line, in place of previous.
+    required: false
+    default: ''
+  prereleases:
+    description: Whether prereleases can be patched from.
+    required: false
+    default: 'false'
+  patcher:
+    description: >-
+      auto, binary, zip or apk. auto picks apk for a .apk file, zip for any other zip archive and
+      binary for the rest.
+    required: false
+    default: auto
+  max-ratio:
+    description: Drop a patch larger than this share of the file it rebuilds.
+    required: false
+    default: '0.8'
+  name:
+    description: >-
+      Name of each patch. {target} is the file's name, {from} and {to} are the tags.
+    required: false
+    default: '{target}.from-{from}.kiff'
+  manifest:
+    description: >-
+      Name of the manifest that lists the patches. Give each workflow its own when several attach
+      patches to one release.
+    required: false
+    default: kiff-patches.json
+  upload:
+    description: >-
+      Whether to attach the patches and the manifest to the release. With false they are only
+      left in the directory output.
+    required: false
+    default: 'true'
+  repository:
+    description: The repository whose releases are read and attached to, as OWNER/NAME.
+    required: false
+    default: ${{ github.repository }}
+  token:
+    description: >-
+      Token for the GitHub API. Attaching needs contents write permission; reading is enough with
+      upload false.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  directory:
+    description: Directory holding the patches and the manifest.
+    value: ${{ steps.patches.outputs.directory }}
+  manifest:
+    description: Path of the manifest, or empty when no file had an earlier release to patch from.
+    value: ${{ steps.patches.outputs.manifest }}
+  patches:
+    description: >-
+      The patches made, as a JSON array of objects with file, from, name, url, size and ratio.
+    value: ${{ steps.patches.outputs.patches }}
+  count:
+    description: Number of patches made.
+    value: ${{ steps.patches.outputs.count }}
+
+runs:
+  using: composite
+  steps:
+    # Inputs reach the scripts as environment variables, never spliced into a run line, so a tag
+    # or a file name cannot become shell.
+    - id: plan
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/plan.sh"'
+      env:
+        INPUT_ASSETS: ${{ inputs.assets }}
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_PREVIOUS: ${{ inputs.previous }}
+        INPUT_FROM: ${{ inputs.from }}
+        INPUT_PRERELEASES: ${{ inputs.prereleases }}
+        INPUT_MAX_RATIO: ${{ inputs.max-ratio }}
+        INPUT_MANIFEST: ${{ inputs.manifest }}
+        INPUT_UPLOAD: ${{ inputs.upload }}
+        GH_REPO: ${{ inputs.repository }}
+        GH_TOKEN: ${{ inputs.token }}
+
+    - id: java
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/check-java.sh"'
+
+    - if: steps.java.outputs.needed == 'true'
+      uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - id: cli
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh"'
+
+    - id: patches
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/make-patches.sh"'
+      env:
+        PLAN: ${{ steps.plan.outputs.plan }}
+        KIFF: ${{ steps.cli.outputs.kiff }}
+        MAX_RATIO: ${{ steps.plan.outputs.max-ratio }}
+        MANIFEST: ${{ steps.plan.outputs.manifest }}
+        INPUT_PATCHER: ${{ inputs.patcher }}
+        INPUT_NAME: ${{ inputs.name }}
+        GH_TOKEN: ${{ inputs.token }}
+
+    - if: steps.plan.outputs.upload == 'true'
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/upload.sh"'
+      env:
+        DIRECTORY: ${{ steps.patches.outputs.directory }}
+        MANIFEST: ${{ steps.patches.outputs.manifest }}
+        TAG: ${{ steps.plan.outputs.tag }}
+        GH_REPO: ${{ steps.plan.outputs.repository }}
+        GH_TOKEN: ${{ inputs.token }}
