@@ -193,6 +193,170 @@ field may be added, but anything else is a new `schema`.
 The exit status is 0 when every source gave a patch or was dropped, and 1 when any could not be
 created or verified. The other patches are still written, and the manifest lists only good ones.
 
+## GitHub Action
+
+The action at the root of this repository runs `kiff release` for a project's GitHub releases. It
+patches each new release's files from the releases before it, restores every patch and checks it
+against the new file's SHA-256, and attaches the patches and a `kiff-patches.json` manifest to the
+release. A project that already attaches its builds to releases adds one workflow:
+
+```yaml
+name: Patches
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  patches:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: linroid/Kiff@v0.1.0
+        with:
+          assets: app-*.apk
+```
+
+Publishing `v1.3.0` with `app-1.3.0.apk` then attaches a patch from each of the three releases
+before it, such as `app-1.3.0.apk.from-v1.2.0.kiff`, and the manifest. The job summary lists every
+patch with its size, its share of the file and what became of it:
+
+| File | From | Patch size | Share of file | Result |
+| --- | --- | ---: | ---: | --- |
+| `app-1.3.0.apk` | v1.2.0 | 4.6 MiB | 6.42% | restored exactly |
+| `app-1.3.0.apk` | v1.1.0 | 9.8 MiB | 13.67% | restored exactly |
+| `app-1.3.0.apk` | v1.0.0 | 60.2 MiB | 83.96% | dropped, over max-ratio 0.8 |
+
+The action runs on Linux and macOS runners, with bash, `gh` and `jq`, which hosted runners have. It
+installs Java 17 when the runner has no Java 17 or newer. kiff lets the JVM use up to 6 GiB, which
+fits hosted runners; on a smaller machine, set `KIFF_OPTS` to something like `-Xmx2g`.
+
+### Attach the patches before publishing
+
+A release that is already published can be seen by an updater before its patches arrive. Creating it
+as a draft, running the action, and only then publishing avoids that, and works however the release
+is built:
+
+```yaml
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: ./gradlew assembleRelease
+      - run: gh release create "$GITHUB_REF_NAME" --draft app/build/outputs/apk/release/app-*.apk
+      - uses: linroid/Kiff@v0.1.0
+        with:
+          assets: app-*.apk
+      - run: gh release edit "$GITHUB_REF_NAME" --draft=false
+```
+
+This is the recommended setup. The `release: published` workflow above suits releases published by
+hand, but it never runs for a release that another workflow published with the default
+`GITHUB_TOKEN`: GitHub starts no workflow for events that token causes. Publish with a GitHub App or
+personal token instead, or use the draft recipe.
+
+### Earlier releases and several files
+
+To patch a release that already exists, run the action by hand with its tag:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+
+jobs:
+  patches:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: linroid/Kiff@v0.1.0
+        with:
+          tag: ${{ inputs.tag }}
+          assets: |
+            app-*-arm64-v8a.apk
+            app-*-x86_64.apk
+            desktop-*-linux-x64.zip
+```
+
+Each line of `assets` is a glob for one file. It must match exactly one file of the release, and at
+most one of each earlier release; a pattern that matches more fails the run and names what it
+matched. `*.kiff` files and the manifest are never matched.
+
+Kiff never recompresses an archive's entries, which is what keeps a restore byte-exact. A file
+compressed as a whole, such as a `.dmg`, a `.tar.gz` or a compressed installer, changes almost
+everywhere between builds, so its patches come out near full size and `max-ratio` drops them. APKs
+and zips with stored entries are where patches pay off.
+
+### Inputs and outputs
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `assets` | required | Glob patterns for the files to patch, one per line |
+| `tag` | the event's | The release to patch, which may be a draft: the `release` event's tag, else the pushed tag |
+| `previous` | `3` | How many earlier releases to patch from |
+| `from` | | Tags to patch from, one per line, in place of `previous` |
+| `prereleases` | `false` | Whether prereleases can be patched from |
+| `patcher` | `auto` | `auto`, `binary`, `zip` or `apk`, as for `kiff release` |
+| `max-ratio` | `0.8` | Drop a patch larger than this share of its file |
+| `name` | `{target}.from-{from}.kiff` | Patch name: `{target}` is the file's name, `{from}` and `{to}` the tags |
+| `manifest` | `kiff-patches.json` | Manifest name; give each workflow its own if several patch one release |
+| `upload` | `true` | Attach the patches and manifest to the release |
+| `repository` | this one | The repository whose releases are read and attached to |
+| `token` | `github.token` | Needs `contents: write` to attach, read access with `upload: false` |
+
+The earlier releases are the closest ones before the new tag in version order, with a leading `v`
+ignored and Semantic Versioning's precedence, so `1.4.0-rc.1` comes before `1.4.0`; a tag that is
+not a version is ordered naturally. A hotfix `v1.2.5` published after `v1.3.0` is patched from
+`v1.2.4` and below, never from `v1.3.0`. A draft is never picked, and a release without the file is
+passed over without using up one of `previous`. `from` takes exactly the tags it lists, and
+only warns about one that does not have the file.
+
+The outputs are `directory`, which holds the patches and the manifest, `manifest`, its path,
+`patches`, a JSON array with the `file`, `from`, `name`, `url`, `size` and `ratio` of each patch,
+and `count`. With `upload: false` nothing is attached, so a later step can put the files on S3 or a
+CDN instead. A project that does not use GitHub releases at all can run `kiff release` itself, with
+`--base-url` set to where its files are served.
+
+### Versions
+
+The action and the CLI are released together, so `linroid/Kiff@v0.1.0` runs kiff 0.1.0, downloaded
+from that release and checked against its checksum. Any other ref, such as a branch or a commit,
+builds the CLI from the action's own source first, which adds a few minutes. Kiff has not been
+released yet, so until v0.1.0 is out, pin a commit of `main`.
+
+Pin an exact version or commit, not a branch, and move it together with the Kiff that your app uses.
+Every patch records the version of the patch format it was written in, and the Kiff inside an app
+refuses a format newer than it knows. An action ahead of the app's Kiff can write patches that no
+installed copy of the app can read, so it should never be ahead of the oldest app version you still
+update.
+
+### Updating from the manifest
+
+Every release carries its own manifest, and GitHub serves the newest published one at a fixed
+address, which skips drafts and prereleases:
+
+```text
+https://github.com/OWNER/REPO/releases/latest/download/kiff-patches.json
+```
+
+An updater fetches it and finds the entry for its file. It takes the patch whose `source.sha256` is
+the file it has installed and whose `format` is in `Kiff.readableFormats`, downloads that patch and
+checks its `sha256`, applies it, and checks the result against the file's own `sha256`. When there
+is no such patch, because the installed version is too old, was dropped for size or the release has
+no manifest, it downloads the full file from `url` instead.
+
 
 ## How a patch is built
 

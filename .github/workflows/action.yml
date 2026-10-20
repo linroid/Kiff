@@ -1,0 +1,234 @@
+name: Action
+
+# Runs the action in this repository against the fixed releases of linroid/kiff-fixtures, which it
+# only reads: see that repository's README for what each release is for.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - action.yml
+      - action/**
+      - cli/**
+      - library/**
+      - .github/scripts/**
+      - .github/workflows/action.yml
+  # No branches filter, so a pull request stacked on another one is tested too.
+  pull_request:
+    paths:
+      - action.yml
+      - action/**
+      - cli/**
+      - library/**
+      - .github/scripts/**
+      - .github/workflows/action.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FIXTURES: linroid/kiff-fixtures
+
+jobs:
+  lint:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the scripts
+        run: shellcheck --external-sources action/*.sh .github/scripts/*.sh
+
+  action:
+    name: Action (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Only caches Gradle's downloads for the build the action runs from source.
+      - uses: gradle/actions/setup-gradle@v6
+
+      # First, since it fails while planning, before the CLI is built.
+      - name: Refuse a pattern that matches several files
+        id: ambiguous
+        continue-on-error: true
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.3.0
+          assets: '*'
+          upload: false
+
+      - name: Check that the ambiguous pattern failed
+        env:
+          OUTCOME: ${{ steps.ambiguous.outcome }}
+        run: |
+          if [[ $OUTCOME != failure ]]; then
+            echo "::error::assets '*' matches four files of v1.3.0, so the action should fail," \
+              "but its outcome is $OUTCOME."
+            exit 1
+          fi
+
+      - name: Patch v1.3.0 from the three releases before it
+        id: latest
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.3.0
+          assets: |
+            app-*.apk
+            desktop-*.zip
+            tool-*.bin
+            noise-*.bin
+          upload: false
+
+      # v1.2.1 is a hotfix published after v1.3.0, but comes before it. v1.1.0 has no tool, so
+      # tool's third patch comes from v1.0.0. Every noise patch is near full size and dropped.
+      - name: Check the patches of v1.3.0
+        env:
+          PATCHES: ${{ steps.latest.outputs.patches }}
+          COUNT: ${{ steps.latest.outputs.count }}
+          MANIFEST: ${{ steps.latest.outputs.manifest }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          app-1.3.0.apk v1.2.1
+          app-1.3.0.apk v1.2.0
+          app-1.3.0.apk v1.1.0
+          desktop-1.3.0.zip v1.2.1
+          desktop-1.3.0.zip v1.2.0
+          desktop-1.3.0.zip v1.1.0
+          tool-1.3.0.bin v1.2.1
+          tool-1.3.0.bin v1.2.0
+          tool-1.3.0.bin v1.0.0
+          EOF
+          if ! jq -e '.files[] | select(.name == "noise-1.3.0.bin") | .patches == []' \
+            "$MANIFEST" > /dev/null; then
+            echo "::error::The manifest should list noise-1.3.0.bin with no patches."
+            exit 1
+          fi
+          url=https://github.com/$FIXTURES/releases/download/v1.3.0/app-1.3.0.apk.from-v1.2.1.kiff
+          if [[ $(jq -r '.[0].url' <<< "$PATCHES") != "$url" ]]; then
+            echo "::error::The first patch should be at $url."
+            exit 1
+          fi
+
+      - name: Restore every patch of v1.3.0
+        env:
+          MANIFEST: ${{ steps.latest.outputs.manifest }}
+        # uses: ./ builds the CLI from this checkout, since main's version is a snapshot.
+        run: |
+          .github/scripts/restore-patches.sh cli/build/install/kiff/bin/kiff "$MANIFEST" \
+            "$FIXTURES"
+
+      - name: Patch the hotfix v1.2.1
+        id: hotfix
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.2.1
+          assets: |
+            app-*.apk
+            tool-*.bin
+          upload: false
+
+      - name: Check v1.2.1 is never patched from v1.3.0
+        env:
+          PATCHES: ${{ steps.hotfix.outputs.patches }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          app-1.2.1.apk v1.2.0
+          app-1.2.1.apk v1.1.0
+          app-1.2.1.apk v1.0.0
+          tool-1.2.1.bin v1.2.0
+          tool-1.2.1.bin v1.0.0
+          EOF
+
+      - name: Patch the prerelease v1.4.0-rc.1
+        id: prerelease
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.4.0-rc.1
+          assets: app-*.apk
+          upload: false
+
+      - name: Check v1.4.0-rc.1 is patched from v1.3.0 and before
+        env:
+          PATCHES: ${{ steps.prerelease.outputs.patches }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          app-1.4.0-rc.1.apk v1.3.0
+          app-1.4.0-rc.1.apk v1.2.1
+          app-1.4.0-rc.1.apk v1.2.0
+          EOF
+
+      - name: Patch v1.3.0 from v1.0.0 alone
+        id: from
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.3.0
+          from: v1.0.0
+          assets: |
+            app-*.apk
+            desktop-*.zip
+            tool-*.bin
+          upload: false
+
+      - name: Check each file has one patch, from v1.0.0
+        env:
+          PATCHES: ${{ steps.from.outputs.patches }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          app-1.3.0.apk v1.0.0
+          desktop-1.3.0.zip v1.0.0
+          tool-1.3.0.bin v1.0.0
+          EOF
+
+      # v1.1.0 has no tool, which is a warning when from names it rather than a failure.
+      - name: Patch v1.3.0 from a release without one of the files
+        id: from-missing
+        uses: ./
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.3.0
+          from: |
+            v1.1.0
+            v1.0.0
+          assets: |
+            app-*.apk
+            tool-*.bin
+          name: '{target}.{from}-{to}.kiff'
+          upload: false
+
+      - name: Check the release without the file was passed over
+        env:
+          PATCHES: ${{ steps.from-missing.outputs.patches }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          app-1.3.0.apk v1.1.0
+          app-1.3.0.apk v1.0.0
+          tool-1.3.0.bin v1.0.0
+          EOF
+          name=$(jq -r '.[0].name' <<< "$PATCHES")
+          if [[ $name != app-1.3.0.apk.v1.1.0-v1.3.0.kiff ]]; then
+            echo "::error::The name input should give app-1.3.0.apk.v1.1.0-v1.3.0.kiff, not $name."
+            exit 1
+          fi
