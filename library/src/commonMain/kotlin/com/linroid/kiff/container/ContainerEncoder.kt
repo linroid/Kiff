@@ -336,7 +336,12 @@ internal class ContainerEncoder(
     val plan = planner.plan(info)
     if (plan == RegionAlgorithm.RAW) return raw(targetFrom, targetTo, literals)
 
-    var best = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
+    var best = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, null)
+    // A group's wider index is a second candidate, not a replacement for the counterpart's.
+    if (shared != null) {
+      val grouped = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
+      if (grouped.packedCost() < best.packedCost()) best = grouped
+    }
     if (plan == RegionAlgorithm.TEXT) {
       val text = textCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo)
       if (text != null && text.packedCost() < best.packedCost()) best = text
@@ -355,9 +360,16 @@ internal class ContainerEncoder(
   }
 
   /**
-   * [shared] is the index for this region's group, when it has one. The alignment still points at
-   * the counterpart, so a region that mostly did not change is still difference-encoded from the
-   * right place; the wider index only adds somewhere else to look for what did move.
+   * Searches [shared], the index for this region's group, or only the counterpart when it is null.
+   *
+   * The alignment points at the counterpart either way, so a region that mostly did not change
+   * starts out difference-encoded from the right place. A wider index is not purely additive,
+   * though, because the scanner follows wherever it last matched. Code in an R8 build differs from
+   * its counterpart in nearly every instruction - the ids it references are renumbered - so it is
+   * almost all differences against the right offset, and one short match in a sibling dex moves
+   * the alignment away: what would have been near-zero differences is carried as content until a
+   * match back in the counterpart restores it. On real release builds that made the grouped search
+   * of a dex's code pack 2-3% larger than the counterpart's alone, which is why [leaf] tries both.
    */
   private fun binaryCandidate(
     span: Int,

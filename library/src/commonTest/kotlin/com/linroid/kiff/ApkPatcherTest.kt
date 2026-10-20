@@ -2,7 +2,9 @@ package com.linroid.kiff
 
 import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.TestApkBuilder
+import com.linroid.kiff.container.TestDexBuilder
 import com.linroid.kiff.zip.TestZipBuilder
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -76,6 +78,45 @@ class ApkPatcherTest {
     assertTrue(
       grouped < ungrouped / 2,
       "grouping the dex entries should find the moved classes: $grouped against $ungrouped"
+    )
+  }
+
+  @Test
+  fun aSiblingDexCannotPullCodeAwayFromItsCounterpart() {
+    // R8 renumbers the ids nearly every instruction references, so rebuilt code matches its
+    // counterpart exactly almost nowhere and is described as differences against it, resuming
+    // after each method that was rewritten. If a rewritten method also exists in a sibling dex,
+    // searching every dex at once finds it there - and the search then follows the sibling, so
+    // the differences after it were carried as content. That must never cost more than searching
+    // the counterpart alone.
+    val code = Random(95).nextBytes(60_000)
+    val rebuilt = code.copyOf()
+    for (at in rebuilt.indices step 12) rebuilt[at] = (rebuilt[at] + 1).toByte()
+    val sibling = structuredBytes(60_000, seed = 96)
+    for (at in 500 until 59_000 step 1_000) {
+      Random(at).nextBytes(64).copyInto(rebuilt, at)
+      rebuilt.copyInto(sibling, at, at, at + 96)
+    }
+    fun dexWith(code: ByteArray) = TestDexBuilder()
+      .section(0x0001, structuredBytes(600, seed = 97)) // string_ids
+      .section(0x2001, code)                             // code
+      .build()
+    val source = apk {
+      manifest()
+      dex("classes.dex", dexWith(code))
+      dex("classes2.dex", dexWith(sibling))
+    }
+    val target = apk {
+      manifest()
+      dex("classes.dex", dexWith(rebuilt))
+      dex("classes2.dex", dexWith(sibling))
+    }
+
+    val grouped = assertRestores(Kiff.apk, source, target)
+    val ungrouped = assertRestores(Kiff.zip, source, target)
+    assertTrue(
+      grouped <= ungrouped,
+      "searching the sibling dex too should never cost size: $grouped against $ungrouped"
     )
   }
 

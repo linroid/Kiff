@@ -103,7 +103,9 @@ data class Child(
    * file unreachable, because the search only ever indexed the counterpart.
    *
    * Members of a group are indexed together, over the span from the first to the last of them.
-   * That span may take in unrelated bytes lying between; it costs index size and can only help.
+   * That span may take in unrelated bytes lying between; it costs index size. A wider search is
+   * not better by itself - it also finds more that leads away from the counterpart - so it is
+   * tried alongside searching the counterpart alone, and kept only where it packs smaller.
    */
   val group: String? = null,
   /**
