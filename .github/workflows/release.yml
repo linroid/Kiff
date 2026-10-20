@@ -9,6 +9,11 @@ on:
         description: Existing tag to rebuild the CLI for and attach it to, such as v0.1.0
         required: true
         type: string
+      maven:
+        description: Also upload the library to Maven Central, which takes each version only once
+        required: false
+        type: boolean
+        default: false
 
 # Two runs for one tag would each find no release and create a draft apiece.
 concurrency:
@@ -92,3 +97,64 @@ jobs:
             gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
           fi
           gh release upload "$TAG" "kiff-$VERSION.zip" "kiff-$VERSION.zip.sha256" --clobber
+
+  maven:
+    name: Upload to Maven Central
+    # The CLI job has checked the tag against gradle.properties. Without that check a SNAPSHOT
+    # version would go to Central's snapshot repository instead.
+    needs: cli
+    # A tag always uploads. A manual run uploads only when asked, since it is usually there to
+    # rebuild the CLI for a version Central already has.
+    if: github.event_name == 'push' || inputs.maven
+    # Only a Mac builds the Apple targets. Elsewhere kotlin.native.ignoreDisabledTargets would skip
+    # them quietly and upload a release without them.
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # The same secrets as linroid/Ketch. An unset one arrives as an empty string, and the plugin
+      # would only say so after compiling every target.
+      - name: Check the secrets are set
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY_ID: ${{ secrets.SIGNING_KEY_ID }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD SIGNING_KEY_ID SIGNING_KEY \
+            SIGNING_KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::The $name repository secret is not set."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      # Uploads one deployment and waits for Central to validate it. Like the GitHub release, it is
+      # then left for the maintainer to publish from the Central Portal, since a published version
+      # can never be changed or removed. The plugin reads the signing key from its own
+      # signingInMemoryKey properties.
+      - name: Upload the library
+        run: ./gradlew :library:publishToMavenCentral --no-configuration-cache
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
