@@ -19,32 +19,40 @@ import okio.Path
  */
 class KiffFilesTest {
 
-  private val fs = systemFileSystem
-  private val dir: Path =
+  private val fs get() = systemFileSystem
+
+  // Null in a browser, which has no file system: okio's Node one fails as soon as it is reached
+  // there, so each test returns early, the way one does below on a file system without symlinks.
+  private val scratch: Path? = try {
     FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "kiff-${Random.nextLong().toULong().toString(16)}"
+  } catch (e: Throwable) {
+    null
+  }
 
   init {
-    fs.createDirectories(dir)
+    scratch?.let { fs.createDirectories(it) }
   }
 
   @AfterTest
   fun cleanUp() {
-    fs.deleteRecursively(dir)
+    scratch?.let { fs.deleteRecursively(it) }
   }
 
-  private fun leftovers() = fs.list(dir).filter { it.name.startsWith(".kiff-") }
+  private fun leftovers(dir: Path) = fs.list(dir).filter { it.name.startsWith(".kiff-") }
 
   @Test
   fun aFileIsReplacedWhole() {
+    val dir = scratch ?: return
     val file = dir / "out.bin"
     KiffFiles.writeBytes(file.toString(), ByteArray(10_000) { 1 })
     KiffFiles.writeBytes(file.toString(), byteArrayOf(2, 3))
     assertContentEquals(byteArrayOf(2, 3), KiffFiles.readBytes(file.toString()))
-    assertEquals(emptyList(), leftovers())
+    assertEquals(emptyList(), leftovers(dir))
   }
 
   @Test
   fun aSymlinkIsFollowedToTheFileItNames() {
+    val dir = scratch ?: return
     val real = dir / "real.bin"
     val link = dir / "link.bin"
     KiffFiles.writeBytes(real.toString(), byteArrayOf(1))
@@ -56,11 +64,12 @@ class KiffFilesTest {
     KiffFiles.writeBytes(link.toString(), byteArrayOf(2))
     assertNotNull(fs.metadata(link).symlinkTarget, "the link should still be a link")
     assertContentEquals(byteArrayOf(2), KiffFiles.readBytes(real.toString()))
-    assertEquals(emptyList(), leftovers())
+    assertEquals(emptyList(), leftovers(dir))
   }
 
   @Test
   fun aDirectoryIsRefusedBeforeAnythingIsWritten() {
+    val dir = scratch ?: return
     val folder = dir / "folder"
     fs.createDirectory(folder)
     var written = false

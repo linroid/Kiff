@@ -29,8 +29,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Run JVM tests
-        run: ./gradlew jvmTest
+      # jvmTest matches only the library: the CLI is a plain JVM project, whose tests are :cli:test.
+      - name: Run JVM and CLI tests
+        run: ./gradlew jvmTest :cli:test
 
       - name: Upload test results
         if: always()
@@ -75,8 +76,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Run JS Node tests
-        run: ./gradlew jsNodeTest
+      - name: Run JS Node and browser tests
+        run: ./gradlew jsTest
 
       - name: Upload test results
         if: always()
@@ -123,6 +124,13 @@ jobs:
 
       - name: Run macOS native tests
         run: ./gradlew macosArm64Test
+
+      # Publishing compiles each shared source set to metadata, which no test task does.
+      # allMetadataJar covers common, native and posix; macosArm64MetadataElements covers apple,
+      # ios and macos, which only a Mac can compile.
+      - name: Compile shared source set metadata
+        if: ${{ !cancelled() }}
+        run: ./gradlew allMetadataJar macosArm64MetadataElements
 
       - name: Upload test results
         if: always()
