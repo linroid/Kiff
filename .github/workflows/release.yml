@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to rebuild the CLI for and attach it to, such as v0.1.0
+        required: true
+        type: string
+
+# Two runs for one tag would each find no release and create a draft apiece.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cli:
+    name: Attach CLI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      # A manual run takes this workflow from the branch it was started on, but builds the tag.
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+
+      - name: Check the version matches the tag
+        run: |
+          if [[ "$TAG" != v* ]]; then
+            echo "::error::Release tags are v<version>, so '$TAG' is not one."
+            exit 1
+          fi
+          expected="${TAG#v}"
+          version=$(sed -n -E 's/^version[[:space:]]*=[[:space:]]*//p' gradle.properties \
+            | tail -n 1 | tr -d '[:space:]')
+          if [[ "$version" != "$expected" ]]; then
+            echo "::error file=gradle.properties::Tag $TAG needs version=$expected in" \
+              "gradle.properties, but the tagged commit has version=${version:-<none>}."
+            exit 1
+          fi
+          if [[ "$version" == *-SNAPSHOT ]]; then
+            echo "::error file=gradle.properties::$version is a snapshot, which is not released."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the CLI distribution
+        run: ./gradlew :cli:distZip
+
+      - name: Check the distribution runs
+        run: |
+          zip="cli/build/distributions/kiff-$VERSION.zip"
+          if [[ ! -f "$zip" ]]; then
+            echo "::error::Gradle did not produce $zip from :cli:distZip."
+            exit 1
+          fi
+          unzip -q "$zip" -d "$RUNNER_TEMP/dist"
+          "$RUNNER_TEMP/dist/kiff-$VERSION/bin/kiff" --help
+
+      - name: Write the checksum
+        working-directory: cli/build/distributions
+        run: |
+          sha256sum "kiff-$VERSION.zip" > "kiff-$VERSION.zip.sha256"
+          sha256sum --check "kiff-$VERSION.zip.sha256"
+
+      # Publishing stays with the maintainer: this only ever creates a draft, and re-runs replace
+      # the files on whatever release the tag already has.
+      - name: Attach to the release
+        working-directory: cli/build/distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
+          fi
+          gh release upload "$TAG" "kiff-$VERSION.zip" "kiff-$VERSION.zip.sha256" --clobber

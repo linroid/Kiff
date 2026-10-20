@@ -7,6 +7,7 @@ import com.linroid.kiff.structuredBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PatchFormatTest {
@@ -27,6 +28,15 @@ class PatchFormatTest {
       Kiff.binary.applyPatch(source, future)
     }
     assertTrue("2" in failure.message.orEmpty(), failure.message.orEmpty())
+  }
+
+  @Test
+  fun readableFormatsNameWhatThisBuildWritesAndNothingItRefuses() {
+    val written = Kiff.info(Kiff.binary.createPatch(source, target)).formatVersion
+    assertTrue(written in Kiff.readableFormats)
+    // The version unknownVersionsAreRejected shows refused: an updater skipping by this set has to
+    // skip exactly what applyPatch would turn down.
+    assertFalse(2 in Kiff.readableFormats)
   }
 
   @Test

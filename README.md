@@ -127,6 +127,72 @@ Most expensive regions
 A region the patch only points at still costs the instruction that points at it, so `Instructions`
 is the floor an archive of mostly-unchanged entries cannot go below.
 
+`kiff release` makes every patch a release ships in one run: one new file, patched from each earlier
+release. Each patch is restored and its result held to the new file's SHA-256 before it is kept,
+and one that costs more than `--max-ratio` of the file (0.8 by default) is dropped, since
+downloading the whole file would cost about as much:
+
+```console
+$ kiff release --to v1.3.0=foo-1.3.0.apk \
+    --from v1.2.0=foo-1.2.0.apk --from v1.0.0=foo-1.0.0.apk \
+    --out patches --base-url https://example.com/foo/v1.3.0
+foo-1.3.0.apk (v1.3.0), 71.7 MiB, apk patcher
+  v1.2.0     4.6 MiB    6.42%  restored  foo-1.3.0.apk.from-v1.2.0.kiff
+  v1.0.0    60.2 MiB   83.96%  dropped, over --max-ratio 0.8
+Wrote patches/kiff-patches.json (1 patch)
+  Took:        9120 ms
+```
+
+A file is given as `LABEL=FILE`, or as `FILE` to go by its name. The text before the first `=` is a
+label only when it holds no path separator, so `builds/v=2/foo.apk` is a file; a file with an `=` in
+its own name takes a label (`v1=a=b.apk`) or a leading `./`. `--patcher auto`, the default, picks
+`apk` for a `.apk` file, `zip` for any other zip archive and `binary` for the rest. `--name` names
+the patches from `{target}`, the new file's name, and the labels `{from}` and `{to}`.
+
+The manifest is what an updater reads. For each file it lists the patches that rebuild it, with what
+an updater needs to check before applying one and after:
+
+```json
+{
+  "schema": 1,
+  "generator": "kiff 0.1.0",
+  "files": [
+    {
+      "name": "foo-1.3.0.apk",
+      "version": "v1.3.0",
+      "url": "https://example.com/foo/v1.3.0/foo-1.3.0.apk",
+      "size": 75182899,
+      "sha256": "5d1f…",
+      "patches": [
+        {
+          "from": "v1.2.0",
+          "source": {
+            "name": "foo-1.2.0.apk",
+            "size": 74121543,
+            "sha256": "a07c…"
+          },
+          "name": "foo-1.3.0.apk.from-v1.2.0.kiff",
+          "url": "https://example.com/foo/v1.3.0/foo-1.3.0.apk.from-v1.2.0.kiff",
+          "size": 4827000,
+          "sha256": "e912…",
+          "patcher": "apk",
+          "format": 1
+        }
+      ]
+    }
+  ]
+}
+```
+
+An updater takes the patch whose `source.sha256` is the file it holds and whose `format` is in
+`Kiff.readableFormats`, and checks what it restores against the file's own `sha256`. Running
+`kiff release` again with the same manifest replaces that file's entry and keeps the others, so one
+manifest can cover every file a release ships. The manifest is a contract with those updaters: a
+field may be added, but anything else is a new `schema`.
+
+The exit status is 0 when every source gave a patch or was dropped, and 1 when any could not be
+created or verified. The other patches are still written, and the manifest lists only good ones.
+
 
 ## How a patch is built
 
@@ -413,6 +479,18 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 Patchers address both files through `SeekableSource` rather than reading them as streams, because a
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
 peak memory is still roughly source + target + patch + index.
+
+## Releasing
+
+Between releases `main` carries the next version with a `-SNAPSHOT` suffix. To release `0.1.0`:
+
+1. Set `version=0.1.0` in `gradle.properties` and land that on `main`.
+2. Tag that commit `v0.1.0` and push the tag.
+3. The [release workflow](.github/workflows/release.yml) builds the CLI and attaches
+   `kiff-0.1.0.zip` and `kiff-0.1.0.zip.sha256` to a draft release for the tag. It refuses a tag
+   that disagrees with `gradle.properties`, and can be re-run by hand for an existing tag.
+4. Review the draft and publish it.
+5. Bump `main` to the next snapshot, such as `version=0.1.1-SNAPSHOT`.
 
 ## License
 

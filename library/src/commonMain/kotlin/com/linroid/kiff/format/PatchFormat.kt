@@ -27,7 +27,7 @@ internal object PatchFormat {
   const val VERSION = 1
 
   /** Versions this build can read. */
-  private val SUPPORTED = setOf(VERSION)
+  val SUPPORTED = setOf(VERSION)
 
   private val magic = byteArrayOf(0x4B, 0x49, 0x46, 0x46)
 

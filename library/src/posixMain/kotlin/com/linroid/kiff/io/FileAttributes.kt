@@ -1,6 +1,7 @@
 package com.linroid.kiff.io
 
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.UnsafeNumber
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
@@ -13,7 +14,9 @@ import platform.posix.fsync
 import platform.posix.open
 import platform.posix.stat
 
-@OptIn(ExperimentalForeignApi::class)
+// mode_t is 16 bits on Apple and 32 on Linux. Only its low twelve bits are used and it never
+// leaves this function, so the width doesn't matter.
+@OptIn(ExperimentalForeignApi::class, UnsafeNumber::class)
 internal actual fun copyPermissions(from: Path, to: Path) {
   memScoped {
     val info = alloc<stat>()
