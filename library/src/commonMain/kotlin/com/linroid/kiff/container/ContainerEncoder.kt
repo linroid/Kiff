@@ -531,11 +531,20 @@ internal class ContainerEncoder(
   }
 
   /**
-   * One index per group of source children, spanning the first to the last of them.
+   * One index per group of source children, spanning the payload of the first to that of the last.
    *
    * Built on first use and kept for as long as the composite is being encoded, because the whole
    * point is that several children search the same bytes: building it per child would index the
    * same megabytes again for each one.
+   *
+   * The span starts at a payload, not at the record around it, because the index samples a block
+   * every few bytes counted from where it starts. A payload lays its content out from its own first
+   * byte - a dex keeps its code on a four-byte grid - while a zip local header can sit at any
+   * offset. Counted from the header, every block would fall off that grid, and an exact match only
+   * just long enough to be found would be missed whenever it starts on it. That is often all a
+   * rebuilt method has in common with its old self, and what the search realigns on after it: on
+   * real R8 builds, missing those matches made a dex's code pack 2-3% larger searched with its
+   * siblings than searched alone.
    */
   private inner class Groups(sourceChildren: List<Child>, private val inherited: DeltaScanner?) {
     private val spans: Map<String, IntRange> = buildMap {
@@ -544,8 +553,8 @@ internal class ContainerEncoder(
         val seen = get(group)
         put(
           group,
-          if (seen == null) child.from..child.to
-          else minOf(seen.first, child.from)..maxOf(seen.last, child.to)
+          if (seen == null) child.contentFrom..child.contentTo
+          else minOf(seen.first, child.contentFrom)..maxOf(seen.last, child.contentTo)
         )
       }
     }
