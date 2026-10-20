@@ -414,6 +414,18 @@ Patchers address both files through `SeekableSource` rather than reading them as
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
 peak memory is still roughly source + target + patch + index.
 
+## Releasing
+
+Between releases `main` carries the next version with a `-SNAPSHOT` suffix. To release `0.1.0`:
+
+1. Set `version=0.1.0` in `gradle.properties` and land that on `main`.
+2. Tag that commit `v0.1.0` and push the tag.
+3. The [release workflow](.github/workflows/release.yml) builds the CLI and attaches
+   `kiff-0.1.0.zip` and `kiff-0.1.0.zip.sha256` to a draft release for the tag. It refuses a tag
+   that disagrees with `gradle.properties`, and can be re-run by hand for an existing tag.
+4. Review the draft and publish it.
+5. Bump `main` to the next snapshot, such as `version=0.1.1-SNAPSHOT`.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
