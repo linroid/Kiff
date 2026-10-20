@@ -146,10 +146,11 @@ jobs:
           done
           exit "$missing"
 
-      # Uploads one deployment and waits for Central to validate it. Like the GitHub release, it is
-      # then left for the maintainer to publish from the Central Portal, since a published version
-      # can never be changed or removed. The plugin reads the signing key from its own
-      # signingInMemoryKey properties.
+      # Uploads one deployment. Like the GitHub release, it is left for the maintainer to publish
+      # from the Central Portal, since a published version can never be changed or removed. The
+      # plugin waits for Central's validation only when it publishes, so a green run does not mean
+      # the deployment passed: the portal shows whether it did. The plugin reads the signing key
+      # from its own signingInMemoryKey properties.
       - name: Upload the library
         run: ./gradlew :library:publishToMavenCentral --no-configuration-cache
         env:
