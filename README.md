@@ -492,7 +492,9 @@ The one Kiff ships, `RollingHashAlgorithm`, finds copies with a rolling hash ove
 the source, sampled every 4-16 bytes depending on how large a range is indexed, which keeps the
 index small enough to diff APK-sized files in a couple of seconds. Between copies it tracks the
 source offset the target is running parallel to, and emits `DIFF` while the aligned bytes still
-mostly agree.
+mostly agree. When an insertion or deletion shifts that offset and the aligned bytes stop agreeing
+altogether, it looks for the shifted offset up to 128 bytes either side before falling back to
+literals, so rebuilt code that has no exact match left in it still realigns.
 
 Because the instruction set is fixed, a different algorithm needs no change to the patch format or
 to any patcher: it is an encode-side choice that the same reader decodes. That is what makes the
