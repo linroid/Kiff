@@ -125,6 +125,13 @@ jobs:
       - name: Run macOS native tests
         run: ./gradlew macosArm64Test
 
+      # Publishing compiles each shared source set to metadata, which no test task does.
+      # allMetadataJar covers common, native and posix; macosArm64MetadataElements covers apple,
+      # ios and macos, which only a Mac can compile.
+      - name: Compile shared source set metadata
+        if: ${{ !cancelled() }}
+        run: ./gradlew allMetadataJar macosArm64MetadataElements
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
