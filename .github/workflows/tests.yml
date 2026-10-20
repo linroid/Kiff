@@ -29,8 +29,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Run JVM tests
-        run: ./gradlew jvmTest
+      # jvmTest matches only the library: the CLI is a plain JVM project, whose tests are :cli:test.
+      - name: Run JVM and CLI tests
+        run: ./gradlew jvmTest :cli:test
 
       - name: Upload test results
         if: always()
