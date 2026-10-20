@@ -73,11 +73,31 @@ internal class MatchIndex(
   /**
    * Finds the longest verified match for `target[position...]` among blocks sharing [hash].
    * Returns true and fills [best] when a match of at least [RollingHash.WINDOW] bytes exists.
+   *
+   * [alignedOffset] is the source offset the scanner is currently running parallel to, or negative
+   * when it has none. It is tried first, whether or not a block starts there, and kept unless a
+   * longer match turns up: identical content elsewhere would otherwise win only because its block
+   * happened to come first, and a copy from there moves the alignment away from where the rest of
+   * the target still agrees.
    */
-  fun lookup(hash: Int, target: ByteArray, position: Int, targetEnd: Int, best: Match): Boolean {
+  fun lookup(
+    hash: Int,
+    target: ByteArray,
+    position: Int,
+    targetEnd: Int,
+    best: Match,
+    alignedOffset: Int
+  ): Boolean {
     best.length = 0
     best.sourceOffset = -1
     if (blockCount == 0) return false
+    if (alignedOffset in source.indices) {
+      val length = forwardLength(alignedOffset, target, position, targetEnd)
+      if (length >= RollingHash.WINDOW) {
+        best.length = length
+        best.sourceOffset = alignedOffset
+      }
+    }
     var block = head[RollingHash.mix(hash, tableBits)]
     var probes = 0
     while (block >= 0 && probes < MAX_PROBES) {

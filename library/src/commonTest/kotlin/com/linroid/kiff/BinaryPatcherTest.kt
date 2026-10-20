@@ -130,6 +130,62 @@ class BinaryPatcherTest {
   }
 
   @Test
+  fun differencesResumeAfterShiftsWithoutAnExactMatch() {
+    // Rebuilt code: a byte in every dozen differs, so no exact match is long enough to be found,
+    // and short insertions and deletions keep moving where the target runs parallel to the source.
+    // The patch is only small if the scanner finds each shifted alignment without one.
+    val source = Random(33).nextBytes(256 * 1024)
+    val random = Random(34)
+    val target = ByteWriter(source.size + 8 * 1024)
+    var at = 0
+    while (at < source.size) {
+      val end = minOf(source.size, at + 4_000)
+      for (i in at until end) target.writeByte(source[i] + if (i % 12 == 0) 1 else 0)
+      val shift = 2 * random.nextInt(1, 48)
+      at = if (random.nextBoolean()) {
+        target.writeBytes(random.nextBytes(shift))
+        end
+      } else {
+        end + shift
+      }
+    }
+    val size = assertRestores(patcher, source, target.toByteArray())
+    assertTrue(size < source.size / 8, "expected differences after every shift, got $size bytes")
+  }
+
+  @Test
+  fun realignsOnlyWhenTheAlignmentHasCollapsed() {
+    // Records renumbered by one: against its own source record each differs by the same small
+    // amounts, which pack to almost nothing, while the record after it agrees in more bytes - its
+    // number now matches - by differences that do not pack at all. A chunk that briefly fails
+    // where it is must not send the scanner to the neighbour for the rest of the table.
+    val header = ByteArray(8) { (0x10 + it).toByte() }
+    val records = 2_000
+    val payloads = Random(35).nextBytes(records * 6)
+    fun record(out: ByteWriter, number: Int, payload: Int, changed: Int) {
+      out.writeByte(number and 0xFF)
+      out.writeByte(number shr 8)
+      out.writeBytes(header)
+      for (i in 0 until 6) out.writeByte(payloads[payload * 6 + i] + if (i < changed) 1 else 0)
+    }
+    val source = ByteWriter(records * 16)
+    for (i in 0 until records) record(source, i, i, changed = 0)
+    val target = ByteWriter(records * 16)
+    for (i in 0 until records) {
+      when (i) {
+        // Overwritten, so the difference stops here...
+        in 200..201 -> target.writeBytes(Random(i).nextBytes(16))
+        // ...and agrees too little to start again for one chunk...
+        in 202..203 -> record(target, i + 1, i, changed = 6)
+        // ...before agreeing as it did all along.
+        else -> record(target, i + 1, i, changed = 4)
+      }
+    }
+    val size = assertRestores(patcher, source.toByteArray(), target.toByteArray())
+    assertTrue(size < 1024, "expected the records' own alignment to be kept, got $size bytes")
+  }
+
+  @Test
   fun rejectsTheWrongSource() {
     val source = structuredBytes(4096, seed = 11)
     val target = structuredBytes(4096, seed = 12)
