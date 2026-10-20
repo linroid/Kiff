@@ -19,16 +19,17 @@ if [[ ! $previous =~ ^[0-9]+$ ]]; then
 fi
 previous=$((10#$previous))
 
-# Sets the variable $1 to true or false from the input $2 holds, named $3 for a message.
+# true or false, from an input that says so in any case.
 boolean() {
-  case $(lowercase "$(trim "$2")") in
-    true) printf -v "$1" true ;;
-    false) printf -v "$1" false ;;
-    *) fail "$3 is '$2', not true or false." ;;
+  case $(lowercase "$(trim "$1")") in
+    true) echo true ;;
+    false) echo false ;;
+    *) return 1 ;;
   esac
 }
-boolean prereleases "${INPUT_PRERELEASES:-false}" prereleases
-boolean upload "${INPUT_UPLOAD:-true}" upload
+prereleases=$(boolean "${INPUT_PRERELEASES:-false}") \
+  || fail "prereleases is '${INPUT_PRERELEASES:-}', not true or false."
+upload=$(boolean "${INPUT_UPLOAD:-true}") || fail "upload is '${INPUT_UPLOAD:-}', not true or false."
 
 max_ratio=$(trim "${INPUT_MAX_RATIO:-0.8}")
 if [[ ! $max_ratio =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]]; then

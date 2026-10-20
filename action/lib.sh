@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared by the action's scripts, which source it.
 #
 # Everything here runs on the bash 3.2 that macOS ships, and on BSD as well as GNU tools.
