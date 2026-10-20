@@ -655,8 +655,18 @@ Between releases `main` carries the next version with a `-SNAPSHOT` suffix. To r
 3. The [release workflow](.github/workflows/release.yml) builds the CLI and attaches
    `kiff-0.1.0.zip` and `kiff-0.1.0.zip.sha256` to a draft release for the tag. It refuses a tag
    that disagrees with `gradle.properties`, and can be re-run by hand for an existing tag.
-4. Review the draft and publish it.
-5. Bump `main` to the next snapshot, such as `version=0.1.1-SNAPSHOT`.
+4. It then uploads the library to the Central Portal as a deployment and waits for Central to
+   validate it. A run started by hand uploads only when told to, since Central takes each version
+   once.
+5. Review the draft and publish it, then publish the deployment from
+   [Deployments](https://central.sonatype.com/publishing/deployments) on the Central Portal.
+6. Bump `main` to the next snapshot, such as `version=0.1.1-SNAPSHOT`.
+
+The upload needs five repository secrets, the same ones linroid/Ketch uses:
+`MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`, a Central Portal user token; and
+`SIGNING_KEY`, `SIGNING_KEY_ID` and `SIGNING_KEY_PASSWORD`, an ASCII-armored secret PGP key, its
+short ID and its passphrase. The public half has to be on a keyserver Central reads, such as
+`keyserver.ubuntu.com`.
 
 ## License
 
