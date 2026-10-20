@@ -2,7 +2,10 @@ package com.linroid.kiff
 
 import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.TestApkBuilder
+import com.linroid.kiff.container.TestDexBuilder
+import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.zip.TestZipBuilder
+import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -76,6 +79,56 @@ class ApkPatcherTest {
     assertTrue(
       grouped < ungrouped / 2,
       "grouping the dex entries should find the moved classes: $grouped against $ungrouped"
+    )
+  }
+
+  @Test
+  fun groupingStillFindsMatchesOnADexsOwnGrid() {
+    // Rebuilt code differs from its counterpart a byte in every dozen, so it is described as
+    // differences, and after each inserted method the search has to realign on an exact match.
+    // Here that match is exactly as long as the shortest one the search can find, and starts on
+    // the dex's four-byte grid - often all a rewritten method shares with its old self. The index
+    // over every dex has to sample that grid just as the counterpart's own index does, wherever
+    // the dex's local header happens to sit.
+    val code = Random(97).nextBytes(60_000)
+    val random = Random(98)
+    val rebuilt = ByteWriter(70_000)
+    var at = 0
+    while (at < code.size) {
+      val end = minOf(code.size, at + 3_000)
+      // Left as it was, between two changed bytes so the match cannot grow past 16.
+      val anchor = at + 256
+      for (i in at until end) {
+        val kept = i in anchor until anchor + 16
+        val changed = !kept && (i % 12 == 0 || i == anchor - 1 || i == anchor + 16)
+        rebuilt.writeByte(code[i] + if (changed) 1 else 0)
+      }
+      // Too long a shift to be found without a match.
+      if (end < code.size) rebuilt.writeBytes(random.nextBytes(4 * random.nextInt(64, 128)))
+      at = end
+    }
+    val sibling = Random(99).nextBytes(60_000)
+    fun dexWith(code: ByteArray) = TestDexBuilder()
+      .section(0x0001, structuredBytes(600, seed = 100)) // string_ids, so code starts at 712
+      .section(0x2001, code)                              // code
+      .build()
+    val source = apk {
+      manifest()
+      dex("classes.dex", dexWith(code))
+      dex("classes2.dex", dexWith(sibling))
+    }
+    val target = apk {
+      manifest()
+      dex("classes.dex", dexWith(rebuilt.toByteArray()))
+      dex("classes2.dex", dexWith(sibling))
+    }
+
+    val grouped = assertRestores(Kiff.apk, source, target)
+    val ungrouped = assertRestores(Kiff.zip, source, target)
+    assertTrue(
+      grouped <= ungrouped,
+      "searching every dex should not miss what the counterpart's index finds: " +
+        "$grouped against $ungrouped"
     )
   }
 
