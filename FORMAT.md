@@ -2,8 +2,9 @@
 
 A patch turns one file into another, byte for byte. This describes what is in one.
 
-Nothing here is released yet, so version 1 is still moving; the frozen vectors in
-`FormatVectorsTest` are what keeps it honest while it does. A format that lives only in code drifts
+Version 1 is frozen as of Kiff 0.1.0, the first release. Patches written by it exist, so a change
+to anything here needs a new version or flag, and every later release still reads version 1. The
+frozen vectors in `FormatVectorsTest` hold it to that. A format that lives only in code drifts
 from its own documentation and the drift is silent — Tinker's bundled bspatch still says bzip2 in
 its header comments while the code has always read gzip — so the vectors, not this file, are the
 authority. If they disagree, the vectors are right and this file is stale.

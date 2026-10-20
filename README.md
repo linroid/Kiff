@@ -5,8 +5,14 @@ file byte for byte from the first one plus that patch.
 
 ## Using it
 
-The library is not published yet. It targets JVM, JS, iOS, macOS, Linux and Windows from one source
-set. Run `./gradlew publishToMavenLocal` to publish it to `~/.m2` for local use.
+The library is on Maven Central. It targets JVM, JS, iOS, macOS, Linux and Windows from one source
+set, so a multiplatform project adds it to `commonMain`:
+
+```kotlin
+implementation("com.linroid.kiff:kiff:0.1.0")
+```
+
+Run `./gradlew publishToMavenLocal` to publish the current source to `~/.m2` instead.
 
 ## Patchers
 
