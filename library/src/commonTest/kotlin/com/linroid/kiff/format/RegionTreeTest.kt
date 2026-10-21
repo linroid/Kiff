@@ -1,10 +1,9 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff.format
 
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
-import com.linroid.kiff.ZipPatcher
+import com.linroid.kiff.KiffOptions
+import com.linroid.kiff.asZip
 import com.linroid.kiff.assertRestores
 import com.linroid.kiff.io.ByteArrayRestoreTarget
 import com.linroid.kiff.io.ByteArraySource
@@ -33,7 +32,7 @@ class RegionTreeTest {
     val source = TestZipBuilder().entry("config.txt", original).build()
     val target = TestZipBuilder().entry("config.txt", edited).build()
 
-    val size = assertRestores(Kiff.zip, source, target)
+    val size = assertRestores(asZip(), source, target)
     assertTrue(
       size < original.length / 4,
       "one changed line should not cost a quarter of the file, got $size bytes"
@@ -54,8 +53,9 @@ class RegionTreeTest {
     for ((original, edited) in listOf(scattered to scatteredEdit, long to longEdit)) {
       val source = TestZipBuilder().entry("config.txt", original).build()
       val target = TestZipBuilder().entry("config.txt", edited).build()
-      val offered = ZipPatcher().createPatch(source, target).size
-      val bytesOnly = ZipPatcher(planner = BinaryRegionPlanner).createPatch(source, target).size
+      val offered = asZip().createPatch(source, target).size
+      val bytesOnly = asZip(KiffOptions(planner = BinaryRegionPlanner))
+        .createPatch(source, target).size
       assertTrue(
         offered <= bytesOnly,
         "offering the line encoding cost size: $offered against $bytesOnly"
@@ -70,8 +70,8 @@ class RegionTreeTest {
     val source = TestZipBuilder().entry("config.txt", original).build()
     val target = TestZipBuilder().entry("config.txt", edited).build()
 
-    assertRestores(ZipPatcher(), source, target)
-    assertRestores(ZipPatcher(planner = BinaryRegionPlanner), source, target)
+    assertRestores(asZip(), source, target)
+    assertRestores(asZip(KiffOptions(planner = BinaryRegionPlanner)), source, target)
   }
 
   @Test
@@ -83,8 +83,8 @@ class RegionTreeTest {
     val source = TestZipBuilder().entry("strings.txt", original).build()
     val target = TestZipBuilder().entry("strings.txt", rewritten).build()
 
-    assertRestores(Kiff.zip, source, target)
-    val encodings = Kiff.zip.explain(source, target).allRegions.map { it.encoding }
+    assertRestores(asZip(), source, target)
+    val encodings = asZip().explain(source, target).allRegions.map { it.encoding }
     assertTrue(RegionEncoding.TEXT !in encodings, "chose a line script anyway: $encodings")
   }
 
@@ -93,7 +93,7 @@ class RegionTreeTest {
     // Nothing in the source resembles it, so any delta would cost more than the bytes themselves.
     val source = TestZipBuilder().entry("a.bin", structuredBytes(40_000, seed = 20)).build()
     val target = TestZipBuilder().entry("a.bin", structuredBytes(40_000, seed = 21)).build()
-    val size = assertRestores(Kiff.zip, source, target)
+    val size = assertRestores(asZip(), source, target)
     assertTrue(
       size <= target.size + 64,
       "a patch must never cost more than storing the target, got $size for ${target.size}"
@@ -107,7 +107,7 @@ class RegionTreeTest {
       .entry("b.bin", structuredBytes(20_000, seed = 31))
       .entry("c.bin", structuredBytes(20_000, seed = 32))
       .build()
-    val size = assertRestores(Kiff.zip, archive, archive)
+    val size = assertRestores(asZip(), archive, archive)
     assertTrue(size < 64, "identical archives should collapse to one copy, got $size bytes")
   }
 
@@ -123,12 +123,12 @@ class RegionTreeTest {
       .entry("a.bin", structuredBytes(4_000, seed = 40))
       .entry("b.bin", structuredBytes(4_000, seed = 42))
       .build()
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = asZip().createPatch(source, target)
 
     // Flip a byte late in the patch, where the content lives rather than the structure.
     val corrupted = patch.copyOf().also { it[it.size - 40] = (it[it.size - 40] + 1).toByte() }
     val failure = assertFailsWith<KiffException.VerificationFailed> {
-      Kiff.zip.applyPatch(source, corrupted)
+      Kiff.applyPatch(source, corrupted)
     }
     assertTrue(
       "Region [" in failure.message.orEmpty(),

@@ -77,7 +77,6 @@ class ReleaseCommand : KiffCommand(name = "release") {
     metavar = "URL",
     help = "URL the patches are published under; without it the manifest gives no URLs"
   )
-  private val patcherName by ignoredPatcherOption()
   private val maxRatio by option(
     "--max-ratio",
     metavar = "RATIO",
@@ -89,7 +88,6 @@ class ReleaseCommand : KiffCommand(name = "release") {
   ).flag()
 
   override fun execute() {
-    warnIgnoredPatcher(patcherName)
     requireFile(target.path)
     sources.forEach { requireFile(it.path) }
     val manifest = manifestPath ?: join(out, ReleaseManifest.FILE_NAME)

@@ -19,7 +19,7 @@ internal sealed class Structure(val id: PatcherId, val name: String) {
   data object Bytes : Structure(PatcherId.BINARY, "bytes")
 
   /**
-   * An archive, always taken apart, as the zip and apk patchers always did. Its entries are where
+   * An archive, always taken apart, as it always has been. Its entries are where
    * nearly all of the saving is, and weighing it would mean a second search of the whole file -
    * which, for an archive, is the largest input Kiff is ever given.
    */

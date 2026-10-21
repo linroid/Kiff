@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff
 
 import com.linroid.kiff.apk.ApkEntryKind
@@ -15,9 +13,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ApkPatcherTest {
+class ApkPatchTest {
 
-  private val patcher = ApkPatcher()
+  private val patcher = asApk()
 
   private fun apk(block: TestApkBuilder.() -> Unit): ByteArray =
     TestApkBuilder().apply(block).build()
@@ -76,9 +74,9 @@ class ApkPatcherTest {
       dex("classes2.dex", b + c)
     }
 
-    val grouped = assertRestores(Kiff.apk, source, target)
+    val grouped = assertRestores(asApk(), source, target)
     // The zip patcher describes the same archive without knowing the dex files belong together.
-    val ungrouped = assertRestores(Kiff.zip, source, target)
+    val ungrouped = assertRestores(asZip(), source, target)
     assertTrue(
       grouped < ungrouped / 2,
       "grouping the dex entries should find the moved classes: $grouped against $ungrouped"
@@ -126,8 +124,8 @@ class ApkPatcherTest {
       dex("classes2.dex", dexWith(sibling))
     }
 
-    val grouped = assertRestores(Kiff.apk, source, target)
-    val ungrouped = assertRestores(Kiff.zip, source, target)
+    val grouped = assertRestores(asApk(), source, target)
+    val ungrouped = assertRestores(asZip(), source, target)
     assertTrue(
       grouped <= ungrouped,
       "searching every dex should not miss what the counterpart's index finds: " +
@@ -157,7 +155,7 @@ class ApkPatcherTest {
     }
 
     val apkSize = assertRestores(patcher, source, target)
-    val zipSize = assertRestores(ZipPatcher(), source, target)
+    val zipSize = assertRestores(asZip(), source, target)
     assertTrue(
       apkSize < zipSize / 2,
       "ordinal pairing should beat the generic zip pairing: apk=$apkSize zip=$zipSize"
@@ -181,7 +179,7 @@ class ApkPatcherTest {
     val size = assertRestores(patcher, source, target)
     assertTrue(size < 2_048, "an unchanged signing block should be copied, got $size bytes")
 
-    val report = patcher.analyze(source, target)
+    val report = KiffReports.apk(source, target)
     assertTrue(report.signed)
     assertEquals(block.size + 32, report.sourceSigningBlockSize)
     assertEquals(report.sourceSigningBlockSize, report.targetSigningBlockSize)
@@ -191,25 +189,25 @@ class ApkPatcherTest {
   fun unsignedArchivesReportNoSigningBlock() {
     val source = apk { manifest(); dex("classes.dex", structuredBytes(5_000, 30)) }
     val target = apk { manifest(); dex("classes.dex", structuredBytes(5_100, 31)) }
-    val report = patcher.analyze(source, target)
+    val report = KiffReports.apk(source, target)
     assertFalse(report.signed)
     assertEquals(0, report.sourceSigningBlockSize)
   }
 
   @Test
   fun classifiesEntriesByKind() {
-    assertEquals(ApkEntryKind.MANIFEST, patcher.kindOf("AndroidManifest.xml"))
-    assertEquals(ApkEntryKind.RESOURCE_TABLE, patcher.kindOf("resources.arsc"))
-    assertEquals(ApkEntryKind.DEX, patcher.kindOf("classes.dex"))
-    assertEquals(ApkEntryKind.DEX, patcher.kindOf("classes12.dex"))
-    assertEquals(ApkEntryKind.NATIVE_LIBRARY, patcher.kindOf("lib/arm64-v8a/libapp.so"))
-    assertEquals(ApkEntryKind.RESOURCE, patcher.kindOf("res/aa.png"))
-    assertEquals(ApkEntryKind.ASSET, patcher.kindOf("assets/model.tflite"))
-    assertEquals(ApkEntryKind.SIGNATURE, patcher.kindOf("META-INF/CERT.RSA"))
-    assertEquals(ApkEntryKind.SIGNATURE, patcher.kindOf("META-INF/MANIFEST.MF"))
-    assertEquals(ApkEntryKind.METADATA, patcher.kindOf("META-INF/services/foo"))
-    assertEquals(ApkEntryKind.OTHER, patcher.kindOf("stamp-cert-sha256"))
-    assertEquals(ApkEntryKind.OTHER, patcher.kindOf("lib/arm64-v8a/notalib.txt"))
+    assertEquals(ApkEntryKind.MANIFEST, KiffReports.apkEntryKind("AndroidManifest.xml"))
+    assertEquals(ApkEntryKind.RESOURCE_TABLE, KiffReports.apkEntryKind("resources.arsc"))
+    assertEquals(ApkEntryKind.DEX, KiffReports.apkEntryKind("classes.dex"))
+    assertEquals(ApkEntryKind.DEX, KiffReports.apkEntryKind("classes12.dex"))
+    assertEquals(ApkEntryKind.NATIVE_LIBRARY, KiffReports.apkEntryKind("lib/arm64-v8a/libapp.so"))
+    assertEquals(ApkEntryKind.RESOURCE, KiffReports.apkEntryKind("res/aa.png"))
+    assertEquals(ApkEntryKind.ASSET, KiffReports.apkEntryKind("assets/model.tflite"))
+    assertEquals(ApkEntryKind.SIGNATURE, KiffReports.apkEntryKind("META-INF/CERT.RSA"))
+    assertEquals(ApkEntryKind.SIGNATURE, KiffReports.apkEntryKind("META-INF/MANIFEST.MF"))
+    assertEquals(ApkEntryKind.METADATA, KiffReports.apkEntryKind("META-INF/services/foo"))
+    assertEquals(ApkEntryKind.OTHER, KiffReports.apkEntryKind("stamp-cert-sha256"))
+    assertEquals(ApkEntryKind.OTHER, KiffReports.apkEntryKind("lib/arm64-v8a/notalib.txt"))
   }
 
   @Test
@@ -226,7 +224,7 @@ class ApkPatcherTest {
       signingBlock(structuredBytes(6_000, 45))
     }
 
-    val report = patcher.analyze(source, target)
+    val report = KiffReports.apk(source, target)
     val native = report.kinds.single { it.kind == ApkEntryKind.NATIVE_LIBRARY }
     assertEquals(2, native.entryCount)
     assertEquals(1, native.changedCount)
@@ -244,9 +242,9 @@ class ApkPatcherTest {
 
   @Test
   fun recognisesWhatIsAnApk() {
-    assertTrue(patcher.isApk(sampleApk(seed = 50)))
-    assertFalse(patcher.isApk(apk { resource("a.png", structuredBytes(100, 51)) }))
-    assertFalse(patcher.isApk(structuredBytes(1_000, seed = 52)))
+    assertTrue(KiffReports.isApk(sampleApk(seed = 50)))
+    assertFalse(KiffReports.isApk(apk { resource("a.png", structuredBytes(100, 51)) }))
+    assertFalse(KiffReports.isApk(structuredBytes(1_000, seed = 52)))
   }
 
   @Test
@@ -266,16 +264,16 @@ class ApkPatcherTest {
     val target = source.copyOfRange(0, 10_000) + structuredBytes(300, 71) +
       source.copyOfRange(10_000, source.size)
     assertRestores(patcher, source, target)
-    assertFailsWith<KiffException.UnsupportedInput> { patcher.analyze(source, target) }
+    assertFailsWith<KiffException.UnsupportedInput> { KiffReports.apk(source, target) }
   }
 
   @Test
-  fun anApkPatchSaysWhoBuiltItAndAppliesWithAnyPatcher() {
+  fun anApkPatchSaysItDescribesAnApk() {
     val source = sampleApk(seed = 80)
     val target = sampleApk(seed = 81)
     val apkPatch = patcher.createPatch(source, target)
     assertEquals(PatcherId.APK, Kiff.info(apkPatch).patcher)
-    assertContentEquals(target, ZipPatcher().applyPatch(source, apkPatch))
+    assertContentEquals(target, Kiff.applyPatch(source, apkPatch))
   }
 
   @Test
@@ -283,6 +281,6 @@ class ApkPatcherTest {
     val source = sampleApk(seed = 82)
     val target = sampleApk(seed = 83)
     val patch = patcher.createPatch(source, target)
-    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(sampleApk(84), patch) }
+    assertFailsWith<KiffException.SourceMismatch> { Kiff.applyPatch(sampleApk(84), patch) }
   }
 }

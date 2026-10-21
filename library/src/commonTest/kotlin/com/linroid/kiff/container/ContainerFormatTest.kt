@@ -1,17 +1,17 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff.container
 
 import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffOptions
 import com.linroid.kiff.NestedContainers
-import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.apk.TestApkBuilder
+import com.linroid.kiff.asZip
 import com.linroid.kiff.assertRestores
 import com.linroid.kiff.region.RegionAlgorithm
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -91,18 +91,18 @@ class ContainerFormatTest {
     val source = TestZipBuilder().entry("payload.sect", sectioned(false)).build()
     val target = TestZipBuilder().entry("payload.sect", sectioned(true)).build()
 
-    val unaware = ZipPatcher()
-    val aware = ZipPatcher(containers = NestedContainers + TestSectionFormat())
+    val unaware = asZip()
+    val aware = asZip(KiffOptions(containers = NestedContainers + TestSectionFormat()))
 
     // Both restore: teaching a patcher a format changes how small a patch is, never whether it
     // applies. The decoder is never told which formats were used, so it cannot care.
     assertRestores(unaware, source, target)
     assertRestores(aware, source, target)
 
-    // And a patch built by the aware encoder applies with a patcher that has no idea the format
-    // exists, because the tree it produced is the same four node kinds.
+    // And a patch built by the aware encoder applies with no idea the format exists, because the
+    // tree it produced is the same four node kinds.
     val patch = aware.createPatch(source, target)
-    assertContentRestores(unaware, source, target, patch)
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 
   @Test
@@ -122,8 +122,8 @@ class ContainerFormatTest {
     val source = TestZipBuilder().entry("bundle.zip", inner).build()
     val target = TestZipBuilder().entry("bundle.zip", innerReordered).build()
 
-    val nested = ZipPatcher()
-    val flat = ZipPatcher(containers = ContainerRegistry.Empty)
+    val nested = asZip()
+    val flat = asZip(KiffOptions(containers = ContainerRegistry.Empty))
     assertRestores(nested, source, target)
     assertRestores(flat, source, target)
 
@@ -143,8 +143,8 @@ class ContainerFormatTest {
     val source = TestZipBuilder().entry("bundle.zip", innerA).build()
     val target = TestZipBuilder().entry("bundle.zip", innerB).build()
 
-    val nestedSize = ZipPatcher().createPatch(source, target).size
-    val flatSize = ZipPatcher(containers = ContainerRegistry.Empty)
+    val nestedSize = asZip().createPatch(source, target).size
+    val flatSize = asZip(KiffOptions(containers = ContainerRegistry.Empty))
       .createPatch(source, target).size
     assertTrue(
       nestedSize <= flatSize,
@@ -165,7 +165,7 @@ class ContainerFormatTest {
 
     val source = TestZipBuilder().entry("bundle.zip", inner).build()
     val target = TestZipBuilder().entry("bundle.zip", innerEdited).build()
-    assertRestores(Kiff.zip, source, target)
+    assertRestores(asZip(), source, target)
   }
 
   @Test
@@ -174,8 +174,10 @@ class ContainerFormatTest {
     // the encoder counted one: from eight levels down it wrote patches every reader refused as
     // nested deeper than 16. A planner that stores archives outright makes taking each one apart
     // the smaller choice at every level, which is what drives the tree that deep.
-    val storesArchives = ZipPatcher(
-      planner = { if (it.name.endsWith(".zip")) RegionAlgorithm.RAW else RegionAlgorithm.BINARY }
+    val storesArchives = asZip(
+      KiffOptions(
+        planner = { if (it.name.endsWith(".zip")) RegionAlgorithm.RAW else RegionAlgorithm.BINARY }
+      )
     )
     for (levels in 1..12) {
       fun nested(data: ByteArray): ByteArray {
@@ -204,7 +206,7 @@ class ContainerFormatTest {
     val inner = TestZipBuilder().entry("a.bin", structuredBytes(3_000, seed = 80)).build()
     val source = TestZipBuilder().entry("bundle.zip", inner, method = 8).build()
     val target = TestZipBuilder().entry("bundle.zip", inner, method = 8).build()
-    assertRestores(Kiff.zip, source, target)
+    assertRestores(asZip(), source, target)
   }
 
   @Test
@@ -216,15 +218,4 @@ class ContainerFormatTest {
     assertEquals("sect", registry.formatFor(sect, 0, sect.size)?.name)
     assertNull(registry.formatFor(structuredBytes(100, 91), 0, 100))
   }
-}
-
-/** Applies [patch] with a different patcher than built it, and checks the bytes come back. */
-private fun assertContentRestores(
-  patcher: ZipPatcher,
-  source: ByteArray,
-  target: ByteArray,
-  patch: ByteArray
-) {
-  val restored = patcher.applyPatch(source, patch)
-  assertTrue(restored.contentEquals(target), "a patch must apply whatever built it")
 }

@@ -1,10 +1,9 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff.delta
 
-import com.linroid.kiff.BinaryPatcher
 import com.linroid.kiff.Kiff
-import com.linroid.kiff.ZipPatcher
+import com.linroid.kiff.KiffOptions
+import com.linroid.kiff.asBytes
+import com.linroid.kiff.asZip
 import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.asSource
 import com.linroid.kiff.io.readFully
@@ -17,7 +16,7 @@ import kotlin.test.assertTrue
 /**
  * A third-party algorithm: it never searches, it just hands every byte over as a literal. Useless
  * in practice, but it proves the seam - a patch it produces is read back by the ordinary reader,
- * with no change to the format and no cooperation from the patcher.
+ * with no change to the format and no cooperation from the reader.
  */
 private object LiteralOnlyAlgorithm : DeltaAlgorithm {
 
@@ -69,43 +68,43 @@ class CustomAlgorithmTest {
 
   @Test
   fun aCustomAlgorithmProducesPatchesTheOrdinaryReaderRestores() {
-    val patcher = BinaryPatcher(LiteralOnlyAlgorithm)
+    val patcher = asBytes(KiffOptions(algorithm = LiteralOnlyAlgorithm))
     val patch = patcher.createPatch(source, target)
-    assertContentEquals(target, patcher.applyPatch(source, patch))
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 
   @Test
   fun theAlgorithmIsNotRecordedInThePatch() {
-    // Nothing about the search reaches the container, so the stock patcher reads it back.
-    val patch = BinaryPatcher(LiteralOnlyAlgorithm).createPatch(source, target)
-    assertContentEquals(target, Kiff.binary.applyPatch(source, patch))
+    // Nothing about the search reaches the container, so the ordinary reader reads it back.
+    val patch = asBytes(KiffOptions(algorithm = LiteralOnlyAlgorithm)).createPatch(source, target)
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
     assertEquals(com.linroid.kiff.PatcherId.BINARY, Kiff.info(patch).patcher)
   }
 
   @Test
   fun runInstructionsFromOutsideTheLibraryRestore() {
-    val patcher = BinaryPatcher(RunOnlyAlgorithm)
+    val patcher = asBytes(KiffOptions(algorithm = RunOnlyAlgorithm))
     val patch = patcher.createPatch(source, target)
-    assertContentEquals(target, Kiff.binary.applyPatch(source, patch))
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 
   @Test
-  fun theArchivePatchersTakeAnAlgorithmToo() {
-    val patcher = ZipPatcher(LiteralOnlyAlgorithm)
+  fun anArchiveTakesAnAlgorithmToo() {
+    val patcher = asZip(KiffOptions(algorithm = LiteralOnlyAlgorithm))
     val patch = patcher.createPatch(source, target)
-    assertContentEquals(target, patcher.applyPatch(source, patch))
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 
   @Test
   fun theBundledAlgorithmStillBeatsANaiveOne() {
-    val smart = Kiff.binary.createPatch(source, target).size
-    val naive = BinaryPatcher(LiteralOnlyAlgorithm).createPatch(source, target).size
+    val smart = asBytes().createPatch(source, target).size
+    val naive = asBytes(KiffOptions(algorithm = LiteralOnlyAlgorithm))
+      .createPatch(source, target).size
     assertTrue(smart < naive, "rolling hash produced $smart bytes, literal-only $naive")
   }
 
   @Test
   fun defaultAlgorithmIsTheRollingHash() {
-    assertEquals(RollingHashAlgorithm, BinaryPatcher().algorithm)
-    assertEquals("rolling-hash", Kiff.binary.let { (it as BinaryPatcher).algorithm.name })
+    assertEquals(RollingHashAlgorithm, KiffOptions().algorithm)
   }
 }

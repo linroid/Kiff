@@ -60,29 +60,6 @@ Kiff.createPatch(source, target, KiffOptions(containers = ContainerRegistry.Empt
 changed entry by entry, and `explain` and `explainApk` say where the bytes of the patch
 `createPatch` would build go.
 
-### Coming from 0.1
-
-Kiff 0.1 had a *patcher* chosen for every patch: `Kiff.binary`, `Kiff.zip` or `Kiff.apk`. They
-still work in 0.2, deprecated, and write exactly the patches they wrote before. They are removed in
-0.3.0.
-
-| 0.1 | 0.2 |
-| --- | --- |
-| `Kiff.apk.createPatch(source, target)` | `Kiff.createPatch(source, target)` |
-| `Kiff.binary.applyPatch(source, patch)` | `Kiff.applyPatch(source, patch)` |
-| `Kiff.createPatch(Kiff.apk, from, to, patch)` | `Kiff.createPatch(from, to, patch)` |
-| `ZipPatcher(containers = ...)` | `Kiff.createPatch(source, target, KiffOptions(containers = ...))` |
-| `Kiff.zip.analyze`, `Kiff.apk.analyze` | `KiffReports.zip`, `KiffReports.apk` |
-| `Kiff.zip.explain`, `Kiff.apk.explainKinds` | `KiffReports.explain`, `KiffReports.explainApk` |
-| `Kiff.apk.isApk`, `Kiff.apk.kindOf` | `KiffReports.isApk`, `KiffReports.apkEntryKind` |
-
-On a file that is no archive, `Kiff.createPatch` writes the patch `Kiff.binary` wrote, and on a zip
-or an APK the one `Kiff.zip` or `Kiff.apk` wrote. Code that built archive patches with
-`Kiff.binary` therefore gets a different patch, which records `zip` or `apk`. An app still on 0.1.0
-applies it with `Kiff.applyPatch` on paths, or with the patcher
-`Kiff.patcher(Kiff.info(patch).patcher)` returns, but not with `Kiff.binary.applyPatch`, which
-refuses a patch another patcher built.
-
 ## CLI
 
 The `cli` module is a small command-line front end for the library, installed as `kiff`:
@@ -101,9 +78,7 @@ $ ./cli/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored
 $ ./cli/build/install/kiff/bin/kiff info foo.patch
 ```
 
-`create` reads each file the way [the library](#how-structure-is-detected) does, where 0.1 read
-every file as plain bytes unless `-p` said otherwise. `-p` and `--patcher` are still accepted until
-0.3.0, and ignored with a warning.
+`create` reads each file the way [the library](#how-structure-is-detected) does.
 
 `kiff changes foo-1.0.apk foo-1.1.apk` lists what differs entry by entry, without building a
 patch. For an APK it also groups the entries the way the package is built:
@@ -399,7 +374,6 @@ and zips with stored entries are where patches pay off.
 | `from` | | Tags to patch from, one per line, in place of `previous` |
 | `prereleases` | `false` | Whether prereleases can be patched from |
 | `kiff-version` | the action's | Released Kiff to make the patches with: the oldest one embedded in an app you update |
-| `patcher` | | Deprecated and ignored, with a warning: `kiff release` reads each file's structure itself |
 | `max-ratio` | `0.8` | Drop a patch larger than this share of its file |
 | `name` | `{target}.from-{from}.kiff` | Patch name: `{target}` is the file's name, `{from}` and `{to}` the tags |
 | `manifest` | `kiff-patches.json` | Manifest name; give each workflow its own if several patch one release |
@@ -448,9 +422,6 @@ Without `kiff-version`, the action runs the CLI of its own version, which it sha
 such as a branch or a commit, builds the CLI from the action's own source first, which adds a few
 minutes. Pin the action to an exact version or commit, not a branch. With `kiff-version` set, the
 action itself can move ahead of your apps, since the format comes from the kiff it runs.
-
-The `patcher` input is deprecated. `kiff release` reads each file's structure itself, so the action
-no longer passes it on, and setting it only gives a warning.
 
 The v0.1.0 GitHub release is still a draft, and a draft has nothing to download. Until it is
 published, leave `kiff-version` empty and pin a commit of `main`.
@@ -553,7 +524,7 @@ time and never patch size. That matters more than it sounds: a byte search that 
 anywhere in the source is already good at finding moved and edited content, so on *stored* content
 today, decomposing mostly breaks even. It will earn its keep on compressed children, which cannot be
 compared at all without being decoded. A zip that is the whole file is the exception: it is always
-taken apart, as 0.1's zip and apk patchers did, since weighing it would mean searching the largest
+taken apart, since weighing it would mean searching the largest
 input Kiff is given twice.
 
 `COLUMNS` is what a format's knowledge is worth. A table of ids is the renumbering problem in its
@@ -754,7 +725,7 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 
 | Package | Holds |
 | --- | --- |
-| `com.linroid.kiff` | `Kiff`, `KiffOptions`, `KiffReports`, `PatchInfo`, `PatcherId`, `KiffException`, and the deprecated patchers |
+| `com.linroid.kiff` | `Kiff`, `KiffOptions`, `KiffReports`, `PatchInfo`, `PatcherId`, `KiffException` |
 | `.delta` | the algorithm seam - `DeltaAlgorithm`, `DeltaScanner`, `DeltaSink` - plus the bundled rolling-hash search and the instruction codec |
 | `.io` | `SeekableSource`, `ByteArraySource`, `fileSource`, whole-file helpers |
 | `.format` | the patch container and its primitives: varint I/O, CRC-32, the content codec |

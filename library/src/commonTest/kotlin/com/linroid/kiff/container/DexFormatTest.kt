@@ -1,12 +1,11 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff.container
 
 import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffOptions
 import com.linroid.kiff.NestedContainers
-import com.linroid.kiff.ZipPatcher
 import com.linroid.kiff.apk.TestApkBuilder
-import com.linroid.kiff.ApkPatcher
+import com.linroid.kiff.asApk
+import com.linroid.kiff.asZip
 import com.linroid.kiff.assertRestores
 import com.linroid.kiff.format.RegionEncoding
 import com.linroid.kiff.structuredBytes
@@ -91,7 +90,7 @@ class DexFormatTest {
   fun aDexInsideAnApkStillRestoresExactly() {
     val source = TestZipBuilder().entry("classes.dex", dex(seed = 10)).build()
     val target = TestZipBuilder().entry("classes.dex", dex(seed = 11)).build()
-    assertRestores(Kiff.zip, source, target)
+    assertRestores(asZip(), source, target)
   }
 
   @Test
@@ -99,8 +98,8 @@ class DexFormatTest {
     val source = TestZipBuilder().entry("classes.dex", dex(seed = 20)).build()
     val target = TestZipBuilder().entry("classes.dex", dex(seed = 20, codeSize = 4_400)).build()
 
-    val aware = ZipPatcher(containers = NestedContainers).createPatch(source, target).size
-    val unaware = ZipPatcher(containers = ContainerRegistry(ZipFormat()))
+    val aware = asZip(KiffOptions(containers = NestedContainers)).createPatch(source, target).size
+    val unaware = asZip(KiffOptions(containers = ContainerRegistry(ZipFormat())))
       .createPatch(source, target).size
     assertTrue(aware <= unaware, "describing the dex cost size: $aware against $unaware")
   }
@@ -123,8 +122,8 @@ class DexFormatTest {
       .dex("classes2.dex", dexWith(b, seed = 65))
       .build()
 
-    val withDex = ApkPatcher(containers = NestedContainers)
-    val withoutDex = ApkPatcher(containers = ContainerRegistry(ZipFormat()))
+    val withDex = asApk(KiffOptions(containers = NestedContainers))
+    val withoutDex = asApk(KiffOptions(containers = ContainerRegistry(ZipFormat())))
     val aware = assertRestores(withDex, source, target)
     val unaware = assertRestores(withoutDex, source, target)
     assertTrue(aware <= unaware, "describing the dex cost size: $aware against $unaware")
@@ -160,8 +159,8 @@ class DexFormatTest {
         .build()
     ).build()
 
-    assertRestores(Kiff.zip, source, target)
-    val table = Kiff.zip.explain(source, target).allRegions.first { it.name == "string_ids" }
+    assertRestores(asZip(), source, target)
+    val table = asZip().explain(source, target).allRegions.first { it.name == "string_ids" }
     // The encoding is the claim worth making: a candidate only wins by packing smaller than every
     // other. The reported ratio is not - it counts unpacked bytes, and the delta inside a columns
     // region is mostly difference-encoded, which emits one byte per target byte whatever it packs
@@ -191,8 +190,8 @@ class DexFormatTest {
 
       val source = TestZipBuilder().entry("classes.dex", bytes).build()
       val target = TestZipBuilder().entry("classes.dex", broken).build()
-      assertRestores(Kiff.zip, source, target)
-      assertRestores(Kiff.apk, target, source)
+      assertRestores(asZip(), source, target)
+      assertRestores(asApk(), target, source)
     }
   }
 

@@ -1,19 +1,56 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff
 
+import com.linroid.kiff.container.ApkFormat
+import com.linroid.kiff.container.ZipFormat
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.asSource
+import com.linroid.kiff.region.RegionReport
 import kotlin.random.Random
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
-/** Asserts that [patcher] rebuilds [target] byte for byte, and reports the patch size. */
-fun assertRestores(patcher: Patcher, source: ByteArray, target: ByteArray): Int {
-  val patch = patcher.createPatch(source, target)
+/**
+ * Builds patches the way [Kiff.createPatch] does, with [structure] in place of detection, so a test
+ * can describe a target as another kind of file would be.
+ */
+internal class ForcedStructure(
+  private val structure: Structure,
+  private val options: KiffOptions = KiffOptions()
+) {
+  val id: PatcherId get() = structure.id
+  val name: String get() = structure.name
+
+  fun createPatch(source: SeekableSource, target: SeekableSource): ByteArray =
+    PatchBuilder.build(source, target, options, structure = structure)
+
+  fun createPatch(source: ByteArray, target: ByteArray): ByteArray =
+    createPatch(source.asSource(), target.asSource())
+
+  /** Builds the patch and reports where its bytes went, region by region. */
+  fun explain(source: ByteArray, target: ByteArray): RegionReport =
+    KiffReports.explainAs(source, target, options, structure)
+}
+
+/** Describes every target as plain bytes. */
+internal fun asBytes(options: KiffOptions = KiffOptions()) =
+  ForcedStructure(Structure.Bytes, options)
+
+/** Describes every target as a zip, entries, gaps and directory, whatever it is. */
+internal fun asZip(options: KiffOptions = KiffOptions()) =
+  ForcedStructure(Structure.Archive(ZipFormat()), options)
+
+/** Describes every target as an APK, with its dex files searched together. */
+internal fun asApk(options: KiffOptions = KiffOptions()) =
+  ForcedStructure(Structure.Archive(ApkFormat()), options)
+
+/** Asserts that [builder]'s patch rebuilds [target] byte for byte, and reports its size. */
+internal fun assertRestores(builder: ForcedStructure, source: ByteArray, target: ByteArray): Int {
+  val patch = builder.createPatch(source, target)
   val info = Kiff.info(patch)
-  assertEquals(patcher.id, info.patcher)
+  assertEquals(builder.id, info.patcher)
   assertEquals(source.size.toLong(), info.sourceSize)
   assertEquals(target.size.toLong(), info.targetSize)
-  assertContentEquals(target, patcher.applyPatch(source, patch), "restored bytes differ")
+  assertContentEquals(target, Kiff.applyPatch(source, patch), "restored bytes differ")
   return patch.size
 }
 

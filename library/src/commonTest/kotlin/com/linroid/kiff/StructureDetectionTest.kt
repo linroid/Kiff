@@ -57,18 +57,6 @@ class StructureDetectionTest {
   }
 
   @Test
-  @Suppress("DEPRECATION")
-  fun eachPatcherStillWritesWhatItDid() {
-    for (pair in StructurePairs.all) {
-      assertContentEquals(
-        Kiff.createPatch(pair.source, pair.target),
-        Kiff.patcher(pair.expected).createPatch(pair.source, pair.target),
-        pair.name
-      )
-    }
-  }
-
-  @Test
   fun aDexIsTakenApartOnlyWhereThatPays() {
     val source = dex(seed = 1, codeSize = 60_000)
     val target = dex(seed = 1, codeSize = 63_000)
