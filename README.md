@@ -351,21 +351,26 @@ version of the app you update. A newer Kiff reads every patch an older one wrote
 `FormatVectorsTest` holds each build to with patches frozen in the released format, so a patch from
 the oldest one applies on every later app as well.
 
-The first run of a version downloads `kiff-VERSION.zip` from its GitHub release, refuses it unless
-it matches the `kiff-VERSION.zip.sha256` beside it, and unpacks it into
-`$KIFF_HOME/versions/VERSION`, with `KIFF_HOME` at `~/.kiff` unless set. It is unpacked beside that
-directory and renamed into place, so an interrupted or concurrent run never leaves half a version
-there, and every later run starts the installed copy without the network. `KIFF_DOWNLOAD_URL`
-replaces `https://github.com/linroid/kiff/releases/download` for a mirror, which serves the same two
-files at `vVERSION/kiff-VERSION.zip`. A draft release cannot be downloaded until it is published,
-and a `-SNAPSHOT` version is refused, since no snapshot has a release.
+The first run of a version downloads it from its GitHub release with `curl`, which has to be
+installed. It takes the executable built for this machine, `kiff-VERSION-PLATFORM` with `PLATFORM`
+one of `linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64` and `windows-x64.exe`, and otherwise
+`kiff-VERSION.zip`, the JVM build, as for 0.1.0, which has no other. Either is refused unless it
+matches the `.sha256` beside it, and is installed into `$KIFF_HOME/versions/VERSION`, with
+`KIFF_HOME` at `~/.kiff` unless set. It is put together beside that directory and renamed into
+place, so an interrupted or concurrent run never leaves half a version there, and every later run
+starts the installed copy without the network. `KIFF_DOWNLOAD_URL` replaces
+`https://github.com/linroid/kiff/releases/download` for a mirror, which serves the same files under
+`vVERSION/`. A draft release cannot be downloaded until it is published, and a `-SNAPSHOT` version
+is refused, since no snapshot has a release.
 
 Only the `kiff` you start needs this feature. Everything after the version goes to the other one
 unread, so that can be any release, even one older than `--use`, with whatever commands and flags
-it has. Its exit status is returned as it is, and progress goes to standard error, so
-`kiff --use 0.1.0 diff a b | patch` still works. It runs on the same Java as this `kiff` when
-`JAVA_HOME` is unset. Naming the version that is running just runs the command, and `kiff -v` or
-`kiff --version` says which version that is. A build from source is `0.0.0-SNAPSHOT`, which
+it has. On Linux and macOS it takes the place of the `kiff` you started, so its exit status and
+signals are your own; elsewhere its exit status is returned as it is. Progress goes to standard
+error, so `kiff --use 0.1.0 diff a b | patch` still works. A JVM build runs on Java 17 or newer:
+the one in `JAVA_HOME`, or `java` on the `PATH`, and a `kiff` that is itself the JVM build lends
+its own Java when `JAVA_HOME` is unset. Naming the version that is running just runs the command,
+and `kiff -v` or `kiff --version` says which version that is. A build from source is `0.0.0-SNAPSHOT`, which
 `--version` follows with the commit it was built from, as in `kiff 0.0.0-SNAPSHOT (59e074e)`. No
 release is that build, so from one `--use` always hands the command over.
 
@@ -831,8 +836,11 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 
 ## Targets
 
-`jvm`, `iosArm64`, `iosSimulatorArm64`, `macosArm64`, `macosX64`, `linuxX64`, `mingwX64`,
-`js(nodejs, browser)`.
+The library: `jvm`, `iosArm64`, `iosSimulatorArm64`, `macosArm64`, `macosX64`, `linuxX64`,
+`linuxArm64`, `mingwX64`, `js(nodejs, browser)`.
+
+The CLI: an executable each for `linuxX64`, `linuxArm64`, `macosArm64`, `macosX64` and `mingwX64`,
+built with Kotlin/Native, and the `jvm` build for anywhere else Java 17 runs.
 
 Kiff addresses both files through `SeekableSource` rather than reading them as streams, because a
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
@@ -849,16 +857,24 @@ $ ./cli/build/install/kiff/bin/kiff --version
 kiff 0.0.0-SNAPSHOT (59e074e)
 ```
 
+That is the JVM build. The executable for a platform is linked by its own task, such as
+`./gradlew :cli:linkReleaseExecutableMacosArm64`, into
+`cli/build/bin/macosArm64/releaseExecutable/kiff.kexe`, or `kiff.exe` for `mingwX64`. A Mac links
+every platform's; Linux links all but the Macs'.
+
 `./gradlew publishToMavenLocal` publishes the library to `~/.m2` as `0.0.0-SNAPSHOT`, for a project
 to try before a release. The tests run per target, as CI runs them:
 
 | Command | Runs |
 | --- | --- |
-| `./gradlew jvmTest :cli:test` | the shared suite on the JVM, and the CLI's tests |
+| `./gradlew jvmTest` | the library's and the CLI's tests on the JVM |
 | `./gradlew jsTest` | the shared suite on Node.js and in a browser |
 | `./gradlew iosSimulatorArm64Test` | the shared suite on the iOS simulator, on macOS with Xcode |
-| `./gradlew macosArm64Test` | the shared suite natively on Apple silicon |
-| `./gradlew linuxX64Test` | the shared suite natively on Linux |
+| `./gradlew macosArm64Test` | the library's and the CLI's tests natively on Apple silicon |
+| `./gradlew linuxX64Test` | the library's and the CLI's tests natively on Linux |
+
+For Linux on arm64 and for Windows, CI links the test executables on Linux, with
+`./gradlew linkDebugTestLinuxArm64 linkDebugTestMingwX64`, and runs them on a machine of each.
 
 ## Releasing
 

@@ -2,26 +2,33 @@
 
 ## Project Structure & Module Organization
 
-Kiff is a Kotlin Multiplatform file-diffing library with a JVM command-line application.
+Kiff is a Kotlin Multiplatform file-diffing library with a command-line application, built as a
+native executable per platform and as a JVM distribution.
 
 - `library/src/commonMain/kotlin/com/linroid/kiff/` contains patchers and shared delta,
   container, format, I/O, and text code. Keep portable logic here.
 - `library/src/{jvmMain,jsMain,nativeMain}/` contains platform-specific filesystem adapters.
 - `library/src/commonTest/` contains shared tests, synthetic archive builders, and embedded
   compatibility vectors; there is no separate application asset directory.
-- `cli/src/main/kotlin/com/linroid/kiff/cli/` contains Clikt commands and output formatting.
+- `cli/src/commonMain/kotlin/com/linroid/kiff/cli/` contains Clikt commands and output formatting;
+  `cli/src/{jvmMain,nativeMain,posixMain,mingwMain}/` hold what differs per platform, such as
+  running another program. `cli/third-party-notices.txt` is what `kiff --licenses` prints after
+  `LICENSE`; keep it in step with what the binaries link.
 - `FORMAT.md` specifies the patch format; `gradle/libs.versions.toml` centralizes dependencies.
 
 ## Build, Test, and Development Commands
 
 Use the Gradle wrapper and JDK 17, matching CI.
 
-- `./gradlew :cli:installDist` builds the CLI distribution and its library dependency.
+- `./gradlew :cli:installDist` builds the CLI's JVM distribution and its library dependency.
 - `./cli/build/install/kiff/bin/kiff --help` shows commands for local use.
-- `./gradlew :library:jvmTest` runs the shared suite on JVM.
+- `./gradlew :cli:linkReleaseExecutableMacosArm64` links the native CLI into
+  `cli/build/bin/macosArm64/releaseExecutable/kiff.kexe`; each native target has its own task.
+- `./gradlew jvmTest` runs the library's shared suite and the CLI's tests on JVM.
 - `./gradlew :library:jsNodeTest` runs the suite on Node.js.
 - `./gradlew :library:iosSimulatorArm64Test` runs iOS simulator tests on macOS with Xcode.
-- `./gradlew :library:linuxX64Test` runs native tests on Linux.
+- `./gradlew linuxX64Test` and `./gradlew macosArm64Test` run the library's and the CLI's tests
+  natively.
 - `./gradlew publishToMavenLocal` publishes artifacts locally for integration testing.
 - Builds are `0.0.0-SNAPSHOT` unless given `-Pversion=X.Y.Z`, which the release workflow takes
   from the `vX.Y.Z` tag. Never put a version in `gradle.properties` or commit a version bump.
