@@ -10,11 +10,11 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 plan=${PLAN:?}
 kiff=${KIFF:?}
+kiff_used=${KIFF_USED:?}
 work=$(dirname "$plan")
 repo=$(jq -r .repository "$plan")
 tag=$(jq -r .tag "$plan")
 max_ratio=${MAX_RATIO:?}
-patcher=$(trim "${INPUT_PATCHER:-}")
 name=$(trim "${INPUT_NAME:-}")
 
 out=$work/patches
@@ -79,6 +79,7 @@ read_result() {
   result="failed: $(sed -n 's/^Error: //p' "$2" | tail -n 1)"
 }
 
+echo "Making the patches with kiff $kiff_used"
 rows=''
 failed=0
 files=$(jq '.files | length' "$plan")
@@ -112,9 +113,6 @@ for ((i = 0; i < files; i++)); do
     --base-url "$base_url"
     --max-ratio "$max_ratio"
   )
-  if [[ -n $patcher ]]; then
-    args+=(--patcher "$patcher")
-  fi
   if [[ -n $name ]]; then
     args+=(--name "$name")
   fi
@@ -164,6 +162,13 @@ set_output count "$count"
 if [[ -n ${GITHUB_STEP_SUMMARY:-} ]]; then
   {
     echo "### Kiff patches for $tag"
+    echo
+    # The manifest names the build that wrote it, which is the surest word on which one ran.
+    generator=''
+    if [[ -f $manifest ]]; then
+      generator=$(jq -r '.generator // empty' "$manifest")
+    fi
+    echo "Made with ${generator:-kiff $kiff_used}."
     echo
     if [[ -n $rows ]]; then
       echo '| File | From | Patch size | Share of file | Result |'

@@ -29,11 +29,30 @@ boolean() {
 }
 prereleases=$(boolean "${INPUT_PRERELEASES:-false}") \
   || fail "prereleases is '${INPUT_PRERELEASES:-}', not true or false."
-upload=$(boolean "${INPUT_UPLOAD:-true}") || fail "upload is '${INPUT_UPLOAD:-}', not true or false."
+upload=$(boolean "${INPUT_UPLOAD:-true}") \
+  || fail "upload is '${INPUT_UPLOAD:-}', not true or false."
 
 max_ratio=$(trim "${INPUT_MAX_RATIO:-0.8}")
 if [[ ! $max_ratio =~ ^([0-9]+(\.[0-9]*)?|\.[0-9]+)$ ]]; then
   fail "max-ratio is '$max_ratio', not a number such as 0.8."
+fi
+
+# A release's version, as kiff --use takes it: three numbers and an optional suffix.
+released='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'
+kiff_version=$(trim "${INPUT_KIFF_VERSION:-}")
+if [[ -z $kiff_version ]]; then
+  :
+elif [[ $(lowercase "$kiff_version") == *-snapshot ]]; then
+  fail "kiff-version is $kiff_version, a snapshot, and no snapshot has a release to download. \
+Leave kiff-version empty to make the patches with the action's own Kiff."
+elif [[ $kiff_version == [vV]* && ${kiff_version:1} =~ $released ]]; then
+  fail "kiff-version is $kiff_version, a tag. Give its version, ${kiff_version:1}."
+elif [[ ! $kiff_version =~ $released ]]; then
+  fail "kiff-version is '$kiff_version', not a released Kiff version such as 0.1.0."
+fi
+
+if [[ -n $(trim "${INPUT_PATCHER:-}") ]]; then
+  warn "patcher is deprecated and ignored: kiff release reads each file's structure itself."
 fi
 
 manifest=$(trim "${INPUT_MANIFEST:-kiff-patches.json}")
@@ -280,3 +299,4 @@ set_output tag "$tag"
 set_output upload "$upload"
 set_output max-ratio "$max_ratio"
 set_output manifest "$manifest"
+set_output kiff-version "$kiff_version"

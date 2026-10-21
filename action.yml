@@ -33,12 +33,18 @@ inputs:
     description: Whether prereleases can be patched from.
     required: false
     default: 'false'
+  kiff-version:
+    description: >-
+      Released Kiff to make the patches with, such as 0.1.0: the oldest Kiff still embedded in a
+      build of the app you update, since that Kiff applies them. Defaults to the action's own.
+    required: false
+    default: ''
   patcher:
     description: >-
-      auto, binary, zip or apk. auto picks apk for a .apk file, zip for any other zip archive and
-      binary for the rest.
+      Deprecated and ignored. kiff release reads each file's structure itself, so the input only
+      gives a warning.
     required: false
-    default: auto
+    default: ''
   max-ratio:
     description: Drop a patch larger than this share of the file it rebuilds.
     required: false
@@ -100,6 +106,8 @@ runs:
         INPUT_PREVIOUS: ${{ inputs.previous }}
         INPUT_FROM: ${{ inputs.from }}
         INPUT_PRERELEASES: ${{ inputs.prereleases }}
+        INPUT_KIFF_VERSION: ${{ inputs.kiff-version }}
+        INPUT_PATCHER: ${{ inputs.patcher }}
         INPUT_MAX_RATIO: ${{ inputs.max-ratio }}
         INPUT_MANIFEST: ${{ inputs.manifest }}
         INPUT_UPLOAD: ${{ inputs.upload }}
@@ -119,6 +127,8 @@ runs:
     - id: cli
       shell: bash
       run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh"'
+      env:
+        KIFF_VERSION: ${{ steps.plan.outputs.kiff-version }}
 
     - id: patches
       shell: bash
@@ -126,9 +136,9 @@ runs:
       env:
         PLAN: ${{ steps.plan.outputs.plan }}
         KIFF: ${{ steps.cli.outputs.kiff }}
+        KIFF_USED: ${{ steps.cli.outputs.version }}
         MAX_RATIO: ${{ steps.plan.outputs.max-ratio }}
         MANIFEST: ${{ steps.plan.outputs.manifest }}
-        INPUT_PATCHER: ${{ inputs.patcher }}
         INPUT_NAME: ${{ inputs.name }}
         GH_TOKEN: ${{ inputs.token }}
 
