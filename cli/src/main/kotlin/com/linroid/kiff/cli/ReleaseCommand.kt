@@ -14,7 +14,6 @@ import com.github.ajalt.clikt.parameters.types.restrictTo
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.PatchInfo
-import com.linroid.kiff.Patcher
 import com.linroid.kiff.io.KiffFiles
 import java.io.File
 import java.io.FileInputStream
@@ -46,7 +45,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
 
     Exit status is 0 when every source gave a patch or was dropped for its size, and 1 when any
     could not be created or verified. The others are still written and listed.
-  """.trimIndent()
+  """.trimIndent() + "\n\n" + DETECTION_HELP
 
   private val target by option("--to", help = "The release's file, as FILE or LABEL=FILE")
     .convert("FILE") { labeled(it) }
@@ -78,13 +77,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
     metavar = "URL",
     help = "URL the patches are published under; without it the manifest gives no URLs"
   )
-  private val patcherName by option(
-    "-p",
-    "--patcher",
-    metavar = "PATCHER",
-    help = "Patcher to use: auto|${Kiff.patchers.joinToString("|") { it.name }}. auto picks apk " +
-      "for a .apk file, zip for any other zip archive, and binary for the rest (default: auto)"
-  ).default(AUTO)
+  private val patcherName by ignoredPatcherOption()
   private val maxRatio by option(
     "--max-ratio",
     metavar = "RATIO",
@@ -96,13 +89,9 @@ class ReleaseCommand : KiffCommand(name = "release") {
   ).flag()
 
   override fun execute() {
+    warnIgnoredPatcher(patcherName)
     requireFile(target.path)
     sources.forEach { requireFile(it.path) }
-    val patcher = if (patcherName.equals(AUTO, ignoreCase = true)) {
-      autoPatcher(target.path)
-    } else {
-      resolvePatcher(patcherName)
-    }
     val manifest = manifestPath ?: join(out, ReleaseManifest.FILE_NAME)
     val names = patchNames(manifest)
     // Read before any patch is made: a manifest that cannot be merged into fails at once rather
@@ -116,12 +105,10 @@ class ReleaseCommand : KiffCommand(name = "release") {
     val elapsed = measureMillis {
       val targetPrint = fingerprint(target.path)
       val labelled = if (target.label == target.fileName) "" else " (${target.label})"
-      echo(
-        "${target.fileName}$labelled, ${formatBytes(targetPrint.size)}, ${patcher.name} patcher"
-      )
+      echo("${target.fileName}$labelled, ${formatBytes(targetPrint.size)}")
       for ((source, name) in sources.zip(names)) {
         val label = "  ${source.label.padEnd(labelWidth)}  "
-        when (val outcome = release(source, name, patcher, targetPrint)) {
+        when (val outcome = release(source, name, targetPrint)) {
           is Outcome.Kept -> {
             patches += outcome.patch
             val status = if (noVerify) "created" else "restored"
@@ -161,27 +148,17 @@ class ReleaseCommand : KiffCommand(name = "release") {
   }
 
   /** Answers a failure the library reports as the outcome it is, as [KiffCommand] would. */
-  private fun release(
-    source: Labeled,
-    name: String,
-    patcher: Patcher,
-    targetPrint: Fingerprint
-  ): Outcome = try {
-    releaseOrThrow(source, name, patcher, targetPrint)
+  private fun release(source: Labeled, name: String, targetPrint: Fingerprint): Outcome = try {
+    releaseOrThrow(source, name, targetPrint)
   } catch (e: KiffException) {
     Outcome.Failed(e.message.orEmpty())
   } catch (e: IOException) {
     Outcome.Failed(e.message ?: e.toString())
   }
 
-  private fun releaseOrThrow(
-    source: Labeled,
-    name: String,
-    patcher: Patcher,
-    targetPrint: Fingerprint
-  ): Outcome {
+  private fun releaseOrThrow(source: Labeled, name: String, targetPrint: Fingerprint): Outcome {
     val path = join(out, name)
-    val info = Kiff.createPatch(patcher, source.path, target.path, path)
+    val info = Kiff.createPatch(source.path, target.path, path)
     var kept = false
     try {
       if (!noVerify) verify(source.path, path, targetPrint)
@@ -196,6 +173,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
         url = urlOf(name),
         size = patchPrint.size,
         sha256 = patchPrint.sha256,
+        // What the header records, as Kiff 0.1 wrote it, so the manifest schema stays at 1.
         patcher = info.patcher.name.lowercase(),
         format = info.formatVersion
       )
@@ -255,23 +233,8 @@ class ReleaseCommand : KiffCommand(name = "release") {
     "${formatBytes(info.patchSize).padStart(10)}  ${formatPercent(info.ratio).padStart(7)}"
 
   private companion object {
-    const val AUTO = "auto"
     const val DEFAULT_NAME = "{target}.from-{from}.kiff"
     const val DEFAULT_MAX_RATIO = 0.8
-
-    /** The start of every zip's first local file header. */
-    private val ZIP_MAGIC = byteArrayOf(0x50, 0x4B, 0x03, 0x04)
-
-    /**
-     * `--patcher auto`'s choice: apk by the name, since an APK is a zip like any other inside, and
-     * zip by the content, since zips go by many names.
-     */
-    fun autoPatcher(path: String): Patcher = when {
-      File(path).name.endsWith(".apk", ignoreCase = true) -> Kiff.apk
-      FileInputStream(path).use { it.readNBytes(ZIP_MAGIC.size) }.contentEquals(ZIP_MAGIC) ->
-        Kiff.zip
-      else -> Kiff.binary
-    }
   }
 }
 

@@ -5,7 +5,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.linroid.kiff.apk.ApkDiffReport
-import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffReports
 import com.linroid.kiff.zip.ZipEntryChange
 import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.io.KiffFiles
@@ -22,12 +22,12 @@ class ChangesCommand : KiffCommand(name = "changes") {
     requireFile(target)
     val sourceBytes = KiffFiles.readBytes(source)
     val targetBytes = KiffFiles.readBytes(target)
-    val apk = if (Kiff.apk.isApk(sourceBytes) || Kiff.apk.isApk(targetBytes)) {
-      Kiff.apk.analyze(sourceBytes, targetBytes)
+    val apk = if (KiffReports.isApk(sourceBytes) || KiffReports.isApk(targetBytes)) {
+      KiffReports.apk(sourceBytes, targetBytes)
     } else {
       null
     }
-    val report = apk?.entries ?: Kiff.zip.analyze(sourceBytes, targetBytes)
+    val report = apk?.entries ?: KiffReports.zip(sourceBytes, targetBytes)
 
     echo("${formatBytes(report.sourceSize.toLong())} -> ${formatBytes(report.targetSize.toLong())}")
     echo(

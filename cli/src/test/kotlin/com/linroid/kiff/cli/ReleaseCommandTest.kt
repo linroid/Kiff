@@ -4,6 +4,7 @@ import com.linroid.kiff.Kiff
 import com.linroid.kiff.PatcherId
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.PrintStream
 import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.security.MessageDigest
@@ -313,22 +314,56 @@ class ReleaseCommandTest {
   }
 
   @Test
-  fun autoPicksApkByNameZipByContentAndBinaryForTheRest() {
-    assertAutoPicks(PatcherId.APK, "app-2.apk", zipBytes(app(2)), zipBytes(app(1)))
-    assertAutoPicks(PatcherId.ZIP, "bundle-2.jar", zipBytes(app(2)), zipBytes(app(1)))
+  fun whatAFileIsComesFromItsContentNotItsName() {
+    val manifest = mapOf("AndroidManifest.xml" to text(50, seed = 9))
+    assertDetects(PatcherId.APK, "app-2.zip", zipBytes(app(2) + manifest), zipBytes(app(1)))
+    assertDetects(PatcherId.ZIP, "app-2.apk", zipBytes(app(2)), zipBytes(app(1)))
+    assertDetects(PatcherId.ZIP, "bundle-2.jar", zipBytes(app(2)), zipBytes(app(1)))
     val data = Random(3).nextBytes(20_000)
-    assertAutoPicks(PatcherId.BINARY, "data-2.bin", data, data.copyOf().also { it[0] = 1 })
+    assertDetects(PatcherId.BINARY, "data-2.bin", data, data.copyOf().also { it[0] = 1 })
   }
 
   @Test
-  fun aNamedPatcherOverridesAuto() {
-    val status = kiff(
-      "release", "--to", zip("app-1.2.zip", app(2)), "--from", zip("app-1.1.zip", app(1)),
-      "--out", out.path, "--patcher", "binary"
-    )
+  fun aPatcherIsIgnoredWithAWarning() {
+    val target = zip("app-1.2.zip", app(2))
+    val source = zip("app-1.1.zip", app(1))
+    for (option in listOf("--patcher", "-p")) {
+      out.deleteRecursively()
+      val run = capturingErr {
+        kiff("release", "--to", target, "--from", source, "--out", out.path, option, "binary")
+      }
 
-    assertEquals(0, status)
-    assertEquals("binary", manifest().files().single().patches().single().string("patcher"))
+      assertEquals(0, run.status, option)
+      assertTrue("Warning: --patcher binary is ignored" in run.err, run.err)
+      assertEquals("zip", manifest().files().single().patches().single().string("patcher"))
+    }
+
+    val created = File(dir, "created.kiff")
+    val run = capturingErr { kiff("create", "-p", "apk", source, target, created.path) }
+    assertEquals(0, run.status)
+    assertTrue("Warning: --patcher apk is ignored" in run.err, run.err)
+    assertEquals(PatcherId.ZIP, Kiff.info(created.path).patcher)
+
+    val quiet = capturingErr { kiff("create", source, target, created.path) }
+    assertEquals(0, quiet.status)
+    assertEquals("", quiet.err)
+  }
+
+  @Test
+  fun thePatcherIsNotOfferedInHelp() {
+    for (command in listOf("create", "release")) {
+      val help = ByteArrayOutputStream()
+      val original = System.out
+      System.setOut(PrintStream(help, true, Charsets.UTF_8))
+      try {
+        kiff(command, "--help")
+      } finally {
+        System.setOut(original)
+      }
+      val text = help.toString(Charsets.UTF_8)
+      assertTrue("AndroidManifest.xml" in text, text)
+      assertFalse("--patcher" in text, text)
+    }
   }
 
   @Test
@@ -356,7 +391,7 @@ class ReleaseCommandTest {
     assertEquals(path, labeled.path, text)
   }
 
-  private fun assertAutoPicks(
+  private fun assertDetects(
     expected: PatcherId,
     name: String,
     target: ByteArray,
@@ -381,6 +416,21 @@ class ReleaseCommandTest {
   }
 
   private fun kiff(vararg args: String): Int = runKiff(arrayOf(*args))
+
+  private class Run(val status: Int, val err: String)
+
+  /** Runs [block] with standard error collected, which is where a warning goes. */
+  private fun capturingErr(block: () -> Int): Run {
+    val err = ByteArrayOutputStream()
+    val original = System.err
+    System.setErr(PrintStream(err, true, Charsets.UTF_8))
+    val status = try {
+      block()
+    } finally {
+      System.setErr(original)
+    }
+    return Run(status, err.toString(Charsets.UTF_8))
+  }
 
   private fun manifest(): JsonObject =
     Json.parseToJsonElement(File(out, ReleaseManifest.FILE_NAME).readText()).jsonObject
