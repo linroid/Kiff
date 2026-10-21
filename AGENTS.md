@@ -23,6 +23,8 @@ Use the Gradle wrapper and JDK 17, matching CI.
 - `./gradlew :library:iosSimulatorArm64Test` runs iOS simulator tests on macOS with Xcode.
 - `./gradlew :library:linuxX64Test` runs native tests on Linux.
 - `./gradlew publishToMavenLocal` publishes artifacts locally for integration testing.
+- Builds are `0.0.0-SNAPSHOT` unless given `-Pversion=X.Y.Z`, which the release workflow takes
+  from the `vX.Y.Z` tag. Never put a version in `gradle.properties` or commit a version bump.
 
 ## Coding Style & Naming Conventions
 

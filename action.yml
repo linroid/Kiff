@@ -117,11 +117,14 @@ runs:
         distribution: temurin
         java-version: 17
 
+    # The runner leaves GITHUB_ACTION_REF empty in a composite action's steps, but not
+    # github.action_ref passed through env (actions/runner#2473).
     - id: cli
       shell: bash
       run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh"'
       env:
         KIFF_VERSION: ${{ steps.plan.outputs.kiff-version }}
+        KIFF_ACTION_REF: ${{ github.action_ref }}
 
     - id: patches
       shell: bash

@@ -194,6 +194,17 @@ class UseVersionTest {
   }
 
   @Test
+  fun asksForTheReleaseOfItsOwnNumbersWhenItIsASnapshot() {
+    // A build without -Pversion is 0.0.0-SNAPSHOT, which no release is, not even 0.0.0.
+    val release = kiffVersion.removeSuffix("-SNAPSHOT")
+    if (release == kiffVersion) return
+    val run = kiff("--use", release, "create", "a", "b", "c")
+
+    assertEquals(1, run.status, run.err)
+    assertEquals(listOf("/releases/v$release/kiff-$release.zip.sha256"), requests.toList())
+  }
+
+  @Test
   fun refusesASnapshotOrAnythingElseNoReleaseHas() {
     val refusals = listOf(
       "9.9.9-SNAPSHOT" to "9.9.9-SNAPSHOT is a snapshot, and no snapshot has a release to download",
@@ -245,7 +256,16 @@ class UseVersionTest {
     for (flag in listOf("-v", "--version")) {
       val version = kiffProcess(flag)
       assertEquals(0, version.status, version.err)
-      assertEquals("kiff $kiffVersion", version.out.trim(), flag)
+      assertEquals(kiffVersionLine, version.out.trim(), flag)
+    }
+    // Only a snapshot names its commit, and only as git abbreviates one.
+    val commit = kiffCommit
+    if (commit == null) {
+      assertEquals("kiff $kiffVersion", kiffVersionLine)
+    } else {
+      assertTrue(kiffVersion.endsWith("-SNAPSHOT"), kiffVersion)
+      assertTrue(Regex("[0-9a-f]{4,40}").matches(commit), commit)
+      assertEquals("kiff $kiffVersion ($commit)", kiffVersionLine)
     }
 
     val help = kiffProcess("--help")

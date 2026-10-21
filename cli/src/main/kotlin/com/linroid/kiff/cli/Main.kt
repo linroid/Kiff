@@ -40,7 +40,7 @@ class RootCommand : CliktCommand(name = "kiff") {
   )
 
   init {
-    versionOption(kiffVersion, names = setOf("-v", "--version"), message = { "kiff $it" })
+    versionOption(kiffVersion, names = setOf("-v", "--version"), message = { kiffVersionLine })
   }
 
   override fun run() {
@@ -106,12 +106,22 @@ class DiffCommand(private val out: OutputStream = System.out) : KiffCommand(name
   }
 }
 
-/** This build's version, which Gradle writes into a resource beside this class. */
-internal val kiffVersion: String by lazy {
+/** What Gradle writes into a resource beside this class about the build. */
+private val buildProperties: Properties by lazy {
   val properties = Properties()
   RootCommand::class.java.getResourceAsStream("version.properties")?.use { properties.load(it) }
-  properties.getProperty("version") ?: "unknown"
+  properties
 }
+
+/** This build's version: a release's tag without the v, or 0.0.0-SNAPSHOT for any other build. */
+internal val kiffVersion: String by lazy { buildProperties.getProperty("version") ?: "unknown" }
+
+/** The commit a snapshot was built from, when git could say. */
+internal val kiffCommit: String? by lazy { buildProperties.getProperty("commit") }
+
+/** What `kiff --version` prints: the version, and the commit that tells snapshots apart. */
+internal val kiffVersionLine: String
+  get() = "kiff $kiffVersion" + (kiffCommit?.let { " ($it)" } ?: "")
 
 internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
   .subcommands(

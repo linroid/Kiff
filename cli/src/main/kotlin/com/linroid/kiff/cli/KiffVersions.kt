@@ -212,7 +212,7 @@ internal class KiffVersions(
   }
 
   companion object {
-    const val RELEASES = "https://github.com/linroid/Kiff/releases/download"
+    const val RELEASES = "https://github.com/linroid/kiff/releases/download"
 
     /** A `.sha256` holds one 81-byte line; anything far longer is not one. */
     private const val MAX_CHECKSUM = 4096

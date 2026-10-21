@@ -3,11 +3,11 @@
 #
 # With KIFF_VERSION set, that is exactly that release of Kiff: the zip its GitHub release
 # attaches, checked against the checksum beside it, or a failure when either is missing. Otherwise
-# it is the action's own version, so the scripts and the CLI come from one commit: that release's
-# zip when there is one, or a build of the action's own source for a snapshot or a version whose
-# zip cannot be downloaded.
+# it is the action's own version, so the scripts and the CLI come from one commit: the zip of the
+# release tagged at the commit the action was loaded from, or a build of the action's own source
+# when no release is, as with a branch or uses: ./, or when that zip cannot be downloaded.
 #
-# KIFF_DOWNLOAD_URL replaces https://github.com/linroid/Kiff/releases/download, as it does for
+# KIFF_DOWNLOAD_URL replaces https://github.com/linroid/kiff/releases/download, as it does for
 # kiff --use, with a mirror that serves vVERSION/kiff-VERSION.zip and its .sha256.
 set -euo pipefail
 
@@ -16,7 +16,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$here/lib.sh"
 
 root=${GITHUB_ACTION_PATH:?}
-releases=${KIFF_DOWNLOAD_URL:-https://github.com/linroid/Kiff/releases/download}
+releases=${KIFF_DOWNLOAD_URL:-https://github.com/linroid/kiff/releases/download}
 releases=${releases%/}
 
 # Installs release $1 and sets kiff to its launcher, or sets kiff to nothing and missing to the URL
@@ -64,20 +64,31 @@ if [[ -n ${KIFF_VERSION:-} ]]; then
 release, and a draft has nothing to download until it is published."
   fi
 else
-  version=$(sed -n -E 's/^version[[:space:]]*=[[:space:]]*//p' "$root/gradle.properties" \
-    | tail -n 1 | tr -d '[:space:]')
-  if [[ -z $version ]]; then
-    fail "$root/gradle.properties has no version."
+  # Nothing in the source says which release it is: only a tag does.
+  version=''
+  ref=$(action_ref "${KIFF_ACTION_REF:-}" "$root")
+  if [[ -z $ref ]]; then
+    echo "The action was not loaded from a ref of linroid/kiff."
+  elif ! tags=$(GIT_TERMINAL_PROMPT=0 git ls-remote --tags https://github.com/linroid/kiff); then
+    notice "Could not list Kiff's tags to find the release at $ref, so the action builds Kiff \
+from source."
+  else
+    version=$(release_at "$ref" <<< "$tags")
+    if [[ -z $version ]]; then
+      echo "No Kiff release is tagged at linroid/kiff@$ref."
+    fi
   fi
-  if [[ $version != *-SNAPSHOT ]]; then
+  if [[ -n $version ]]; then
     install_release "$version"
     if [[ -z $kiff ]]; then
       notice "Kiff v$version has no CLI at $missing, so the action builds it from source."
     fi
   fi
   if [[ -z $kiff ]]; then
+    # The source of a release's tag is that release. Anything else is a snapshot.
+    version=${version:-0.0.0-SNAPSHOT}
     echo "Building kiff $version from $root"
-    "$root/gradlew" -p "$root" --console=plain :cli:installDist
+    "$root/gradlew" -p "$root" --console=plain "-Pversion=$version" :cli:installDist
     kiff=$root/cli/build/install/kiff/bin/kiff
   fi
 fi
