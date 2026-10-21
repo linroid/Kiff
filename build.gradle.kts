@@ -13,6 +13,14 @@ plugins {
  */
 val minimumJdk = 17
 
+// A release's version is its tag, which the release workflow passes as -Pversion=X.Y.Z and Gradle
+// sets on every project. Any other build is a snapshot of no particular version.
+allprojects {
+  if (version.toString().let { it.isBlank() || it == Project.DEFAULT_VERSION }) {
+    version = "0.0.0-SNAPSHOT"
+  }
+}
+
 subprojects {
   tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
     compilerOptions {
