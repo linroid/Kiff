@@ -1,6 +1,11 @@
+import java.net.URI
 import org.gradle.api.distribution.DistributionContainer
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
+import org.jetbrains.kotlin.gradle.plugin.mpp.DisableCacheInKotlinVersion
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeCacheApi
+import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType
 import org.jetbrains.kotlin.konan.target.Family
+import org.jetbrains.kotlin.konan.target.HostManager
 
 plugins {
   alias(libs.plugins.kotlin.multiplatform)
@@ -53,6 +58,20 @@ kotlin {
       // Only the system libraries kiff calls into: Kotlin/Native also asks for libcrypt.so.1 and
       // others it does not use, which some distributions no longer install.
       if (target.konanTarget.family == Family.LINUX) linkerOpts("--as-needed")
+    }
+    // Clikt's clikt-core and clikt-mordant each define selfAndAncestors, so the per-library caches
+    // a debug build links on a Linux host clash over it in ld.lld. A release build is compiled
+    // whole and links no caches, and no other host builds caches for Linux, so only Linux debug
+    // builds and tests, on Linux, go without them and are slower for it.
+    if (target.konanTarget.family == Family.LINUX && HostManager.hostIsLinux) {
+      target.binaries.matching { it.buildType == NativeBuildType.DEBUG }.configureEach {
+        @OptIn(KotlinNativeCacheApi::class)
+        disableNativeCache(
+          version = DisableCacheInKotlinVersion.`2_4_21`,
+          reason = "Clikt defines selfAndAncestors in two libraries",
+          issueUrl = URI("https://github.com/ajalt/clikt/issues/598")
+        )
+      }
     }
   }
 
