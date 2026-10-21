@@ -287,6 +287,135 @@ class CraftedPatchTest {
   }
 
   @Test
+  fun bytesAfterTheContentAreRefused() {
+    val abc = "abc".encodeToByteArray()
+    assertRefused(payload(bytes { raw(3) }, abc) + ByteArray(7), targetSize = 3)
+  }
+
+  @Test
+  fun treeBytesTheRootLeavesUnreadAreRefused() {
+    val tree = bytes {
+      raw(3)
+      writeBytes(ByteArray(8))
+    }
+    assertRefused(payload(tree, "abc".encodeToByteArray()), targetSize = 3)
+  }
+
+  @Test
+  fun aTreeThatRunsIntoTheContentIsRefused() {
+    // Declared one byte short, the tree's END would be read as content and the content's last byte
+    // left over, so the region would restore the wrong bytes with nothing above it to notice.
+    val instructions = bytes {
+      instruction(DeltaOp.ADD, 3)
+      instruction(DeltaOp.END, 0)
+    }
+    val tree = bytes { delta(3, instructions) }
+    val payload = payload(tree, "abc".encodeToByteArray(), treeLength = tree.size - 1)
+    assertRefused(payload, targetSize = 3)
+  }
+
+  @Test
+  fun contentNoRegionUsesIsRefused() {
+    assertRefused(payload(bytes { zeros(3) }, "abc".encodeToByteArray()), targetSize = 3)
+  }
+
+  @Test
+  fun deltaInstructionsHaveToEndAtTheirDeclaredLength() {
+    val instructions = bytes {
+      instruction(DeltaOp.ADD, 3)
+      instruction(DeltaOp.END, 0)
+    }
+    for (declared in listOf(0, instructions.size - 1, instructions.size + 4)) {
+      val tree = bytes {
+        writeVarLong(3)
+        writeByte(RegionEncoding.DELTA.code)
+        writeVarInt(declared)
+        writeBytes(instructions)
+        writeBytes(ByteArray(maxOf(0, declared - instructions.size)))
+      }
+      assertRefused(payload(tree, "abc".encodeToByteArray()), targetSize = 3)
+    }
+  }
+
+  @Test
+  fun textEditsHaveToEndAtTheirDeclaredLength() {
+    val edits = byteArrayOf(1, 2, 0) // EQUAL 2, END
+    for (declared in listOf(1, edits.size + 3)) {
+      val tree = bytes {
+        writeVarLong(4)
+        writeByte(RegionEncoding.TEXT.code)
+        writeVarLong(0)
+        writeVarLong(source.size.toLong())
+        writeVarInt(declared)
+        writeBytes(edits)
+        writeBytes(ByteArray(maxOf(0, declared - edits.size)))
+      }
+      assertRefused(payload(tree), targetSize = 4)
+    }
+  }
+
+  @Test
+  fun aPackedStreamForNoContentHasToBeEmpty() {
+    val payload = payload(
+      bytes { raw(0) }, byteArrayOf(1, 2, 3, 4, 5), unpacked = 0,
+      encoding = PatchPayload.CONTENT_LZ_HUFFMAN
+    )
+    assertRefused(payload, targetSize = 0)
+  }
+
+  @Test
+  fun aRegionLongerThanVersionOneAllowsIsInvalid() {
+    // Not a patch too large to apply but one version 1 cannot express: a larger target is a
+    // composite of regions that each fit.
+    val length = Int.MAX_VALUE + 1L
+    assertRefused(payload(bytes { zeros(length) }), targetSize = length)
+  }
+
+  @Test
+  fun redundantButCompleteFormsStillRestore() {
+    // Each of these means exactly one thing and leaves no byte unaccounted for. Version 1 accepts
+    // them, so a writer that produces them is writing valid patches.
+    val abc = "abc".encodeToByteArray()
+    val trees = mapOf(
+      "a three-byte varint for 3" to bytes {
+        writeByte(0x83)
+        writeByte(0x80)
+        writeByte(0x00)
+        writeByte(RegionEncoding.RAW.code)
+      },
+      "zero-length instructions" to bytes {
+        delta(
+          3,
+          bytes {
+            instruction(DeltaOp.ADD, 0)
+            instruction(DeltaOp.COPY, 0)
+            writeSignedVarLong(0)
+            instruction(DeltaOp.RUN, 0)
+            writeByte(0)
+            instruction(DeltaOp.ADD, 3)
+            instruction(DeltaOp.END, 0)
+          }
+        )
+      },
+      "an empty composite" to bytes {
+        composite(3, 2)
+        composite(0, 0)
+        raw(3)
+      }
+    )
+    for ((label, tree) in trees) {
+      val restored = ByteArrayRestoreTarget(3)
+      PatchPayload.apply(ByteArraySource(source), payload(tree, abc), 0, 3, false, restored)
+      assertContentEquals(abc, restored.toByteArray(), label)
+    }
+    // A line script may stop before the end of its source range.
+    val restored = ByteArrayRestoreTarget(4)
+    val stopsEarly = bytes { text(4, 0, source.size.toLong(), byteArrayOf(1, 2, 0)) }
+    PatchPayload.apply(ByteArraySource(source), payload(stopsEarly), 0, 4, false, restored)
+    assertContentEquals("a\nb\n".encodeToByteArray(), restored.toByteArray())
+  }
+
+  @Test
   fun aFewPackedBytesCannotDeclareAGigabyte() {
     // The declared target is the only other bound, and it is the patch's own word: a patch can
     // declare a gigabyte of both, and four stored bytes used to be enough to have it allocated.

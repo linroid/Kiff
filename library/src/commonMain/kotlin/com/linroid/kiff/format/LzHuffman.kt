@@ -87,7 +87,13 @@ internal object LzHuffman {
 
   fun decompress(data: ByteArray, expectedSize: Int): ByteArray {
     val result = ByteArray(expectedSize)
-    if (expectedSize == 0) return result
+    if (expectedSize == 0) {
+      // Packing nothing writes nothing, so nothing is the only stream that unpacks to nothing.
+      if (data.isNotEmpty()) {
+        throw KiffException.InvalidPatch("Content stream holds ${data.size} byte(s) of nothing")
+      }
+      return result
+    }
     val bits = BitReader(data)
 
     val literalLengths = IntArray(LITERAL_SYMBOLS) { bits.read(CODE_LENGTH_BITS) }
@@ -127,6 +133,7 @@ internal object LzHuffman {
     if (position != expectedSize) {
       throw KiffException.InvalidPatch("Content stream produced $position of $expectedSize bytes")
     }
+    bits.finish()
     return result
   }
 
@@ -427,6 +434,16 @@ internal object LzHuffman {
         count--
       }
       return value
+    }
+
+    /**
+     * Refuses anything after the end symbol: a whole byte, or a set bit in the padding that fills
+     * out the last one, which [BitWriter] always leaves clear.
+     */
+    fun finish() {
+      if (at != data.size || bits and ((1 shl count) - 1) != 0) {
+        throw KiffException.InvalidPatch("Content stream has bits after its end symbol")
+      }
     }
   }
 

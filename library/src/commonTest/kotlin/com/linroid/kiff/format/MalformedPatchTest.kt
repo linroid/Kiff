@@ -150,12 +150,20 @@ class MalformedPatchTest {
   }
 
   @Test
-  fun trailingRubbishIsRefusedOrIgnored() {
+  fun trailingRubbishIsRefused() {
+    // Bytes after the content belong to nothing, so a patch that carries them was appended to or
+    // mis-measured, and is refused as one.
     for ((label, patcher, pair) in cases()) {
       val (source, target) = pair
       val patch = patcher.createPatch(source, target)
       for (extra in listOf(1, 7, 64)) {
-        check("$label plus $extra bytes", patcher, source, target, patch + ByteArray(extra) { 0x5A })
+        val padded = patch + ByteArray(extra) { 0x5A }
+        assertFailsWith<KiffException.InvalidPatch>("$label plus $extra bytes") {
+          patcher.applyPatch(source, padded)
+        }
+        assertFailsWith<KiffException.InvalidPatch>("$label plus $extra bytes, streaming") {
+          patcher.applyPatch(ByteArraySource(source), padded, Collecting(target))
+        }
       }
     }
   }
