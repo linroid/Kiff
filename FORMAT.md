@@ -23,16 +23,25 @@ table are data rather than framing, and are read little-endian, as [COLUMNS](#co
 ```
 "KIFF"    4 bytes
 version   1 byte      = 1
-patcher   1 byte      binary = 1, zip = 2, apk = 3: which patcher built it
+patcher   1 byte      binary = 1, zip = 2, apk = 3: what the writer took the target to be
 flags     1 byte
 source    varint size, u32 CRC-32 (big-endian)
 target    varint size, u32 CRC-32 (big-endian)
 payload
 ```
 
-`patcher` names the patcher that built the patch, for display and diagnostics. Nothing in the
-payload depends on it, and every patch is applied the same way whatever it says. Kiff 0.1.0 refuses
-any other value, so a version-1 patch carries one of these three, and a reader refuses the rest.
+`patcher` is informational: what the writer took the target to be as a whole, for display and
+diagnostics. Nothing in the payload depends on it, and every patch is applied the same way whatever
+it says. The tree records the structure a patch was built with, so a reader never needs this to
+apply one.
+
+Kiff 0.1.0 had one patcher per code, chosen by its caller, and each of them refuses a patch that
+carries another's code. A writer therefore records the code of the patcher that suits the target,
+which is the one a 0.1.0 caller applies it with: `apk` for a zip that carries an
+`AndroidManifest.xml`, `zip` for any other zip whose directory reads, and `binary` for everything
+else, including a file the writer took apart with a container format of its own. Kiff 0.1.0 refuses
+any other value too, so a version-1 patch carries one of these three, and a reader refuses the
+rest.
 
 `flags` is a bit set. One bit is defined:
 
@@ -261,7 +270,7 @@ of an error, or to carry bytes that nothing accounts for, which is where corrupt
 
 - a magic that is not `KIFF`, or a version it does not implement
 - a flag bit it does not recognise
-- a patcher, region encoding, content encoding, delta opcode or text opcode it does not know
+- a patcher code, region encoding, content encoding, delta opcode or text opcode it does not know
 - a varint wider than 64 bits, or a negative value where a size, count or length belongs
 - a region, a source range, the tree or the content longer than 2,147,483,647 bytes: a larger
   target is a composite of regions that each fit
