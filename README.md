@@ -201,16 +201,20 @@ created or verified. The other patches are still written, and the manifest lists
 
 ### Running another version
 
-`-v VERSION`, or `--use VERSION`, runs the command after it with that release of Kiff instead of
-the one you started:
+A leading `+VERSION` runs the command after it with that release of Kiff instead of the one you
+started:
 
 ```console
-$ kiff -v 0.1.0 create foo-1.2.0.apk foo-1.3.0.apk foo.patch
+$ kiff +0.1.0 create foo-1.2.0.apk foo-1.3.0.apk foo.patch
 Downloading kiff 0.1.0 from https://github.com/linroid/Kiff/releases/download/v0.1.0/kiff-0.1.0.zip
 Created foo.patch with the apk patcher
   Patcher:     apk (format v1)
   ...
 ```
+
+Like the toolchain in `cargo +nightly build`, it has to be the first argument: anywhere later, a
+`+` is an ordinary argument of the command. `--use VERSION` and `--use=VERSION` are the long form,
+and they have to come first too.
 
 A patch is applied on the user's device, by the Kiff inside the app they already have, and that
 Kiff refuses a format newer than it knows. So build patches with the oldest Kiff still embedded in a
@@ -227,11 +231,11 @@ replaces `https://github.com/linroid/Kiff/releases/download` for a mirror, which
 files at `vVERSION/kiff-VERSION.zip`. A draft release cannot be downloaded until it is published,
 and a `-SNAPSHOT` version is refused, since no snapshot has a release.
 
-Only the `kiff` you start needs this option. Everything after the version goes to the other one
-unread, so that can be any release, even one older than `-v`, with whatever commands and flags it
-has. Its exit status is returned as it is, and progress goes to standard error, so
-`kiff -v 0.1.0 diff a b | patch` still works. It runs on the same Java as this `kiff` when
-`JAVA_HOME` is unset. Naming the version that is running just runs the command, and
+Only the `kiff` you start needs this feature. Everything after the version goes to the other one
+unread, so that can be any release, even one older than `+VERSION`, with whatever commands and
+flags it has. Its exit status is returned as it is, and progress goes to standard error, so
+`kiff +0.1.0 diff a b | patch` still works. It runs on the same Java as this `kiff` when
+`JAVA_HOME` is unset. Naming the version that is running just runs the command, and `kiff -v` or
 `kiff --version` says which version that is.
 
 ## GitHub Action

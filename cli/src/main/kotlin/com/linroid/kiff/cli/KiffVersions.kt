@@ -19,21 +19,21 @@ import java.time.Duration
 import java.util.HexFormat
 import java.util.zip.ZipFile
 
-/** Why `kiff -v` could not hand a command to the version it names. */
+/** Why `kiff +VERSION` could not hand a command to the version it names. */
 internal class UnavailableVersionException(message: String) : Exception(message)
 
 /**
- * The version a leading `-v X`, `-vX`, `--use X` or `--use=X` names, and the arguments after it,
- * which are left for that version to read. Anywhere else `-v` is not this option.
+ * The version a leading `+X`, `--use X` or `--use=X` names, and the arguments after it, which are
+ * left for that version to read. Like `cargo +nightly`, only the first argument counts: anywhere
+ * else a `+` is an ordinary argument.
  */
 internal fun leadingVersion(args: Array<String>): Pair<String, List<String>>? {
   val first = args.firstOrNull() ?: return null
   return when {
+    first.startsWith("+") -> first.substring(1) to args.drop(1)
     // Without a value this is left to Clikt, which says the option needs one.
-    first == "-v" || first == "--use" -> if (args.size > 1) args[1] to args.drop(2) else null
+    first == "--use" -> if (args.size > 1) args[1] to args.drop(2) else null
     first.startsWith("--use=") -> first.removePrefix("--use=") to args.drop(1)
-    // Clikt would read -v1.2.3 as -v 1.2.3, and then run the command with this build.
-    first.startsWith("-v") -> first.substring(2) to args.drop(1)
     else -> null
   }
 }
@@ -44,9 +44,9 @@ internal fun checkReleased(version: String) {
     version.endsWith("-SNAPSHOT", ignoreCase = true) ->
       "$version is a snapshot, and no snapshot has a release to download"
     version.startsWith("v") && RELEASED.matches(version.substring(1)) ->
-      "$version is a tag: -v takes its version, ${version.substring(1)}"
+      "$version is a tag, and its version is ${version.substring(1)}"
     !RELEASED.matches(version) ->
-      "\"$version\" is not a version: -v takes a released Kiff version, such as 1.2.3"
+      "\"$version\" is not a released Kiff version, such as 1.2.3"
     else -> return
   }
   throw UnavailableVersionException(problem)
@@ -56,8 +56,8 @@ internal fun checkReleased(version: String) {
 private val RELEASED = Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?""")
 
 /**
- * The released Kiff builds that `kiff -v` hands a command to. Each is downloaded once, from the zip
- * its GitHub release attaches, checked against the `.sha256` beside it, and kept in
+ * The released Kiff builds that `kiff +VERSION` hands a command to. Each is downloaded once, from
+ * the zip its GitHub release attaches, checked against the `.sha256` beside it, and kept in
  * [home]`/versions/<version>`.
  */
 internal class KiffVersions(

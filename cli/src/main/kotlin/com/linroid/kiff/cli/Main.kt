@@ -24,17 +24,22 @@ import kotlin.system.exitProcess
 class RootCommand : CliktCommand(name = "kiff") {
   override val invokeWithoutSubcommand = true
 
-  // Declared for --help alone: runKiff hands a leading -v to that version before Clikt reads
-  // anything, since the command after it may be one this build does not have.
+  override fun help(context: Context) =
+    "A leading +VERSION, as in kiff +0.1.0 create OLD NEW PATCH, runs the command with that " +
+      "released Kiff, downloaded on first use. It has to be the first argument, as in " +
+      "cargo +nightly."
+
+  // Declared for --help alone: runKiff hands a leading --use or +VERSION to that version before
+  // Clikt reads anything, since the command after it may be one this build does not have.
   @Suppress("unused")
   private val use by option(
-    "-v", "--use",
+    "--use",
     metavar = "VERSION",
-    help = "Run the command with Kiff <version>, fetched once"
+    help = "The same as a leading +VERSION"
   )
 
   init {
-    versionOption(kiffVersion, message = { "kiff $it" })
+    versionOption(kiffVersion, names = setOf("-v", "--version"), message = { "kiff $it" })
   }
 
   override fun run() {
@@ -120,7 +125,7 @@ internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
 
 /**
  * Runs the command line [args] describe and answers the exit status, as Clikt's `main` would. A
- * leading `-v VERSION` runs the rest with that released Kiff instead, through [versions].
+ * leading `+VERSION` runs the rest with that released Kiff instead, through [versions].
  */
 internal fun runKiff(
   args: Array<String>,
@@ -130,7 +135,7 @@ internal fun runKiff(
   val (version, rest) = leadingVersion(args) ?: return parse(args, out)
   return try {
     when (version) {
-      // Nothing to fetch: this build reads the rest itself, as if -v had not been there.
+      // Nothing to fetch: this build reads the rest itself, as if +VERSION had not been there.
       kiffVersion -> parse(rest.toTypedArray(), out)
       // Handed over unread, since that version may take commands and flags this one lacks.
       else -> {
