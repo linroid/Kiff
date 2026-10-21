@@ -2,27 +2,37 @@
 
 A patch turns one file into another, byte for byte. This describes what is in one.
 
-Version 1 is frozen as of Kiff 0.1.0, the first release. Patches written by it exist, so a change
-to anything here needs a new version or flag, and every later release still reads version 1. The
-frozen vectors in `FormatVectorsTest` hold it to that. A format that lives only in code drifts
-from its own documentation and the drift is silent — Tinker's bundled bspatch still says bzip2 in
-its header comments while the code has always read gzip — so the vectors, not this file, are the
-authority. If they disagree, the vectors are right and this file is stale.
+Version 1 is frozen as of Kiff 0.1.0, the first release. Patches written by it exist, and every
+later release still reads them; [Versions and flags](#versions-and-flags) says what that leaves
+room for.
 
-All integers are little-endian unless stated. `varint` is LEB128, seven bits per byte, low group
-first. `svarint` is the same over a zig-zag encoding, so small negatives stay short.
+This document is the specification: a reader built from it alone applies every version-1 patch.
+The frozen vectors in `FormatVectorsTest` are its conformance tests. A format that lives only in
+code drifts from its own documentation and the drift is silent — Tinker's bundled bspatch still
+says bzip2 in its header comments while the code has always read gzip — which is why the vectors
+exist. Where one disagrees with this document, one of them has a bug.
+
+`varint` is LEB128: seven bits per byte, low group first, at most 64 bits. `svarint` is the same
+over a zig-zag encoding, so small negatives stay short. The only fixed-width integers are CRC-32s,
+and they are big-endian. The CRC is the one zip and zlib use (CRC-32/ISO-HDLC: reflected
+polynomial `0xEDB88320`, initial value and final XOR `0xFFFFFFFF`). Values inside a `COLUMNS`
+table are data rather than framing, and are read little-endian, as [COLUMNS](#columns) describes.
 
 ## Container
 
 ```
 "KIFF"    4 bytes
 version   1 byte      = 1
-patcher   1 byte      binary = 1, zip = 2, apk = 3
+patcher   1 byte      binary = 1, zip = 2, apk = 3: which patcher built it
 flags     1 byte
 source    varint size, u32 CRC-32 (big-endian)
 target    varint size, u32 CRC-32 (big-endian)
 payload
 ```
+
+`patcher` names the patcher that built the patch, for display and diagnostics. Nothing in the
+payload depends on it, and every patch is applied the same way whatever it says. Kiff 0.1.0 refuses
+any other value, so a version-1 patch carries one of these three, and a reader refuses the rest.
 
 `flags` is a bit set. One bit is defined:
 
@@ -30,13 +40,37 @@ payload
 | --- | --- |
 | `0x01` | every region that produces target bytes carries a CRC-32 of them |
 
-**A reader must refuse a flag it does not recognise.** Flags change how the payload is laid out, so
-carrying on would produce bytes rather than an error, and bytes that are wrong are worse than a
-failure that is loud.
+The other seven bits are reserved and must be zero. **A reader must refuse a flag it does not
+recognise.** Flags change how the payload is laid out, so carrying on would produce bytes rather
+than an error, and bytes that are wrong are worse than a failure that is loud.
 
 The source checksum is what lets a patch refuse the wrong input file; the target checksum is what
 lets it refuse its own output. Both are integrity checks against accident. CRC-32 is not
 collision-resistant and none of this is a signature.
+
+A patch file is conventionally named with a `.kiff` extension. A reader identifies one by its
+magic, never by its name, and the name carries no version: the header does.
+
+## Versions and flags
+
+The version byte says which reader can apply a patch, and it is the only thing that does. A reader
+of version N applies every version-N patch exactly as this document describes, and refuses any
+version it does not implement.
+
+Once a version is released, the set of patches valid under it is fixed. Anything a reader of that
+version would refuse, or would read differently, takes a new version: a new flag bit, region
+encoding, content encoding, delta or text opcode, patcher code, a new or moved field, or a looser
+limit such as a deeper tree or a longer length. A change in how a writer chooses among what the
+version already allows needs no new version, and neither does a clearer description of the same
+bytes. The magic and the version byte keep their place in every version, so any reader can tell
+which version a patch needs.
+
+Flags are options a writer picks for one patch, among those every reader of its version
+understands. New flags are defined only together with a new version.
+
+A writer writes the lowest version that can express the patch, so a patch that uses nothing new
+stays readable by older readers. That matters most where a patch updates the software that applies
+it: the reader is the one in the release being replaced.
 
 ## Payload
 
@@ -72,15 +106,17 @@ its own structure in lost compression, which is more than the structure ever sav
 ## Region tree
 
 A node describes a run of target bytes. Nodes nest, and children tile their parent exactly — no
-gaps, no overlaps — which is the whole basis of restoring a file byte for byte. A reader must
-refuse a tree deeper than 16.
+gaps, no overlaps — which is the whole basis of restoring a file byte for byte. The root is at
+depth 0, and a composite's children and a `COLUMNS` node's inner node are each one deeper. A reader
+must refuse a tree deeper than 16, so a leaf may sit at depth 16 and no further.
 
 ```
-node := varint targetLength, byte encoding, [u32 checksum], body
+node := varint targetLength, byte encoding, [u32 checksum, big-endian], body
 ```
 
-The checksum is present when `flags & 0x01` and the encoding is not `COMPOSITE`. A composite
-produces nothing of its own; its children cover every byte of it.
+The checksum is present when `flags & 0x01` and the encoding is not `COMPOSITE`, except inside a
+`COLUMNS` node, where no node carries one at any depth. A composite produces nothing of its own; its
+children cover every byte of it.
 
 | encoding | code | body |
 | --- | --- | --- |
@@ -88,7 +124,7 @@ produces nothing of its own; its children cover every byte of it.
 | `DELTA` | 1 | `varint length`, then that many instruction bytes |
 | `RAW` | 2 | nothing: `targetLength` bytes are taken from the content stream |
 | `TEXT` | 3 | `varint sourceFrom`, `varint sourceLength`, `varint length`, edit bytes |
-| `COLUMNS` | 4 | `varint sourceFrom`, `varint sourceLength`, `byte fieldCount`, field widths, then one node with no `COLUMNS` in it |
+| `COLUMNS` | 4 | `varint sourceFrom`, `varint sourceLength`, `byte fieldCount`, one width byte per field, then one node with no `COLUMNS` in it |
 
 ### DELTA
 
@@ -116,7 +152,10 @@ byte per target byte, so it looks expensive before packing and is not.
 
 A line-level edit script, ending with `END`. A line is *bytes up to and including its newline*, and
 the last line of a region may have none — which is what makes this exact. Concatenating lines
-reproduces the region, so a trailing newline, or its absence, survives.
+reproduces the region, so a trailing newline, or its absence, survives. A newline is the byte
+`0x0A`; a `0x0D` before it simply belongs to the line.
+
+Each edit is one opcode byte, followed by a varint for all but `END`.
 
 | opcode | code | operand | effect |
 | --- | --- | --- | --- |
@@ -135,16 +174,67 @@ back.
 
 The rearrangement reads the table column by column rather than row by row, storing each column as
 differences from the entry before it, in the field's own width and wrapping within it. A trailing
-partial row is copied across untouched.
+partial row is copied across untouched. Exactly, for a range of `length` bytes and fields of
+`w1 … wn` bytes:
 
-The node inside carries no checksum: it works on rearranged bytes, which are not target bytes, and
-the node around it covers what the rearrangement finally produces. It may not hold another `COLUMNS`
-node at any depth: each one builds its output whole before emitting it, so nesting them would hold a
-region's worth again for every level.
+- a row is `w1 + … + wn` bytes, and there are `length / row` whole rows
+- each field's value is an unsigned little-endian integer of its width
+- the output is field 1 of every row, then field 2 of every row, and so on; each value is written
+  as its difference from the same field in the row before, the first row's from 0, modulo
+  `2^(8 × width)`, little-endian in the field's width
+- the `length mod row` bytes after the last whole row follow unchanged
+
+Rearranging back undoes each step. The target region is rearranged with its own length, and the
+source range named by `sourceFrom` and `sourceLength` with its own, which may differ.
+
+A layout has at least one field, each 1 to 8 bytes wide, a row of at most 255 bytes, and at least
+8 whole rows. Those are the limits Kiff 0.1.0 reads, so every version-1 patch keeps to them.
+
+Nothing inside a `COLUMNS` node carries a checksum, at any depth: it works on rearranged bytes,
+which are not target bytes, and the node around it covers what the rearrangement finally produces.
+It may not hold another `COLUMNS` node at any depth: each one builds its output whole before
+emitting it, so nesting them would hold a region's worth again for every level.
 
 This exists because a table of ids is the renumbering problem in its purest form — every entry of a
 dex's `string_ids` is an offset into the file, so inserting one string shifts all of them — while
 the gaps between those entries barely move.
+
+## The LZ77 + Huffman stream
+
+Content encoding 2 packs the whole content stream as one block. Bits are read most significant
+first within each byte, extra bits included, and the last byte is padded with zero bits.
+
+1. 289 code lengths for the literal and length alphabet, then 40 for the distance alphabet, each
+   four bits, so 1,316 bits in all. A length is 0 to 15, and 0 means the symbol is not used.
+2. Within each alphabet, codes are canonical, as in deflate: symbols get consecutive codes in order
+   of code length, then of symbol. A set of lengths that over-subscribes the code space is refused.
+   One that leaves codes unassigned is allowed, and reading an unassigned code is refused.
+3. Then symbols from the literal and length alphabet, until the end:
+   - `0` to `255` is that byte;
+   - `256` is the end, and by then the stream has produced exactly the declared content size;
+   - `257 + i` is a match whose length is `lengthBase[i]` plus `lengthExtra[i]` extra bits. A
+     distance symbol `j` follows, for a distance of `distanceBase[j]` plus `distanceExtra[j]` extra
+     bits. The distance may not reach back past the start, and the match copies one byte at a time,
+     so it may overlap what it is producing.
+
+| length symbols `i` | `lengthBase` | `lengthExtra` |
+| --- | --- | --- |
+| 0 – 7 | 4, 5, 6, 7, 8, 9, 10, 11 | 0 |
+| 8 – 11 | 12, 14, 16, 18 | 1 |
+| 12 – 14 | 20, 24, 28 | 2 |
+| 15 – 17 | 32, 40, 48 | 3 |
+| 18 – 19 | 56, 72 | 4 |
+| 20 – 21 | 88, 120 | 5 |
+| 22 – 23 | 152, 216 | 6 |
+| 24 – 25 | 280, 408 | 7 |
+| 26 – 27 | 536, 792 | 8 |
+| 28 – 29 | 1048, 1560 | 9 |
+| 30 – 31 | 2072, 3096 | 10 |
+
+So a match is 4 to 4,119 bytes long. The distance symbols are deflate's thirty, extended by ten:
+`distanceBase` is 1, 2, 3 and 4 for `j` up to 3, then `((2 + j mod 2) << (j / 2 - 1)) + 1`, and
+`distanceExtra` is 0 for `j` up to 3, then `j / 2 - 1`. The longest distance, at `j = 39`, is
+786,433 plus 18 extra bits: 1,048,576 bytes, a window of 1 MiB.
 
 ## Applying without holding the files
 
@@ -161,7 +251,8 @@ be checked after the fact, because afterwards the bytes are gone.
 The content stream is the other thing a reader holds. Kiff's reader unpacks it whole before the
 first region, so a patch whose target is mostly new content costs about its target in memory, since
 that new content is what the stream carries. Regions consume the stream strictly in order, so a
-reader could unpack it as it goes instead; nothing in the format stands in the way.
+reader could unpack it as it goes instead, holding only the last 1 MiB, which is as far back as a
+match reaches; nothing in the format stands in the way.
 
 ## What a reader must refuse
 

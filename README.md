@@ -359,9 +359,11 @@ https://github.com/OWNER/REPO/releases/latest/download/kiff-patches.json
 
 An updater fetches it and finds the entry for its file. It takes the patch whose `source.sha256` is
 the file it has installed and whose `format` is in `Kiff.readableFormats`, downloads that patch and
-checks its `sha256`, applies it, and checks the result against the file's own `sha256`. When there
-is no such patch, because the installed version is too old, was dropped for size or the release has
-no manifest, it downloads the full file from `url` instead.
+checks its `sha256`, applies it, and checks the result against the file's own `sha256`. Before
+applying, it compares `Kiff.info(patch).targetSize` with the file's `size`: a few bytes of patch can
+declare gigabytes of target, and the declared size is what a restore writes and may allocate. When
+there is no such patch, because the installed version is too old, was dropped for size or the
+release has no manifest, it downloads the full file from `url` instead.
 
 
 ## How a patch is built
@@ -483,9 +485,11 @@ content stream, where the same region emitted as literals would not compress at 
 the bytes exactly - a trailing newline, or its absence, survives. It wins where byte matches
 fragment and loses where they do not, which is why it competes rather than being chosen.
 
-Every region that produces target bytes also carries a CRC-32 of them, which costs about 0.005% of
-a patch and is what turns "this did not restore" into "this region did not restore". On a package of
-seventy megabytes that is the difference between a bug you can find and one you can only stare at.
+Every region that produces target bytes also carries a CRC-32 of them, four bytes each, which is
+what turns "this did not restore" into "this region did not restore". On a package of seventy
+megabytes that is the difference between a bug you can find and one you can only stare at. They
+cost under 1% of a typical archive patch, and up to several percent of a small one whose entries
+are stored: 32 of the 423 bytes of a patch between two kotlin-stdlib jars repacked uncompressed.
 A flag in the header says whether they are present, and a flag this build does not recognise is
 refused rather than guessed at.
 
