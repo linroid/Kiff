@@ -30,6 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -39,25 +41,22 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
           persist-credentials: false
 
-      - name: Check the version matches the tag
+      # The tag is the version: nothing in the source says which release a commit is.
+      - name: Read the version from the tag
+        id: version
         run: |
-          if [[ "$TAG" != v* ]]; then
-            echo "::error::Release tags are v<version>, so '$TAG' is not one."
+          # The same versions as kiff --use and the action's kiff-version input take.
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::Release tags are vX.Y.Z with an optional -suffix, so '$TAG' is not one."
             exit 1
           fi
-          expected="${TAG#v}"
-          version=$(sed -n -E 's/^version[[:space:]]*=[[:space:]]*//p' gradle.properties \
-            | tail -n 1 | tr -d '[:space:]')
-          if [[ "$version" != "$expected" ]]; then
-            echo "::error file=gradle.properties::Tag $TAG needs version=$expected in" \
-              "gradle.properties, but the tagged commit has version=${version:-<none>}."
-            exit 1
-          fi
-          if [[ "$version" == *-SNAPSHOT ]]; then
-            echo "::error file=gradle.properties::$version is a snapshot, which is not released."
+          version="${TAG#v}"
+          if [[ "$(tr '[:upper:]' '[:lower:]' <<< "$version")" == *-snapshot ]]; then
+            echo "::error::$TAG names a snapshot, which is not released."
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v6
         with:
@@ -67,7 +66,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
 
       - name: Build the CLI distribution
-        run: ./gradlew :cli:distZip
+        run: ./gradlew -Pversion="$VERSION" :cli:distZip
 
       - name: Check the distribution runs
         run: |
@@ -77,7 +76,13 @@ jobs:
             exit 1
           fi
           unzip -q "$zip" -d "$RUNNER_TEMP/dist"
-          "$RUNNER_TEMP/dist/kiff-$VERSION/bin/kiff" --help
+          kiff="$RUNNER_TEMP/dist/kiff-$VERSION/bin/kiff"
+          "$kiff" --help
+          said=$("$kiff" --version)
+          if [[ "$said" != "kiff $VERSION" ]]; then
+            echo "::error::The distribution says '$said' to --version, not 'kiff $VERSION'."
+            exit 1
+          fi
 
       - name: Write the checksum
         working-directory: cli/build/distributions
@@ -100,8 +105,8 @@ jobs:
 
   maven:
     name: Upload to Maven Central
-    # The CLI job has checked the tag against gradle.properties. Without that check a SNAPSHOT
-    # version would go to Central's snapshot repository instead.
+    # The CLI job reads the version from the tag and refuses a snapshot. A build without
+    # -Pversion is 0.0.0-SNAPSHOT, which would go to Central's snapshot repository instead.
     needs: cli
     # A tag always uploads. A manual run uploads only when asked, since it is usually there to
     # rebuild the CLI for a version Central already has.
@@ -113,6 +118,7 @@ jobs:
       contents: read
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      VERSION: ${{ needs.cli.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -152,7 +158,12 @@ jobs:
       # the deployment passed: the portal shows whether it did. The plugin reads the signing key
       # from its own signingInMemoryKey properties.
       - name: Upload the library
-        run: ./gradlew :library:publishToMavenCentral --no-configuration-cache
+        run: |
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::The CLI job gave no version for $TAG."
+            exit 1
+          fi
+          ./gradlew -Pversion="$VERSION" :library:publishToMavenCentral --no-configuration-cache
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
