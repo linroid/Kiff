@@ -19,18 +19,16 @@ import java.time.Duration
 import java.util.HexFormat
 import java.util.zip.ZipFile
 
-/** Why `kiff +VERSION` could not hand a command to the version it names. */
+/** Why `kiff --use` could not hand a command to the version it names. */
 internal class UnavailableVersionException(message: String) : Exception(message)
 
 /**
- * The version a leading `+X`, `--use X` or `--use=X` names, and the arguments after it, which are
- * left for that version to read. Like `cargo +nightly`, only the first argument counts: anywhere
- * else a `+` is an ordinary argument.
+ * The version a leading `--use X` or `--use=X` names, and the arguments after it, which are left
+ * for that version to read. Only the first argument counts: anywhere else `--use` is the command's.
  */
 internal fun leadingVersion(args: Array<String>): Pair<String, List<String>>? {
   val first = args.firstOrNull() ?: return null
   return when {
-    first.startsWith("+") -> first.substring(1) to args.drop(1)
     // Without a value this is left to Clikt, which says the option needs one.
     first == "--use" -> if (args.size > 1) args[1] to args.drop(2) else null
     first.startsWith("--use=") -> first.removePrefix("--use=") to args.drop(1)
@@ -56,7 +54,7 @@ internal fun checkReleased(version: String) {
 private val RELEASED = Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?""")
 
 /**
- * The released Kiff builds that `kiff +VERSION` hands a command to. Each is downloaded once, from
+ * The released Kiff builds that `kiff --use` hands a command to. Each is downloaded once, from
  * the zip its GitHub release attaches, checked against the `.sha256` beside it, and kept in
  * [home]`/versions/<version>`.
  */

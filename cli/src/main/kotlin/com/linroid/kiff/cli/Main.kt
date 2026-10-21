@@ -24,18 +24,19 @@ import kotlin.system.exitProcess
 class RootCommand : CliktCommand(name = "kiff") {
   override val invokeWithoutSubcommand = true
 
-  override fun help(context: Context) =
-    "A leading +VERSION, as in kiff +0.1.0 create OLD NEW PATCH, runs the command with that " +
-      "released Kiff, downloaded on first use. It has to be the first argument, as in " +
-      "cargo +nightly."
+  override fun help(context: Context) = """
+    To run a command with another released Kiff, downloaded on first use, start with --use:
 
-  // Declared for --help alone: runKiff hands a leading --use or +VERSION to that version before
-  // Clikt reads anything, since the command after it may be one this build does not have.
+    kiff --use 0.1.0 create old.apk new.apk patch.kiff
+  """.trimIndent()
+
+  // Declared for --help alone: runKiff hands a leading --use to that version before Clikt reads
+  // anything, since the command after it may be one this build does not have.
   @Suppress("unused")
   private val use by option(
     "--use",
     metavar = "VERSION",
-    help = "The same as a leading +VERSION"
+    help = "Run with that released Kiff (first argument only)"
   )
 
   init {
@@ -125,7 +126,7 @@ internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
 
 /**
  * Runs the command line [args] describe and answers the exit status, as Clikt's `main` would. A
- * leading `+VERSION` runs the rest with that released Kiff instead, through [versions].
+ * leading `--use VERSION` runs the rest with that released Kiff instead, through [versions].
  */
 internal fun runKiff(
   args: Array<String>,
@@ -135,7 +136,7 @@ internal fun runKiff(
   val (version, rest) = leadingVersion(args) ?: return parse(args, out)
   return try {
     when (version) {
-      // Nothing to fetch: this build reads the rest itself, as if +VERSION had not been there.
+      // Nothing to fetch: this build reads the rest itself, as if --use had not been there.
       kiffVersion -> parse(rest.toTypedArray(), out)
       // Handed over unread, since that version may take commands and flags this one lacks.
       else -> {

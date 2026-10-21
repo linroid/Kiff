@@ -73,10 +73,13 @@ class UseVersionTest {
   fun handsTheArgumentsToThatVersionUnreadAndAnswersItsStatus() {
     if (WINDOWS) return
     release("9.9.9", distribution("9.9.9"))
-    val run = kiffProcess("+9.9.9", "create", "two words", "", "--no-such-flag", "+1.0.0", "-v")
+    val run = kiffProcess(
+      "--use", "9.9.9",
+      "create", "two words", "", "--no-such-flag", "--use=1", "-v"
+    )
 
     assertEquals(3, run.status, run.err)
-    assertEquals("[create]\n[two words]\n[]\n[--no-such-flag]\n[+1.0.0]\n[-v]\n", run.out)
+    assertEquals("[create]\n[two words]\n[]\n[--no-such-flag]\n[--use=1]\n[-v]\n", run.out)
     assertTrue("Downloading kiff 9.9.9 from $base/v9.9.9/kiff-9.9.9.zip\n" in run.err, run.err)
     // The test runs it with no JAVA_HOME, which the launcher needs to find this Java.
     assertTrue("JAVA_HOME=${System.getProperty("java.home")}\n" in run.err, run.err)
@@ -87,7 +90,7 @@ class UseVersionTest {
   fun reusesAnInstalledVersionWithoutAskingTheServerAgain() {
     if (WINDOWS) return
     release("9.9.9", distribution("9.9.9"))
-    assertEquals(3, kiffProcess("+9.9.9").status)
+    assertEquals(3, kiffProcess("--use=9.9.9").status)
     val first = requests.toList()
     assertEquals(
       listOf(
@@ -99,7 +102,7 @@ class UseVersionTest {
       first
     )
 
-    // The long form, in both its spellings, hands over to the same installed copy.
+    // Either spelling hands over to the copy now installed.
     for (use in listOf(arrayOf("--use", "9.9.9"), arrayOf("--use=9.9.9"))) {
       val again = kiffProcess(*use, "info", "x.kiff")
       assertEquals(3, again.status, again.err)
@@ -127,7 +130,7 @@ class UseVersionTest {
   @Test
   fun refusesAZipThatDoesNotMatchItsChecksumAndKeepsNothing() {
     release("9.9.9", distribution("9.9.9"), sha256 = sha256("another zip".encodeToByteArray()))
-    val run = kiff("+9.9.9", "create", "a", "b", "c")
+    val run = kiff("--use", "9.9.9", "create", "a", "b", "c")
 
     assertEquals(1, run.status)
     val zip = "$base/v9.9.9/kiff-9.9.9.zip"
@@ -140,14 +143,14 @@ class UseVersionTest {
 
   @Test
   fun namesTheAddressThatHasNoRelease() {
-    val run = kiff("+9.9.8", "create", "a", "b", "c")
+    val run = kiff("--use", "9.9.8", "create", "a", "b", "c")
     assertEquals(1, run.status)
     assertEquals(
       "Error: No release of kiff 9.9.8 at $base/v9.9.8/kiff-9.9.8.zip.sha256 (HTTP 404)\n",
       run.err
     )
     // diff keeps 1 for "the files differ", so its trouble is 2 here too.
-    assertEquals(2, kiff("+9.9.8", "diff", "a", "b").status)
+    assertEquals(2, kiff("--use", "9.9.8", "diff", "a", "b").status)
     assertFalse(Files.exists(home))
   }
 
@@ -155,7 +158,7 @@ class UseVersionTest {
   fun namesTheAddressItCouldNotReach() {
     val closed = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1")).use { it.localPort }
     val unreachable = "http://127.0.0.1:$closed"
-    val run = kiff("+9.9.9", "create", "a", "b", "c", baseUrl = unreachable)
+    val run = kiff("--use", "9.9.9", "create", "a", "b", "c", baseUrl = unreachable)
     assertEquals(1, run.status)
     val url = "$unreachable/v9.9.9/kiff-9.9.9.zip.sha256"
     // The reason after it is the platform's, such as "Connection refused".
@@ -166,7 +169,7 @@ class UseVersionTest {
   @Test
   fun refusesAnEntryThatWouldUnpackOutsideItsDirectory() {
     release("9.9.9", distribution("9.9.9", "kiff-9.9.9/../../escaped"))
-    val run = kiff("+9.9.9", "create", "a", "b", "c")
+    val run = kiff("--use", "9.9.9", "create", "a", "b", "c")
 
     assertEquals(1, run.status)
     assertTrue(
@@ -182,7 +185,7 @@ class UseVersionTest {
   fun runsTheCommandItselfWhenItIsThisVersion() {
     val a = Files.writeString(dir.resolve("a"), "x\n").toString()
     val b = Files.writeString(dir.resolve("b"), "y\n").toString()
-    val run = kiff("+$kiffVersion", "diff", a, b)
+    val run = kiff("--use", kiffVersion, "diff", a, b)
 
     assertEquals(1, run.status, run.err)
     assertTrue(run.out.startsWith("--- $a\n+++ $b\n"), run.out)
@@ -201,9 +204,9 @@ class UseVersionTest {
       "" to "\"\" is not a released Kiff version"
     )
     for ((version, reason) in refusals) {
-      for (use in listOf("+$version", "--use=$version")) {
-        val run = kiff(use, "create", "a", "b", "c")
-        assertEquals(1, run.status, use)
+      for (use in listOf(arrayOf("--use", version), arrayOf("--use=$version"))) {
+        val run = kiff(*use, "create", "a", "b", "c")
+        assertEquals(1, run.status, use.joinToString(" "))
         assertTrue(run.err.startsWith("Error: $reason"), run.err)
       }
     }
@@ -212,14 +215,15 @@ class UseVersionTest {
   }
 
   @Test
-  fun readsTheVersionOnlyFromTheFirstArgument() {
-    val rest = listOf("create", "+2.0.0", "--use", "3.0.0")
-    for (form in listOf(listOf("+1.2.3"), listOf("--use", "1.2.3"), listOf("--use=1.2.3"))) {
+  fun readsTheVersionOnlyFromALeadingUse() {
+    val rest = listOf("create", "--use", "3.0.0")
+    for (form in listOf(listOf("--use", "1.2.3"), listOf("--use=1.2.3"))) {
       assertEquals("1.2.3" to rest, leadingVersion((form + rest).toTypedArray()), "$form")
     }
-    // After the command a + is an argument of the command's, and -v is --version.
-    assertNull(leadingVersion(arrayOf("create", "+1.2.3")))
+    // After the command --use is the command's, -v is --version, and + names nothing.
+    assertNull(leadingVersion(arrayOf("create", "--use", "1.2.3")))
     assertNull(leadingVersion(arrayOf("-v", "1.2.3")))
+    assertNull(leadingVersion(arrayOf("+1.2.3", "create")))
     assertNull(leadingVersion(arrayOf("--version")))
     // Without a value Clikt says what is missing.
     assertNull(leadingVersion(arrayOf("--use")))
@@ -227,7 +231,17 @@ class UseVersionTest {
   }
 
   @Test
-  fun printsItsOwnVersionForEitherFlagAndExplainsPlusVersionInItsHelp() {
+  fun takesALeadingPlusAsAnOrdinaryArgument() {
+    // It is no command of this build's, so Clikt refuses it, and nothing is fetched.
+    val run = kiff("+9.9.9", "create", "a", "b", "c")
+    assertEquals(1, run.status)
+    assertEquals("", run.err)
+    assertEquals(emptyList(), requests.toList())
+    assertFalse(Files.exists(home))
+  }
+
+  @Test
+  fun printsItsOwnVersionForEitherFlagAndExplainsUseInItsHelp() {
     for (flag in listOf("-v", "--version")) {
       val version = kiffProcess(flag)
       assertEquals(0, version.status, version.err)
@@ -236,8 +250,8 @@ class UseVersionTest {
 
     val help = kiffProcess("--help")
     assertEquals(0, help.status, help.err)
-    assertTrue("A leading +VERSION" in help.out, help.out)
-    assertTrue("--use=<version>  The same as a leading +VERSION" in help.out, help.out)
+    assertTrue("kiff --use 0.1.0 create old.apk new.apk patch.kiff" in help.out, help.out)
+    assertTrue("--use=<version>  Run with that released Kiff (first argument only)" in help.out)
     assertTrue("-v, --version" in help.out, help.out)
   }
 
