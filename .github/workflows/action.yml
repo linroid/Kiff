@@ -257,8 +257,8 @@ jobs:
             exit 1
           fi
 
-      # No Kiff release can be downloaded while v0.1.0 is a draft, so a mirror on localhost serves
-      # release-shaped files instead, through KIFF_DOWNLOAD_URL as kiff --use reads it. 0.0.2-test
+      # A mirror on localhost serves release-shaped builds of this checkout, through
+      # KIFF_DOWNLOAD_URL as kiff --use reads it, so the test needs no published release. 0.0.2-test
       # is the same zip under a checksum it does not have.
       - name: Serve test releases of the CLI
         run: |

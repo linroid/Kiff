@@ -16,6 +16,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Examples say vX.Y.Z or <version>, and the badges say which release is the latest, so a release
+  # needs no edit to the docs. A pinned release in them would go stale with the next one.
+  pinned-releases:
+    name: No pinned releases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the docs and the action pin no Kiff release
+        run: |
+          pinned='linroid/[Kk]iff@v[0-9]|com\.linroid\.kiff:kiff(-[a-z0-9]+)?:[0-9]'
+          if git grep -n -E "$pinned" -- README.md AGENTS.md action.yml; then
+            echo "::error::Write vX.Y.Z or <version> in place of a Kiff release."
+            exit 1
+          fi
+
   jvm-tests:
     name: JVM Tests
     runs-on: ubuntu-latest
