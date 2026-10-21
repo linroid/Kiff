@@ -10,19 +10,119 @@
 Kotlin Multiplatform file diffing: turn two versions of a file into a patch, and rebuild the second
 file byte for byte from the first one plus that patch.
 
-## Using it
+## Getting started
 
-The library is on Maven Central. It targets JVM, JS, iOS, macOS, Linux and Windows from one source
-set, so a multiplatform project adds it to `commonMain`:
+### Using the library
+
+Kiff is on Maven Central as `com.linroid.kiff:kiff`. Below, `<version>` is the latest release, which
+the Maven Central badge above shows. It targets JVM, JS, iOS, macOS, Linux and Windows from one
+source set, so a multiplatform project adds it to `commonMain`:
 
 ```kotlin
-implementation("com.linroid.kiff:kiff:<version>")
+kotlin {
+  sourceSets {
+    commonMain.dependencies {
+      implementation("com.linroid.kiff:kiff:<version>")
+    }
+  }
+}
 ```
 
-`<version>` is the latest release, which the Maven Central badge above shows.
+A JVM or Android project adds it to `dependencies`:
 
-Run `./gradlew publishToMavenLocal` to publish the current source to `~/.m2` instead, as
-`0.0.0-SNAPSHOT`.
+```kotlin
+dependencies {
+  implementation("com.linroid.kiff:kiff:<version>")
+}
+```
+
+With a version catalog, that is an entry in `gradle/libs.versions.toml`, and
+`implementation(libs.kiff)`:
+
+```toml
+[versions]
+kiff = "<version>"
+
+[libraries]
+kiff = { module = "com.linroid.kiff:kiff", version.ref = "kiff" }
+```
+
+Gradle picks the artifact each target needs, such as `kiff-jvm` or `kiff-iosarm64`, from the module
+metadata `kiff` publishes. Maven reads no such metadata, so a Maven project depends on
+`com.linroid.kiff:kiff-jvm` instead.
+
+A patch rebuilds one file from another:
+
+```kotlin
+val patch = Kiff.createPatch(source, target)
+val restored = Kiff.applyPatch(source, patch)  // == target, byte for byte
+```
+
+[Creating and applying a patch](#creating-and-applying-a-patch) goes on from there.
+
+### Installing the CLI
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh | bash
+```
+
+That installs the latest release into `~/.kiff` and links `kiff` into `/usr/local/bin`. Give bash
+`KIFF_VERSION` to pin a release, as in `| KIFF_VERSION=X.Y.Z bash`, and `KIFF_INSTALL` to put the
+link somewhere else, such as `$HOME/.local/bin`. kiff runs on Java 17 or newer, which the script
+does not install.
+
+Without the script, download `kiff-<version>.zip` from the
+[latest release](https://github.com/linroid/kiff/releases/latest), unzip it, and run `bin/kiff`.
+
+To uninstall, remove the `kiff` link and `~/.kiff`.
+
+`kiff --use X` runs a command with another released Kiff, downloaded on first use: see
+[Running another version](#running-another-version). The [CLI reference](#cli) has every command.
+
+### Setting up the GitHub Action
+
+The action patches each new release of a project from the releases before it, and attaches the
+patches with a manifest that the app's updater reads.
+
+1. **Attach each build to its release**, with its version in its name, such as `app-1.3.0.apk`. The
+   action patches files a release already carries.
+2. **Add `.github/workflows/patches.yml`:**
+
+   ```yaml
+   name: Patches
+   on:
+     release:
+       types: [ published ]
+
+   jobs:
+     patches:
+       runs-on: ubuntu-latest
+       permissions:
+         contents: write
+       steps:
+         - uses: linroid/kiff@vX.Y.Z
+           with:
+             assets: app-*.apk
+             kiff-version: X.Y.Z
+   ```
+
+3. **Pin the versions.** Replace `vX.Y.Z` with the latest release, which the Release badge above
+   shows, and keep that exact tag rather than a branch. Set `kiff-version` to the oldest Kiff
+   embedded in an app build you still support, since that Kiff applies the patches; for an app that
+   first embeds Kiff now, that is the same release. [Versions](#versions) says why.
+4. **Publish a release.** The action attaches a patch from each of the three releases before it,
+   and `kiff-patches.json`, and its job summary lists every patch. A release that another workflow
+   publishes with the default `GITHUB_TOKEN` starts no `release` workflow, so a release workflow
+   uses the [draft-first recipe](#attach-the-patches-before-publishing) instead, which also keeps
+   updaters from seeing a release before its patches.
+5. **Update from the manifest in the app.** Add [the library](#using-the-library) and read
+   `https://github.com/OWNER/REPO/releases/latest/download/kiff-patches.json`. Take the patch whose
+   `source.sha256` is the installed file's SHA-256, download it, apply it, and check the result
+   against the file's `sha256`. [Updating from the manifest](#updating-from-the-manifest) has every
+   check.
+
+The [action reference](#github-action) has every input and output, more recipes, and how the action
+picks the Kiff it runs.
 
 ## Creating and applying a patch
 
@@ -72,11 +172,11 @@ changed entry by entry, and `explain` and `explainApk` say where the bytes of th
 
 ## CLI
 
-The `cli` module is a small command-line front end for the library, installed as `kiff`:
+The `cli` module is a small command-line front end for the library, installed as `kiff` (see
+[Installing the CLI](#installing-the-cli)):
 
 ```console
-$ ./gradlew :cli:installDist
-$ ./cli/build/install/kiff/bin/kiff create foo-1.0.apk foo-1.1.apk foo.patch
+$ kiff create foo-1.0.apk foo-1.1.apk foo.patch
 Created foo.patch
   Read as:     apk (format v1)
   Source:      67.4 MiB crc32=fa4b3b57
@@ -84,8 +184,8 @@ Created foo.patch
   Patch:       13.5 MiB (18.82% of target)
   Took:        2200 ms
 
-$ ./cli/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
-$ ./cli/build/install/kiff/bin/kiff info foo.patch
+$ kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
+$ kiff info foo.patch
 ```
 
 `create` reads each file the way [the library](#how-structure-is-detected) does.
@@ -274,27 +374,10 @@ release is that build, so from one `--use` always hands the command over.
 The action at the root of this repository runs `kiff release` for a project's GitHub releases. It
 patches each new release's files from the releases before it, restores every patch and checks it
 against the new file's SHA-256, and attaches the patches and a `kiff-patches.json` manifest to the
-release. A project that already attaches its builds to releases adds one workflow:
-
-```yaml
-name: Patches
-on:
-  release:
-    types: [ published ]
-
-jobs:
-  patches:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: linroid/kiff@vX.Y.Z
-        with:
-          assets: app-*.apk
-```
-
-Here and below, `vX.Y.Z` stands for the latest Kiff release, which the Release badge above shows.
-Pin that exact tag, or the commit it names, rather than a branch.
+release. A project that already attaches its builds to releases adds one workflow, the one in
+[Setting up the GitHub Action](#setting-up-the-github-action). Here and below, `vX.Y.Z` stands for
+the latest Kiff release, which the Release badge above shows. Pin that exact tag, or the commit it
+names, rather than a branch.
 
 Publishing `v1.3.0` with `app-1.3.0.apk` then attaches a patch from each of the three releases
 before it, such as `app-1.3.0.apk.from-v1.2.0.kiff`, and the manifest. The job summary names the
@@ -754,6 +837,28 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 Kiff addresses both files through `SeekableSource` rather than reading them as streams, because a
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
 peak memory is still roughly source + target + patch + index.
+
+## Building from source
+
+Kiff builds with the Gradle wrapper on JDK 17 or newer. A build from source is `0.0.0-SNAPSHOT`,
+and its `kiff --version` names the commit:
+
+```console
+$ ./gradlew :cli:installDist
+$ ./cli/build/install/kiff/bin/kiff --version
+kiff 0.0.0-SNAPSHOT (59e074e)
+```
+
+`./gradlew publishToMavenLocal` publishes the library to `~/.m2` as `0.0.0-SNAPSHOT`, for a project
+to try before a release. The tests run per target, as CI runs them:
+
+| Command | Runs |
+| --- | --- |
+| `./gradlew jvmTest :cli:test` | the shared suite on the JVM, and the CLI's tests |
+| `./gradlew jsTest` | the shared suite on Node.js and in a browser |
+| `./gradlew iosSimulatorArm64Test` | the shared suite on the iOS simulator, on macOS with Xcode |
+| `./gradlew macosArm64Test` | the shared suite natively on Apple silicon |
+| `./gradlew linuxX64Test` | the shared suite natively on Linux |
 
 ## Releasing
 
