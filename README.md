@@ -370,9 +370,10 @@ signals are your own; elsewhere its exit status is returned as it is. Progress g
 error, so `kiff --use 0.1.0 diff a b | patch` still works. A JVM build runs on Java 17 or newer:
 the one in `JAVA_HOME`, or `java` on the `PATH`, and a `kiff` that is itself the JVM build lends
 its own Java when `JAVA_HOME` is unset. Naming the version that is running just runs the command,
-and `kiff -v` or `kiff --version` says which version that is. A build from source is `0.0.0-SNAPSHOT`, which
-`--version` follows with the commit it was built from, as in `kiff 0.0.0-SNAPSHOT (59e074e)`. No
-release is that build, so from one `--use` always hands the command over.
+and `kiff -v` or `kiff --version` says which version that is. A build from source is
+`0.0.0-SNAPSHOT`, which `--version` follows with the commit it was built from, as in
+`kiff 0.0.0-SNAPSHOT (59e074e)`. No release is that build, so from one `--use` always hands the
+command over.
 
 ## GitHub Action
 
