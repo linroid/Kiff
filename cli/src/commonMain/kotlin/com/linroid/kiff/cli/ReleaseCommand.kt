@@ -19,7 +19,6 @@ import kotlin.random.Random
 import okio.HashingSink
 import okio.IOException
 import okio.Path
-import okio.Path.Companion.toPath
 import okio.blackholeSink
 import okio.buffer
 import okio.use
@@ -96,7 +95,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
     // Read before any patch is made: a manifest that cannot be merged into fails at once rather
     // than after every patch is built.
     val existing = ReleaseManifest.read(manifest)
-    systemFileSystem.createDirectories(out.toPath())
+    systemFileSystem.createDirectories(platformPath(out))
 
     val labelWidth = sources.maxOf { it.label.length }
     val patches = mutableListOf<ReleasePatch>()
@@ -181,7 +180,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
     } finally {
       // What the manifest does not list is not left behind either, for a script that uploads the
       // whole directory to publish.
-      if (!kept) systemFileSystem.delete(path.toPath(), mustExist = false)
+      if (!kept) systemFileSystem.delete(platformPath(path), mustExist = false)
     }
   }
 
@@ -240,7 +239,7 @@ class ReleaseCommand : KiffCommand(name = "release") {
 
 /** A file given on the command line, and the label it goes by in names and the manifest. */
 internal class Labeled(val label: String, val path: String) {
-  val fileName: String get() = path.toPath().name
+  val fileName: String get() = platformPath(path).name
 
   companion object {
     /**
@@ -254,7 +253,9 @@ internal class Labeled(val label: String, val path: String) {
     fun parse(text: String): Labeled {
       val equals = text.indexOf('=')
       val label = if (equals < 0) null else text.substring(0, equals)
-      if (label == null || '/' in label || '\\' in label) return Labeled(text.toPath().name, text)
+      if (label == null || '/' in label || '\\' in label) {
+        return Labeled(platformPath(text).name, text)
+      }
       require(label.isNotEmpty()) { "No label before the '=' in '$text'" }
       val path = text.substring(equals + 1)
       require(path.isNotEmpty()) { "No file after '$label='" }
@@ -297,7 +298,7 @@ private const val HEX_DIGITS = "0123456789ABCDEF"
 internal class Fingerprint(val size: Long, val sha256: String)
 
 /** The size and SHA-256 of the file at [path], read once, in pieces. */
-internal fun fingerprint(path: String): Fingerprint = fingerprint(path.toPath())
+internal fun fingerprint(path: String): Fingerprint = fingerprint(platformPath(path))
 
 internal fun fingerprint(path: Path): Fingerprint {
   val digest = HashingSink.sha256(blackholeSink())
@@ -307,13 +308,6 @@ internal fun fingerprint(path: Path): Fingerprint {
 
 /** [dir]/[name], or [name] alone for the current directory, which reads better in output. */
 internal fun join(dir: String, name: String): String =
-  if (dir == ".") name else (dir.toPath() / name).toString()
-
-/** [path] from the root, with no `.` or `..` left in it, so two spellings of one file compare. */
-internal fun absolute(path: String): Path {
-  val given = path.toPath()
-  if (given.isAbsolute) return given.normalized()
-  return (systemFileSystem.canonicalize(".".toPath()) / given).normalized()
-}
+  if (dir == ".") name else (platformPath(dir) / name).toString()
 
 private fun count(n: Int, one: String, many: String) = "$n ${if (n == 1) one else many}"
