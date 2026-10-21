@@ -1,0 +1,251 @@
+name: CLI Binaries
+
+# Builds the CLI as a release ships it, a bare executable for each platform and the JVM zip, and
+# runs each executable on a machine of its own platform. The release workflow calls this with the
+# tag's version and attaches what it builds. A pull request builds 0.0.0-ci.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version to build, as -Pversion takes it.
+        required: true
+        type: string
+      ref:
+        description: The ref to build, such as refs/tags/v1.2.3.
+        required: true
+        type: string
+  push:
+    branches: [ main ]
+    paths:
+      - cli/**
+      - library/src/*Main/**
+      - library/build.gradle.kts
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradle/**
+      - .github/scripts/smoke-cli.sh
+      - .github/workflows/cli-binaries.yml
+  # No branches filter, so a pull request stacked on another one is tested too.
+  pull_request:
+    paths:
+      - cli/**
+      - library/src/*Main/**
+      - library/build.gradle.kts
+      - build.gradle.kts
+      - settings.gradle.kts
+      - gradle.properties
+      - gradle/**
+      - .github/scripts/smoke-cli.sh
+      - .github/workflows/cli-binaries.yml
+
+concurrency:
+  group: cli-binaries-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  VERSION: ${{ inputs.version || '0.0.0-ci' }}
+  # Another version, whose JVM zip the smoke tests' kiff --use falls back to.
+  OTHER: 0.0.1-smoke
+
+jobs:
+  # Kotlin/Native links Linux and Windows executables from Linux, and only Apple's from a Mac.
+  linux:
+    name: Build for Linux and Windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the executables and the JVM zip
+        run: |
+          ./gradlew -Pversion="$VERSION" :cli:distZip \
+            :cli:linkReleaseExecutableLinuxX64 :cli:linkReleaseExecutableLinuxArm64 \
+            :cli:linkReleaseExecutableMingwX64
+
+      # Unlike the Linux linker, the Windows one keeps the symbol table, which mingw's strip drops.
+      - name: Strip the Windows executable
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends binutils-mingw-w64-x86-64
+          x86_64-w64-mingw32-strip cli/build/bin/mingwX64/releaseExecutable/kiff.exe
+
+      - name: Name them as a release does
+        run: |
+          mkdir dist
+          bin=cli/build/bin
+          cp "$bin/linuxX64/releaseExecutable/kiff.kexe" "dist/kiff-$VERSION-linux-x64"
+          cp "$bin/linuxArm64/releaseExecutable/kiff.kexe" "dist/kiff-$VERSION-linux-arm64"
+          cp "$bin/mingwX64/releaseExecutable/kiff.exe" "dist/kiff-$VERSION-windows-x64.exe"
+          cp "cli/build/distributions/kiff-$VERSION.zip" dist/
+
+      - name: Check the JVM zip runs
+        run: |
+          unzip -q "dist/kiff-$VERSION.zip" -d "$RUNNER_TEMP/zip"
+          kiff="$RUNNER_TEMP/zip/kiff-$VERSION/bin/kiff"
+          said=$("$kiff" --version)
+          if [[ "$said" != "kiff $VERSION" ]]; then
+            echo "::error::The JVM zip says '$said' to --version, not 'kiff $VERSION'."
+            exit 1
+          fi
+
+      - name: Build the JVM zip of another version, for kiff --use
+        run: |
+          ./gradlew -Pversion="$OTHER" :cli:distZip
+          mkdir other
+          cp "cli/build/distributions/kiff-$OTHER.zip" other/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-linux
+          path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-other
+          path: other/
+          if-no-files-found: error
+
+  macos:
+    name: Build for macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the executables
+        run: |
+          ./gradlew -Pversion="$VERSION" \
+            :cli:linkReleaseExecutableMacosArm64 :cli:linkReleaseExecutableMacosX64
+
+      - name: Strip them and name them as a release does
+        run: |
+          mkdir dist
+          bin=cli/build/bin
+          cp "$bin/macosArm64/releaseExecutable/kiff.kexe" "dist/kiff-$VERSION-macos-arm64"
+          cp "$bin/macosX64/releaseExecutable/kiff.kexe" "dist/kiff-$VERSION-macos-x64"
+          strip dist/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-macos
+          path: dist/
+          if-no-files-found: error
+
+  smoke:
+    name: Run on ${{ matrix.platform }}
+    needs: [ linux, macos ]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-latest
+            built: cli-linux
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            built: cli-linux
+          - platform: macos-arm64
+            runner: macos-latest
+            built: cli-macos
+          - platform: macos-x64
+            runner: macos-15-intel
+            built: cli-macos
+          - platform: windows-x64
+            runner: windows-latest
+            built: cli-linux
+            exe: .exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.built }}
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-other
+          path: other
+
+      # Only for kiff --use of a release that has nothing but its JVM zip.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Run kiff as a user would
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          EXE: ${{ matrix.exe }}
+        run: |
+          .github/scripts/smoke-cli.sh "dist/kiff-$VERSION-$PLATFORM$EXE" "$PLATFORM" \
+            "$PWD/other/kiff-$OTHER.zip"
+
+  release-files:
+    name: Collect the release files
+    needs: smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-linux
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-macos
+          path: dist
+
+      # The line sha256sum writes, which kiff --use, the action and install.sh read.
+      - name: Write a checksum for each
+        working-directory: dist
+        run: |
+          for file in kiff-*; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          sha256sum --check ./*.sha256
+          {
+            echo "| File | Bytes |"
+            echo "| --- | ---: |"
+            for file in kiff-*; do
+              [[ $file == *.sha256 ]] || echo "| \`$file\` | $(wc -c < "$file" | tr -d ' ') |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kiff-cli-release
+          path: dist/
+          if-no-files-found: error

@@ -258,21 +258,36 @@ jobs:
           fi
 
       # A mirror on localhost serves release-shaped builds of this checkout, through
-      # KIFF_DOWNLOAD_URL as kiff --use reads it, so the test needs no published release. 0.0.2-test
-      # is the same zip under a checksum it does not have.
+      # KIFF_DOWNLOAD_URL as kiff --use reads it, so the test needs no published release. 0.0.1-test
+      # has only its JVM zip, as 0.1.0 does, and 0.0.2-test is that zip under a checksum it does
+      # not have. 0.0.3-test has this runner's executable alone.
       - name: Serve test releases of the CLI
         run: |
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) target=LinuxX64 bin=linuxX64 platform=linux-x64 ;;
+            macOS-ARM64) target=MacosArm64 bin=macosArm64 platform=macos-arm64 ;;
+            *) echo "::error::No executable is built for $RUNNER_OS on $RUNNER_ARCH."; exit 1 ;;
+          esac
+          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
           ./gradlew -Pversion=0.0.1-test :cli:distZip
+          ./gradlew -Pversion=0.0.3-test ":cli:linkReleaseExecutable$target"
           mirror=$RUNNER_TEMP/mirror
-          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test"
+          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test" "$mirror/v0.0.3-test"
           cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.1-test/"
           cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.2-test/kiff-0.0.2-test.zip"
-          cd "$mirror/v0.0.1-test"
-          if command -v sha256sum > /dev/null; then
-            sha256sum kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
-          else
-            shasum -a 256 kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
-          fi
+          cp "cli/build/bin/$bin/releaseExecutable/kiff.kexe" \
+            "$mirror/v0.0.3-test/kiff-0.0.3-test-$platform"
+          for file in "$mirror/v0.0.1-test/kiff-0.0.1-test.zip" \
+            "$mirror/v0.0.3-test/kiff-0.0.3-test-$platform"; do
+            (
+              cd "$(dirname "$file")"
+              if command -v sha256sum > /dev/null; then
+                sha256sum "$(basename "$file")" > "$file.sha256"
+              else
+                shasum -a 256 "$(basename "$file")" > "$file.sha256"
+              fi
+            )
+          done
           printf '%064d  kiff-0.0.2-test.zip\n' 0 > "$mirror/v0.0.2-test/kiff-0.0.2-test.zip.sha256"
           nohup python3 -m http.server 8765 --bind 127.0.0.1 --directory "$mirror" \
             > "$RUNNER_TEMP/mirror.log" 2>&1 &
@@ -312,6 +327,36 @@ jobs:
             echo "::error::kiff-version 0.0.1-test should have made the patches, not $generator."
             exit 1
           fi
+
+      - name: Patch v1.2.1 with a release of the CLI that has this runner's executable
+        id: native
+        uses: ./
+        env:
+          KIFF_DOWNLOAD_URL: http://127.0.0.1:8765
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.2.1
+          assets: tool-*.bin
+          kiff-version: 0.0.3-test
+          upload: false
+
+      - name: Check the executable made the patches
+        env:
+          MANIFEST: ${{ steps.native.outputs.manifest }}
+        run: |
+          generator=$(jq -r .generator "$MANIFEST")
+          if [[ $generator != 'kiff 0.0.3-test' ]]; then
+            echo "::error::kiff-version 0.0.3-test should have made the patches, not $generator."
+            exit 1
+          fi
+          name="kiff-0.0.3-test-$PLATFORM"
+          if ! grep -q "\"GET /v0.0.3-test/$name HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
+            echo "::error::The action should have downloaded $name."
+            cat "$RUNNER_TEMP/mirror.log"
+            exit 1
+          fi
+          .github/scripts/restore-patches.sh "$RUNNER_TEMP/kiff-cli-0.0.3-test/$name" "$MANIFEST" \
+            "$FIXTURES"
 
       - name: Refuse a release of the CLI that does not match its checksum
         id: tampered

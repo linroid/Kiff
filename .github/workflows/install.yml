@@ -62,23 +62,41 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # 0.0.2-test is the same zip under a checksum it does not have. The mirror also serves
-      # install.sh, so each run fetches it with curl as the README's one-liner does.
+      # 0.0.1-test has this runner's executable and its JVM zip, as a release does. 0.0.2-test is
+      # the same executable under a checksum it does not have, and 0.0.3-test has only a JVM zip,
+      # as 0.1.0 does. The mirror also serves install.sh, so each run fetches it with curl as the
+      # README's one-liner does.
       - name: Serve test releases of the CLI
         run: |
-          ./gradlew -Pversion=0.0.1-test :cli:distZip
+          case "$RUNNER_OS-$RUNNER_ARCH" in
+            Linux-X64) target=LinuxX64 bin=linuxX64 platform=linux-x64 ;;
+            macOS-ARM64) target=MacosArm64 bin=macosArm64 platform=macos-arm64 ;;
+            *) echo "::error::No executable is built for $RUNNER_OS on $RUNNER_ARCH."; exit 1 ;;
+          esac
+          echo "PLATFORM=$platform" >> "$GITHUB_ENV"
+          ./gradlew -Pversion=0.0.1-test :cli:distZip ":cli:linkReleaseExecutable$target"
+          ./gradlew -Pversion=0.0.3-test :cli:distZip
+          kiff=cli/build/bin/$bin/releaseExecutable/kiff.kexe
           mirror=$RUNNER_TEMP/mirror
-          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test"
+          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test" "$mirror/v0.0.3-test"
           cp install.sh "$mirror/"
+          cp "$kiff" "$mirror/v0.0.1-test/kiff-0.0.1-test-$platform"
           cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.1-test/"
-          cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.2-test/kiff-0.0.2-test.zip"
-          cd "$mirror/v0.0.1-test"
-          if command -v sha256sum > /dev/null; then
-            sha256sum kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
-          else
-            shasum -a 256 kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
-          fi
-          printf '%064d  kiff-0.0.2-test.zip\n' 0 > "$mirror/v0.0.2-test/kiff-0.0.2-test.zip.sha256"
+          cp "$kiff" "$mirror/v0.0.2-test/kiff-0.0.2-test-$platform"
+          cp cli/build/distributions/kiff-0.0.3-test.zip "$mirror/v0.0.3-test/"
+          for file in "$mirror/v0.0.1-test/kiff-0.0.1-test-$platform" \
+            "$mirror/v0.0.1-test/kiff-0.0.1-test.zip" "$mirror/v0.0.3-test/kiff-0.0.3-test.zip"; do
+            (
+              cd "$(dirname "$file")"
+              if command -v sha256sum > /dev/null; then
+                sha256sum "$(basename "$file")" > "$file.sha256"
+              else
+                shasum -a 256 "$(basename "$file")" > "$file.sha256"
+              fi
+            )
+          done
+          printf '%064d  kiff-0.0.2-test-%s\n' 0 "$platform" \
+            > "$mirror/v0.0.2-test/kiff-0.0.2-test-$platform.sha256"
           nohup python3 -m http.server 8765 --bind 127.0.0.1 --directory "$mirror" \
             > "$RUNNER_TEMP/mirror.log" 2>&1 &
           for _ in $(seq 50); do
@@ -104,6 +122,12 @@ jobs:
             echo "::error::The installed kiff --version printed '$version', not 'kiff 0.0.1-test'."
             exit 1
           fi
+          # The executable, not the JVM zip the release also has.
+          if [[ -e $KIFF_HOME/versions/0.0.1-test/lib ]] \
+            || grep -q "kiff-0.0.1-test.zip" "$RUNNER_TEMP/mirror.log"; then
+            echo "::error::The installer took the JVM zip of a release with an executable."
+            exit 1
+          fi
           # The layout kiff --use keeps its versions in, with no temporary directory left over.
           target=$(readlink "$KIFF_INSTALL/kiff")
           if [[ $target != "$KIFF_HOME/versions/0.0.1-test/bin/kiff" ]]; then
@@ -119,7 +143,7 @@ jobs:
       - name: Install the same release again
         run: |
           curl -fsSL "$MIRROR/install.sh" | KIFF_VERSION=v0.0.1-test bash
-          # The zip and its checksum, once each, by the first install.
+          # The executable and its checksum, once each, by the first install.
           requests=$(grep -c 'GET /v0.0.1-test/' "$RUNNER_TEMP/mirror.log" || true)
           if [[ $requests != 2 ]]; then
             echo "::error::The release should have been downloaded once, but the mirror had" \
@@ -134,11 +158,11 @@ jobs:
           bin=$RUNNER_TEMP/tampered-bin
           if curl -fsSL "$MIRROR/install.sh" \
             | KIFF_VERSION=0.0.2-test KIFF_HOME=$home KIFF_INSTALL=$bin bash; then
-            echo "::error::A zip that does not match its checksum should fail the installer."
+            echo "::error::A release that does not match its checksum should fail the installer."
             exit 1
           fi
           # The mirror served both files, so the installer failed on the checksum.
-          for file in kiff-0.0.2-test.zip kiff-0.0.2-test.zip.sha256; do
+          for file in "kiff-0.0.2-test-$PLATFORM" "kiff-0.0.2-test-$PLATFORM.sha256"; do
             if ! grep -q "\"GET /v0.0.2-test/$file HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
               echo "::error::The installer should have downloaded $file before refusing it."
               cat "$RUNNER_TEMP/mirror.log"
@@ -174,18 +198,35 @@ jobs:
             exit 1
           fi
 
-      - name: Install without Java
+      - name: Install a release that has only its JVM zip
+        run: |
+          bin=$RUNNER_TEMP/jvm-bin
+          curl -fsSL "$MIRROR/install.sh" | KIFF_VERSION=0.0.3-test KIFF_INSTALL=$bin bash \
+            > "$RUNNER_TEMP/jvm.log"
+          cat "$RUNNER_TEMP/jvm.log"
+          if ! grep -q "has no build for $PLATFORM, so its JVM build is installed" \
+            "$RUNNER_TEMP/jvm.log"; then
+            echo "::error::The installer should say it fell back to the JVM zip."
+            exit 1
+          fi
+          version=$("$bin/kiff" --version)
+          if [[ $version != 'kiff 0.0.3-test' || ! -d $KIFF_HOME/versions/0.0.3-test/lib ]]; then
+            echo "::error::The JVM zip of 0.0.3-test should be installed, but kiff says '$version'."
+            exit 1
+          fi
+
+      - name: Install a JVM zip without Java
         run: |
           bin=$RUNNER_TEMP/no-java-bin
           curl -fsSL "$MIRROR/install.sh" \
-            | KIFF_VERSION=0.0.1-test KIFF_INSTALL=$bin JAVA_HOME=$RUNNER_TEMP/no-java bash \
+            | KIFF_VERSION=0.0.3-test KIFF_INSTALL=$bin JAVA_HOME=$RUNNER_TEMP/no-java bash \
             2> "$RUNNER_TEMP/no-java.log"
           cat "$RUNNER_TEMP/no-java.log"
-          if ! grep -q 'kiff needs Java 17 or newer' "$RUNNER_TEMP/no-java.log"; then
+          if ! grep -q 'needs Java 17 or newer' "$RUNNER_TEMP/no-java.log"; then
             echo "::error::The installer should warn that it found no Java."
             exit 1
           fi
-          if [[ $(readlink "$bin/kiff") != "$KIFF_HOME/versions/0.0.1-test/bin/kiff" ]]; then
+          if [[ $(readlink "$bin/kiff") != "$KIFF_HOME/versions/0.0.3-test/bin/kiff" ]]; then
             echo "::error::The installer should link kiff without Java too."
             exit 1
           fi

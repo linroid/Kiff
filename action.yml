@@ -107,7 +107,18 @@ runs:
         GH_REPO: ${{ inputs.repository }}
         GH_TOKEN: ${{ inputs.token }}
 
+    # A release's executable for the runner needs nothing else, so Java is only looked for when
+    # there is none. The runner leaves GITHUB_ACTION_REF empty in a composite action's steps, but
+    # not github.action_ref passed through env (actions/runner#2473).
+    - id: native
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh" native'
+      env:
+        KIFF_VERSION: ${{ steps.plan.outputs.kiff-version }}
+        KIFF_ACTION_REF: ${{ github.action_ref }}
+
     - id: java
+      if: steps.native.outputs.kiff == ''
       shell: bash
       run: '"$GITHUB_ACTION_PATH/action/check-java.sh"'
 
@@ -117,14 +128,14 @@ runs:
         distribution: temurin
         java-version: 17
 
-    # The runner leaves GITHUB_ACTION_REF empty in a composite action's steps, but not
-    # github.action_ref passed through env (actions/runner#2473).
+    # The JVM zip of a release without an executable for the runner, or a build of the source.
     - id: cli
       shell: bash
-      run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh"'
+      run: '"$GITHUB_ACTION_PATH/action/install-kiff.sh" jvm'
       env:
         KIFF_VERSION: ${{ steps.plan.outputs.kiff-version }}
-        KIFF_ACTION_REF: ${{ github.action_ref }}
+        KIFF_RESOLVED: ${{ steps.native.outputs.version }}
+        KIFF_NATIVE: ${{ steps.native.outputs.kiff }}
 
     - id: patches
       shell: bash

@@ -17,7 +17,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh \
 #     | KIFF_INSTALL="$HOME/.local/bin" bash
 #
-# Kiff runs on Java 17 or newer, which this script does not install.
+# It installs the executable each release attaches for this machine, which needs nothing else.
+# A release without one, as 0.1.0 has none, is installed from its JVM zip instead, which runs on
+# Java 17 or newer, which this script does not install.
 #
 set -euo pipefail
 
@@ -77,19 +79,29 @@ sha256_of() {
 
 # --- Check the platform ----------------------------------------------------
 
-check_os() {
-  local os
+# This machine as a release names its executables, such as linux-x64, or nothing when releases have
+# none for its processor, which the JVM zip then serves.
+detect_platform() {
+  local os arch
   os="$(uname -s)"
   case "$os" in
-    Linux* | Darwin*) ;;
+    Linux*) os="linux" ;;
+    Darwin*) os="macos" ;;
     MINGW* | MSYS* | CYGWIN*)
       warn "This script installs kiff on Linux and macOS. On Windows, download"
-      warn "kiff-<version>.zip from https://github.com/${REPO}/releases/latest,"
-      warn "unzip it, and run bin\\kiff.bat."
+      warn "kiff-<version>-windows-x64.exe from https://github.com/${REPO}/releases/latest"
+      warn "and run it, renamed kiff.exe if you like."
       error "Unsupported shell: $os"
       ;;
     *) error "Unsupported operating system: $os" ;;
   esac
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64 | amd64) arch="x64" ;;
+    aarch64 | arm64) arch="arm64" ;;
+    *) return 0 ;;
+  esac
+  printf '%s-%s' "$os" "$arch"
 }
 
 # --- Resolve version -------------------------------------------------------
@@ -164,56 +176,89 @@ check_link() {
 
 # --- Download and install ---------------------------------------------------
 
-# Installs Kiff $1 in $2/versions/$1, the directory kiff --use keeps it in.
-install_version() {
-  local version="$1" home="$2"
-  local versions="${home}/versions"
-  local dir="${versions}/${version}"
-  local filename="kiff-${version}.zip"
-  local base="$DOWNLOAD_URL"
-  while [ "${base%/}" != "$base" ]; do
-    base="${base%/}"
-  done
-  local url="${base}/v${version}/${filename}"
-
-  DOWNLOAD_DIR="$(mktemp -d)"
-
-  # The checksum first, so a release without one is refused before the zip is downloaded.
-  if ! curl -fsSL -o "${DOWNLOAD_DIR}/${filename}.sha256" "${url}.sha256"; then
-    error "Download failed. Check that kiff ${version} is a published release" \
-      "with ${filename}.sha256."
-  fi
-  local expected="" name="" rest=""
-  read -r expected name rest <"${DOWNLOAD_DIR}/${filename}.sha256" || true
+# Downloads ${1}.sha256 to $2 and sets CHECKSUM to its hash, which must be on the line sha256sum
+# writes for the file named $3. Returns 1 when there is no such file, and fails on anything else.
+CHECKSUM=""
+fetch_checksum() {
+  local url="$1" file="$2" name="$3" status
+  status="$(curl -sSL -o "$file" -w '%{http_code}' "${url}.sha256")" || status=000
+  case "$status" in
+    200) ;;
+    404) return 1 ;;
+    *) error "Could not download ${url}.sha256 (HTTP ${status})." ;;
+  esac
+  local expected="" named="" rest=""
+  read -r expected named rest <"$file" || true
   expected="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
-  name="${name#\*}"
+  named="${named#\*}"
   if ! [[ $expected =~ ^[0-9a-f]{64}$ ]] || [ -n "$rest" ] \
-    || { [ -n "$name" ] && [ "$name" != "$filename" ]; }; then
-    error "${url}.sha256 is not a SHA-256 checksum of ${filename}."
+    || { [ -n "$named" ] && [ "$named" != "$name" ]; }; then
+    error "${url}.sha256 is not a SHA-256 checksum of ${name}."
   fi
+  CHECKSUM="$expected"
+}
 
+# Downloads $1 to $2 and refuses it unless it has SHA-256 $3.
+fetch_checked() {
+  local url="$1" file="$2" expected="$3" actual
   info "Downloading ${url}"
-  if ! curl -fSL --progress-bar -o "${DOWNLOAD_DIR}/${filename}" "$url"; then
-    error "Download failed. Check that kiff ${version} is a published release with ${filename}."
+  if ! curl -fSL --progress-bar -o "$file" "$url"; then
+    error "Download failed: ${url}."
   fi
-
-  local actual
-  actual="$(sha256_of "${DOWNLOAD_DIR}/${filename}")"
+  actual="$(sha256_of "$file")"
   if [ "$actual" != "$expected" ]; then
     error "${url} has SHA-256 ${actual}, but ${url}.sha256 says ${expected}." \
       "Nothing was installed."
   fi
+}
 
-  info "Extracting..."
+# Installs Kiff $1 for platform $3 in $2/versions/$1, the directory kiff --use keeps it in: the
+# executable built for the platform, or the JVM zip when the release has none.
+install_version() {
+  local version="$1" home="$2" platform="$3"
+  local versions="${home}/versions"
+  local dir="${versions}/${version}"
+  local base="$DOWNLOAD_URL"
+  while [ "${base%/}" != "$base" ]; do
+    base="${base%/}"
+  done
+  local release="${base}/v${version}"
+
+  DOWNLOAD_DIR="$(mktemp -d)"
+
+  # The checksum first, so a release without one is refused before anything large is downloaded.
+  local name="" native=""
+  if [ -n "$platform" ]; then
+    name="kiff-${version}-${platform}"
+    if fetch_checksum "${release}/${name}" "${DOWNLOAD_DIR}/${name}.sha256" "$name"; then
+      native=1
+    fi
+  fi
+  if [ -z "$native" ]; then
+    name="kiff-${version}.zip"
+    if ! fetch_checksum "${release}/${name}" "${DOWNLOAD_DIR}/${name}.sha256" "$name"; then
+      error "Download failed. Check that kiff ${version} is a published release."
+    fi
+    info "kiff ${version} has no build for ${platform:-this machine}, so its JVM build is installed"
+    need_cmd unzip
+  fi
+  fetch_checked "${release}/${name}" "${DOWNLOAD_DIR}/${name}" "$CHECKSUM"
+
   if ! mkdir -p "$versions"; then
     error "Could not create ${versions}. Set KIFF_HOME to a directory you can write."
   fi
   # Beside the target, so the move that installs it is a rename within one directory.
   UNPACK_DIR="$(mktemp -d "${versions}/.${version}-XXXXXXXX")"
-  unzip -q "${DOWNLOAD_DIR}/${filename}" -d "$UNPACK_DIR"
   local unpacked="${UNPACK_DIR}/kiff-${version}"
-  if [ ! -f "${unpacked}/bin/${BINARY_NAME}" ]; then
-    error "${url} holds no kiff-${version}/bin/${BINARY_NAME}."
+  if [ -n "$native" ]; then
+    mkdir -p "${unpacked}/bin"
+    mv "${DOWNLOAD_DIR}/${name}" "${unpacked}/bin/${BINARY_NAME}"
+  else
+    info "Extracting..."
+    unzip -q "${DOWNLOAD_DIR}/${name}" -d "$UNPACK_DIR"
+    if [ ! -f "${unpacked}/bin/${BINARY_NAME}" ]; then
+      error "${release}/${name} holds no kiff-${version}/bin/${BINARY_NAME}."
+    fi
   fi
   chmod a+x "${unpacked}/bin/"*
 
@@ -261,7 +306,9 @@ warn_java() {
   if [ -n "${JAVA_HOME:-}" ]; then
     found="${found} in JAVA_HOME (${JAVA_HOME})"
   fi
-  warn "kiff needs Java 17 or newer, but found ${found}. Install one, such as:"
+  warn "This release has no build for this machine, and its JVM build needs Java 17 or newer,"
+  warn "but found ${found}."
+  warn "Install one, such as:"
   case "$(uname -s)" in
     Darwin*)
       warn "  brew install openjdk@17"
@@ -280,13 +327,12 @@ warn_java() {
 main() {
   need_cmd curl
   need_cmd uname
-  need_cmd unzip
-  check_os
   if ! command -v sha256sum >/dev/null 2>&1; then
     need_cmd shasum
   fi
 
-  local version home install_dir
+  local platform version home install_dir
+  platform="$(detect_platform)"
   version="$(resolve_version)"
   check_version "$version"
   home="$(absolute "$KIFF_DIR")"
@@ -306,7 +352,7 @@ main() {
     fi
     info "Using kiff ${version}, already installed in ${dir}"
   else
-    install_version "$version" "$home"
+    install_version "$version" "$home" "$platform"
     info "Installed kiff ${version} in ${dir}"
   fi
 
@@ -330,9 +376,11 @@ main() {
   ${sudo[@]+"${sudo[@]}"} ln -sfn "$launcher" "$link"
   info "Linked ${link} to ${launcher}"
 
-  # Verify installation
-  local major output
-  major="$(java_major)"
+  # Verify installation. Only a JVM build, which has its jars in lib, needs Java.
+  local major=17 output
+  if [ -d "${dir}/lib" ]; then
+    major="$(java_major)"
+  fi
   if [ "$major" -lt 17 ]; then
     warn_java "$major"
   elif output="$("$link" --version 2>&1)"; then
