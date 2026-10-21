@@ -52,18 +52,18 @@ bytes   content
 | encoding | code | |
 | --- | --- | --- |
 | stored | 0 | the bytes as they are, when packing made them bigger |
-| LZ77 | 1 | matching only, no entropy coding. Readable, never written |
 | LZ77 + Huffman | 2 | matching, then canonical Huffman over the symbols |
 
-Encoding 1 is kept readable because patches written with it exist. It is the same matching as 2
-without the entropy coding, and about a sixth of a patch rides on the difference, so there is no
-reason to choose it.
+Code 1 is not part of version 1. Builds before the first release used it for the same matching
+without the entropy coding; no released Kiff wrote it, and a reader refuses it like any other
+encoding it does not know. Its stored size bounded nothing it could unpack to, which made it the one
+way for a few bytes of patch to name an allocation as large as the target.
 
 The Huffman form writes the code lengths of both alphabets first, four bits each, then the symbol
 stream: 256 literals, an end symbol and length codes on one alphabet, distances on another, each
-with extra bits. The bucket tables are deflate's; the bit layout is not, and none of it is
-deflate-compatible. A reader must refuse an over-subscribed tree rather than decode it into
-nonsense.
+with extra bits. The distance buckets extend deflate's to a 1 MiB window and the length buckets are
+Kiff's own, so none of it is deflate-compatible. A reader must refuse an over-subscribed tree rather
+than decode it into nonsense.
 
 Every region that carries content appends it to this one stream, consumed in the order the tree is
 written. One stream rather than one per region is deliberate: a deep tree would otherwise pay for
@@ -166,24 +166,37 @@ reader could unpack it as it goes instead; nothing in the format stands in the w
 ## What a reader must refuse
 
 Not a list of nice-to-haves. Each of these is a way for a malformed patch to produce bytes instead
-of an error.
+of an error, or to carry bytes that nothing accounts for, which is where corruption hides.
 
 - a magic that is not `KIFF`, or a version it does not implement
 - a flag bit it does not recognise
+- a patcher, region encoding, content encoding, delta opcode or text opcode it does not know
 - a varint wider than 64 bits, or a negative value where a size, count or length belongs
+- a region, a source range, the tree or the content longer than 2,147,483,647 bytes: a larger
+  target is a composite of regions that each fit
 - a tree nested deeper than 16
 - a region that runs past the end of the target, a composite whose children do not add up to it, or
   a tree whose root does not cover the declared target, refused before anything is written
 - an instruction reading outside the source, or past the end of the content stream
-- a `COLUMNS` field layout it cannot apply, or one naming a source range outside the source
+- a `COLUMNS` layout with no fields, a field narrower than 1 byte or wider than 8, a row wider than
+  255 bytes, or fewer than 8 whole rows, or one naming a source range outside the source
 - a `COLUMNS` node inside another, directly or through a composite
+- a block that ends anywhere but its declared length: the tree, a `DELTA` region's instructions, or
+  a `TEXT` region's edits
 - content longer than the target, which no patch can use and which names its own allocation
 - content longer than its stored bytes can unpack to: exactly their own length when stored, and for
   LZ77 + Huffman at most 4,119 bytes - the longest match - for every twelve bits after the code
   lengths and the end symbol, which is what that match's length symbol, ten extra bits and distance
   symbol take at the least
+- content the tree does not use up, or any byte after the stored content
+- an LZ77 + Huffman stream with anything after its end symbol, a set bit in the padding of its last
+  byte included, or any stored byte at all for no content
 - a region whose checksum does not match what it produced
 - a restored target whose checksum does not match the header
+
+Kiff 0.1.0, the first release, still read code 1 and let trailing and unused bytes pass. No
+released Kiff writes either, so these rules refuse no patch Kiff has written; 0.1.0 is only more
+lenient than the format.
 
 One bound a reader cannot derive: the target size is declared in the header, and nothing
 corroborates it until the restore is done. A reader returning the result as an array allocates that
@@ -196,3 +209,15 @@ range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do n
 Those bounds hold region by region. Each `TEXT` or `COLUMNS` region reads its source range afresh,
 and nothing limits how many regions name the same range, so the reading a restore does is bounded
 by the patch's size times the source's rather than by either alone.
+
+## What a reader must accept
+
+Some patches say a thing in more bytes than they need. Each of these still means exactly one
+thing and leaves no byte unaccounted for, so it is a valid patch, and a reader that refused it
+would be refusing what a writer is entitled to write.
+
+- a varint longer than it needs to be
+- a `DELTA` instruction or a `TEXT` edit of length zero
+- a composite with no children, and a region of no bytes
+- a `TEXT` script that stops before the end of its source range: the rest is not copied
+- flags `0`, so a patch with no region checksums at all

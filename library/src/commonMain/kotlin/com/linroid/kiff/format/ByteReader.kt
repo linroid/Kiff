@@ -2,14 +2,21 @@ package com.linroid.kiff.format
 
 import com.linroid.kiff.KiffException
 
-/** Bounds-checked reader over patch bytes; failures surface as [KiffException.InvalidPatch]. */
-internal class ByteReader(private val data: ByteArray, private var position: Int = 0) {
+/**
+ * Bounds-checked reader over patch bytes; failures surface as [KiffException.InvalidPatch].
+ *
+ * [limit] is where the bytes this reader may see end. A block of the patch that declares its own
+ * length is read through a [window] of exactly that length, so it can neither read into whatever
+ * follows it nor leave part of itself unread without [requireConsumed] noticing.
+ */
+internal class ByteReader(
+  private val data: ByteArray,
+  private var position: Int = 0,
+  private val limit: Int = data.size
+) {
 
   val offset: Int get() = position
-  val remaining: Int get() = data.size - position
-
-  /** The buffer being read, so a nested block can be decoded in place rather than copied out. */
-  val bytes: ByteArray get() = data
+  val remaining: Int get() = limit - position
 
   fun readByte(): Int {
     ensure(1)
@@ -26,6 +33,24 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
   fun skip(count: Int) {
     ensure(count)
     position += count
+  }
+
+  /** The next [count] bytes as a reader of their own, decoded in place rather than copied out. */
+  fun window(count: Int): ByteReader {
+    ensure(count)
+    val inner = ByteReader(data, position, position + count)
+    position += count
+    return inner
+  }
+
+  /** A second reader at the same place over the same bytes, for reading ahead. */
+  fun copy(): ByteReader = ByteReader(data, position, limit)
+
+  /** Refuses a block that ended before its declared length did. */
+  fun requireConsumed(what: String) {
+    if (remaining != 0) {
+      throw KiffException.InvalidPatch("$what end $remaining byte(s) before their declared length")
+    }
   }
 
   fun readUInt32(): UInt {
@@ -72,9 +97,9 @@ internal class ByteReader(private val data: ByteArray, private var position: Int
 
   private fun ensure(count: Int) {
     // Subtracted rather than added: a count near Int.MAX_VALUE would wrap the sum past the check.
-    if (count < 0 || count > data.size - position) {
+    if (count < 0 || count > limit - position) {
       throw KiffException.InvalidPatch(
-        "Patch truncated: need $count byte(s) at offset $position of ${data.size}"
+        "Patch truncated: need $count byte(s) at offset $position, which ends at $limit"
       )
     }
   }

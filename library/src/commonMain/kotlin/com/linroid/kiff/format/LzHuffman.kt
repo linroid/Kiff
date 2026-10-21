@@ -5,15 +5,15 @@ import com.linroid.kiff.KiffException
 /**
  * The codec the content stream is packed with: LZ77 matching, then Huffman coding of what it found.
  *
- * [Lzss] does the first half and stops. It writes its tokens as varints, which spends a whole byte
- * on a literal however common that byte is, and a whole byte on a length however predictable. On a
- * real patch that leaves about a fifth of the content on the table: 4.7 MB where gzip manages 3.7
- * from the same input, and the difference is entirely the entropy coding gzip does and it does not.
+ * Matching alone, with its tokens written as varints, spends a whole byte on a literal however
+ * common that byte is, and a whole byte on a length however predictable. On a real patch that left
+ * about a fifth of the content on the table: 4.7 MB where gzip manages 3.7 from the same input, and
+ * the difference is entirely the entropy coding gzip does and matching alone does not.
  *
  * Nothing here is bit-compatible with deflate, and it does not need to be - this codec is internal
  * to the patch format, which is what makes it a few hundred lines rather than a few thousand. The
- * bucket tables are deflate's, though, because they are well chosen and there is nothing to gain by
- * inventing others.
+ * distance buckets are deflate's thirty, extended by ten to reach a 1 MiB window; the length
+ * buckets are Kiff's own, thirty-two of them covering 4 to 4,119 bytes.
  *
  * ## What is left, measured on the content stream of a real patch
  *
@@ -87,7 +87,13 @@ internal object LzHuffman {
 
   fun decompress(data: ByteArray, expectedSize: Int): ByteArray {
     val result = ByteArray(expectedSize)
-    if (expectedSize == 0) return result
+    if (expectedSize == 0) {
+      // Packing nothing writes nothing, so nothing is the only stream that unpacks to nothing.
+      if (data.isNotEmpty()) {
+        throw KiffException.InvalidPatch("Content stream holds ${data.size} byte(s) of nothing")
+      }
+      return result
+    }
     val bits = BitReader(data)
 
     val literalLengths = IntArray(LITERAL_SYMBOLS) { bits.read(CODE_LENGTH_BITS) }
@@ -127,6 +133,7 @@ internal object LzHuffman {
     if (position != expectedSize) {
       throw KiffException.InvalidPatch("Content stream produced $position of $expectedSize bytes")
     }
+    bits.finish()
     return result
   }
 
@@ -192,7 +199,7 @@ internal object LzHuffman {
     }
   }
 
-  /** The same hash-chain search [Lzss] uses; only what is done with the result differs. */
+  /** LZ77 matching through hash chains over a window of up to [MAX_WINDOW] bytes. */
   private fun match(data: ByteArray, tokens: Tokens) {
     val head = IntArray(HASH_SIZE) { -1 }
     val window = windowFor(data.size)
@@ -427,6 +434,16 @@ internal object LzHuffman {
         count--
       }
       return value
+    }
+
+    /**
+     * Refuses anything after the end symbol: a whole byte, or a set bit in the padding that fills
+     * out the last one, which [BitWriter] always leaves clear.
+     */
+    fun finish() {
+      if (at != data.size || bits and ((1 shl count) - 1) != 0) {
+        throw KiffException.InvalidPatch("Content stream has bits after its end symbol")
+      }
     }
   }
 

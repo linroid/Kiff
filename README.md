@@ -639,7 +639,7 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 | `com.linroid.kiff` | `Kiff`, `Patcher`, `PatcherId`, `PatchInfo`, `KiffException`, and the three patchers |
 | `.delta` | the algorithm seam - `DeltaAlgorithm`, `DeltaScanner`, `DeltaSink` - plus the bundled rolling-hash search and the instruction codec |
 | `.io` | `SeekableSource`, `ByteArraySource`, `fileSource`, whole-file helpers |
-| `.format` | the patch container and its primitives: varint I/O, CRC-32, LZSS |
+| `.format` | the patch container and its primitives: varint I/O, CRC-32, the content codec |
 | `.zip` / `.apk` | archive parsing and region encoding, each with the report type its patcher returns |
 | `.text` | the line-based Myers diff, which is not part of the patch pipeline |
 

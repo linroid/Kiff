@@ -9,7 +9,6 @@ import com.linroid.kiff.io.RestoreTarget
 import com.linroid.kiff.io.ScratchRestoreTarget
 import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.io.readFully
-import com.linroid.kiff.io.toIntIndex
 import com.linroid.kiff.text.TextRegion
 
 /**
@@ -45,9 +44,14 @@ import com.linroid.kiff.text.TextRegion
  */
 internal object PatchPayload {
 
-  /** Content encodings, as written in the payload header. */
+  /**
+   * Content encodings, as written in the payload header.
+   *
+   * Code 1 was LZ77 matching without the entropy coding. No released Kiff wrote it, and it is not
+   * part of version 1: its stored size bounds nothing it unpacks to, so it was the one way for a
+   * few bytes of patch to name an allocation as large as the target.
+   */
   const val CONTENT_STORED = 0
-  const val CONTENT_LZSS = 1
   const val CONTENT_LZ_HUFFMAN = 2
 
   fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): ByteArray {
@@ -83,11 +87,14 @@ internal object PatchPayload {
     val literalLength = container.readVarInt()
     val literalFlag = container.readByte()
     val storedLength = container.readVarInt()
+    // The tree is read through a window of exactly its declared size, so no region can read on into
+    // the content, and anything the root leaves unread is refused once it has been applied.
+    val tree = container.window(treeLength)
 
     // The root of the tree says how much target it describes, and that has to be the target the
     // header declared. A patch whose two sizes disagree is refused here, before anything is
     // unpacked or a byte written, rather than once its tree has run out.
-    val covered = ByteReader(patch, container.offset).readVarLong()
+    val covered = tree.copy().readVarLong()
     if (covered != targetSize) {
       throw KiffException.InvalidPatch(
         "Region tree covers $covered bytes of a $targetSize-byte target"
@@ -108,9 +115,7 @@ internal object PatchPayload {
     val possible = when (literalFlag) {
       CONTENT_STORED -> storedLength.toLong()
       CONTENT_LZ_HUFFMAN -> LzHuffman.maxUnpackedSize(storedLength)
-      // An LZSS match can be any length, so nothing follows from its stored size and the target is
-      // its only bound. An encoding this does not know is refused below.
-      else -> literalLength.toLong()
+      else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
     }
     if (literalLength > possible || (literalFlag == CONTENT_STORED && literalLength < possible)) {
       throw KiffException.InvalidPatch(
@@ -118,16 +123,16 @@ internal object PatchPayload {
       )
     }
 
-    val tree = ByteReader(patch, container.offset)
-    container.skip(treeLength)
     val storedLiterals = container.readBytes(storedLength)
-    val literals = when (literalFlag) {
-      CONTENT_STORED -> storedLiterals
-      // Kept readable because patches written with it exist, including the frozen vectors. The
-      // encoder has no reason to choose it: it is the same matching without the entropy coding.
-      CONTENT_LZSS -> Lzss.decompress(storedLiterals, literalLength)
-      CONTENT_LZ_HUFFMAN -> LzHuffman.decompress(storedLiterals, literalLength)
-      else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
+    // The content runs to the end of the patch. Bytes after it belong to nothing, and accepting
+    // them would let an appended or mis-measured patch pass for a whole one.
+    if (container.remaining != 0) {
+      throw KiffException.InvalidPatch("Patch has ${container.remaining} byte(s) after its content")
+    }
+    val literals = if (literalFlag == CONTENT_STORED) {
+      storedLiterals
+    } else {
+      LzHuffman.decompress(storedLiterals, literalLength)
     }
 
     val checked = CheckedRestoreTarget(out, targetSize)
@@ -135,6 +140,14 @@ internal object PatchPayload {
     val written = applyNode(tree, state, checked, targetSize, depth = 0, checksums = checksums)
     if (written != targetSize) {
       throw KiffException.InvalidPatch("Patch described $written of $targetSize target bytes")
+    }
+    // Every byte of the tree and of the content has to be accounted for: what no region used is
+    // where corruption hides, and where a later version of the format would put something.
+    tree.requireConsumed("Region tree")
+    if (state.literalCursor != literals.size) {
+      throw KiffException.InvalidPatch(
+        "Patch carries ${literals.size - state.literalCursor} content byte(s) no region uses"
+      )
     }
     return checked.wholeChecksum()
   }
@@ -187,21 +200,20 @@ internal object PatchPayload {
       }
 
       RegionEncoding.DELTA -> {
-        val instructionLength = tree.readVarInt()
-        val instructions = ByteReader(tree.bytes, tree.offset)
-        tree.skip(instructionLength)
+        val instructions = tree.window(tree.readVarInt())
         state.literalCursor += state.delta.apply(
           source = state.source,
           instructions = instructions,
           literals = state.literals,
           literalFrom = state.literalCursor,
           out = out,
-          length = length.toIntIndex("Region length")
+          length = length.withinVersionOne("Region length")
         )
+        instructions.requireConsumed("Delta instructions")
       }
 
       RegionEncoding.RAW -> {
-        val span = length.toIntIndex("Region length")
+        val span = length.withinVersionOne("Region length")
         if (span > state.literals.size - state.literalCursor) {
           throw KiffException.InvalidPatch("Raw region reads past the literal stream")
         }
@@ -212,17 +224,16 @@ internal object PatchPayload {
       RegionEncoding.TEXT -> {
         val sourceFrom = tree.readVarLong()
         val sourceLength = tree.readVarLong()
-        val editLength = tree.readVarInt()
-        val edits = ByteReader(tree.bytes, tree.offset)
-        tree.skip(editLength)
+        val edits = tree.window(tree.readVarInt())
         state.literalCursor += TextRegion.apply(
           source = state.read(sourceFrom, sourceLength, "Text"),
           edits = edits,
           literals = state.literals,
           literalFrom = state.literalCursor,
           out = out,
-          length = length.toIntIndex("Region length")
+          length = length.withinVersionOne("Region length")
         )
+        edits.requireConsumed("Text edits")
       }
 
       RegionEncoding.COLUMNS -> {
@@ -235,7 +246,7 @@ internal object PatchPayload {
         val sourceLength = tree.readVarLong()
         val count = tree.readByte()
         val widths = List(count) { tree.readByte() }
-        val span = length.toIntIndex("Region length")
+        val span = length.withinVersionOne("Region length")
         if (!ColumnTransform.suits(widths, span)) {
           throw KiffException.InvalidPatch("Column region declares a row this cannot describe")
         }
@@ -293,9 +304,21 @@ internal object PatchPayload {
       if (from < 0 || length < 0 || length > source.size - from) {
         throw KiffException.InvalidPatch("$what region names a source range outside the source")
       }
-      val bytes = ByteArray(length.toIntIndex("$what source length"))
+      val bytes = ByteArray(length.withinVersionOne("$what source length"))
       source.readFully(from, bytes)
       return bytes
     }
+  }
+
+  /**
+   * A length a version-1 reader holds as an [Int]: one region, one source range, the tree and the
+   * content are each at most `Int.MAX_VALUE` bytes. A larger target is a composite of regions that
+   * fit, so a patch past this is not one version 1 can express, rather than one too big to apply.
+   */
+  private fun Long.withinVersionOne(what: String): Int {
+    if (this < 0 || this > Int.MAX_VALUE) {
+      throw KiffException.InvalidPatch("$what $this is longer than version 1 allows")
+    }
+    return toInt()
   }
 }

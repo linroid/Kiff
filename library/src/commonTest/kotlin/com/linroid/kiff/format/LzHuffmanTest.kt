@@ -6,6 +6,7 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -107,11 +108,25 @@ class LzHuffmanTest {
   }
 
   @Test
-  fun itBeatsTheOlderCodecOnRealisticContent() {
-    val data = structuredBytes(400_000, seed = 4)
-    val old = Lzss.compress(data).size
-    val new = LzHuffman.compress(data).size
-    assertTrue(new < old, "entropy coding should pay: $new against $old")
+  fun nothingMayFollowTheEndSymbol() {
+    val data = structuredBytes(5_000, seed = 6)
+    val packed = LzHuffman.compress(data)
+    assertFailsWith<KiffException.InvalidPatch> {
+      LzHuffman.decompress(packed + ByteArray(1), data.size)
+    }
+    // One byte packs to the code lengths, a one-bit literal and a one-bit end symbol: 1,318 bits,
+    // so the last of its 165 bytes ends in two bits of padding, which the writer leaves clear.
+    val one = LzHuffman.compress(ByteArray(1))
+    assertEquals(165, one.size)
+    assertContentEquals(ByteArray(1), LzHuffman.decompress(one, 1))
+    val padded = one.copyOf().also { it[it.size - 1] = (it[it.size - 1].toInt() or 1).toByte() }
+    assertFailsWith<KiffException.InvalidPatch> { LzHuffman.decompress(padded, 1) }
+  }
+
+  @Test
+  fun aStreamForNothingIsEmpty() {
+    assertContentEquals(ByteArray(0), LzHuffman.decompress(ByteArray(0), 0))
+    assertFailsWith<KiffException.InvalidPatch> { LzHuffman.decompress(byteArrayOf(1, 2, 3), 0) }
   }
 
   @Test
