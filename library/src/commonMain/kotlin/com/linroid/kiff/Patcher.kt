@@ -29,7 +29,10 @@ interface Patcher {
    * dozen bytes can validly declare gigabytes. For a patch you did not make, check
    * `Kiff.info(patch).targetSize` against what you expect first, or restore into a [RestoreTarget].
    *
-   * @throws KiffException.InvalidPatch if the patch is malformed or was built by another patcher.
+   * Any patcher applies any patch, whichever one built it: they differ only in how they describe a
+   * target, and every patch is read the same way.
+   *
+   * @throws KiffException.InvalidPatch if the patch is malformed.
    * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail the recorded checksum.
    */

@@ -7,6 +7,7 @@ import com.linroid.kiff.format.ByteWriter
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.random.Random
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -267,12 +268,12 @@ class ApkPatcherTest {
   }
 
   @Test
-  fun apkPatchesAreNotInterchangeableWithZipPatches() {
+  fun anApkPatchSaysWhoBuiltItAndAppliesWithAnyPatcher() {
     val source = sampleApk(seed = 80)
     val target = sampleApk(seed = 81)
     val apkPatch = patcher.createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { ZipPatcher().applyPatch(source, apkPatch) }
     assertEquals(PatcherId.APK, Kiff.info(apkPatch).patcher)
+    assertContentEquals(target, ZipPatcher().applyPatch(source, apkPatch))
   }
 
   @Test
