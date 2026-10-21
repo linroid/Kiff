@@ -12,7 +12,8 @@ set, so a multiplatform project adds it to `commonMain`:
 implementation("com.linroid.kiff:kiff:0.1.0")
 ```
 
-Run `./gradlew publishToMavenLocal` to publish the current source to `~/.m2` instead.
+Run `./gradlew publishToMavenLocal` to publish the current source to `~/.m2` instead, as
+`0.0.0-SNAPSHOT`.
 
 ## Creating and applying a patch
 
@@ -255,7 +256,9 @@ unread, so that can be any release, even one older than `--use`, with whatever c
 it has. Its exit status is returned as it is, and progress goes to standard error, so
 `kiff --use 0.1.0 diff a b | patch` still works. It runs on the same Java as this `kiff` when
 `JAVA_HOME` is unset. Naming the version that is running just runs the command, and `kiff -v` or
-`kiff --version` says which version that is.
+`kiff --version` says which version that is. A build from source is `0.0.0-SNAPSHOT`, which
+`--version` follows with the commit it was built from, as in `kiff 0.0.0-SNAPSHOT (59e074e)`. No
+release is that build, so from one `--use` always hands the command over.
 
 ## GitHub Action
 
@@ -417,11 +420,13 @@ patches. As for `kiff --use`, `KIFF_DOWNLOAD_URL` replaces
 `https://github.com/linroid/Kiff/releases/download` with a mirror that serves the same two files at
 `vVERSION/kiff-VERSION.zip`.
 
-Without `kiff-version`, the action runs the CLI of its own version, which it shares with its tag:
-`linroid/Kiff@v0.1.0` runs kiff 0.1.0, downloaded from that release in the same way. Any other ref,
-such as a branch or a commit, builds the CLI from the action's own source first, which adds a few
-minutes. Pin the action to an exact version or commit, not a branch. With `kiff-version` set, the
-action itself can move ahead of your apps, since the format comes from the kiff it runs.
+Without `kiff-version`, the action runs the Kiff release tagged at the commit it was loaded from,
+downloaded in the same way: `linroid/Kiff@v0.1.0` runs kiff 0.1.0, and so does the commit that
+`v0.1.0` names. A ref with no release at its commit, such as a branch, builds the CLI from the
+action's own source first, as `0.0.0-SNAPSHOT`, which adds a few minutes. So does a release whose
+zip cannot be downloaded, as that release's version. Pin the action to a release tag or its commit,
+not a branch. With `kiff-version` set, the action itself can move ahead of your apps, since the
+format comes from the kiff it runs.
 
 The v0.1.0 GitHub release is still a draft, and a draft has nothing to download. Until it is
 published, leave `kiff-version` empty and pin a commit of `main`.
@@ -743,20 +748,25 @@ peak memory is still roughly source + target + patch + index.
 
 ## Releasing
 
-Between releases `main` carries the next version with a `-SNAPSHOT` suffix. To release `0.1.0`:
+A release's version is its tag. Nothing in the source names a version: any build without
+`-Pversion` is `0.0.0-SNAPSHOT`, so releasing needs no commit of its own. To release `0.2.0`:
 
-1. Set `version=0.1.0` in `gradle.properties` and land that on `main`.
-2. Tag that commit `v0.1.0` and push the tag.
-3. The [release workflow](.github/workflows/release.yml) builds the CLI and attaches
-   `kiff-0.1.0.zip` and `kiff-0.1.0.zip.sha256` to a draft release for the tag. It refuses a tag
-   that disagrees with `gradle.properties`, and can be re-run by hand for an existing tag.
-4. It then uploads the library to the Central Portal as a deployment. A run started by hand uploads
-   only when told to, since Central takes each version once.
-5. Review the draft and publish it. Then open
+1. Tag the commit `v0.2.0` and push the tag. A tag is `vX.Y.Z`, or `vX.Y.Z-suffix` for a
+   prerelease such as `v0.2.0-rc.1`.
+2. The [release workflow](.github/workflows/release.yml) builds the CLI with `-Pversion=0.2.0`,
+   checks that it says `kiff 0.2.0`, and attaches `kiff-0.2.0.zip` and `kiff-0.2.0.zip.sha256` to a
+   draft release for the tag. It refuses any other tag and a `-SNAPSHOT`, and can be re-run by hand
+   for an existing tag.
+3. It then uploads the library, built with the same `-Pversion`, to the Central Portal as a
+   deployment. A run started by hand uploads only when told to, since Central takes each version
+   once.
+4. Review the draft and publish it. Then open
    [Deployments](https://central.sonatype.com/publishing/deployments) on the Central Portal, wait
    for the deployment to show as validated, and publish it. The workflow does not wait for that
    validation, so a failed one shows only there.
-6. Bump `main` to the next snapshot, such as `version=0.1.1-SNAPSHOT`.
+
+To build a release by hand, pass its version the same way, as in
+`./gradlew -Pversion=0.2.0 :cli:distZip`.
 
 The upload needs five repository secrets, the same ones linroid/Ketch uses:
 `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`, a Central Portal user token; and
