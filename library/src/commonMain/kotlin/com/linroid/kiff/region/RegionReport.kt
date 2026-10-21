@@ -6,8 +6,8 @@ import com.linroid.kiff.format.RegionEncoding
  * What a region is *for*, which is what makes an attribution readable across formats.
  *
  * The vocabulary is deliberately format-neutral: a zip entry's record and a dex section's items are
- * both [CONTENT], a central directory and a dex map list are both [INDEX]. A patcher that learns to
- * carve a new format up reuses these rather than inventing its own.
+ * both [CONTENT], a central directory and a dex map list are both [INDEX]. A container format that
+ * carves a new kind of file up reuses these rather than inventing its own.
  */
 enum class RegionKind {
   /** Payload the format names: a zip entry's record, a dex section's items. */
@@ -19,7 +19,7 @@ enum class RegionKind {
   /** Bytes that belong to nothing named: a preamble, alignment padding, an APK signing block. */
   GAP,
 
-  /** The whole input, from a patcher that does not carve it up at all. */
+  /** The whole input, when nothing carves it up at all. */
   WHOLE
 }
 
@@ -128,5 +128,5 @@ internal fun interface RegionRecorder {
   fun record(cost: RegionCost)
 }
 
-/** Label for the single region a patcher reports when it scans an input whole. */
+/** Label for the single region reported when an input is searched whole. */
 internal const val WHOLE_FILE_REGION = "(whole file)"

@@ -11,6 +11,6 @@ sealed class KiffException(message: String) : Exception(message) {
   /** The rebuilt target does not match the checksum recorded when the patch was created. */
   class VerificationFailed(message: String) : KiffException(message)
 
-  /** The input is not a well-formed archive for the selected patcher. */
+  /** An input Kiff cannot work with: too large to index, or not the archive a report needs. */
   class UnsupportedInput(message: String) : KiffException(message)
 }

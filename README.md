@@ -14,34 +14,74 @@ implementation("com.linroid.kiff:kiff:0.1.0")
 
 Run `./gradlew publishToMavenLocal` to publish the current source to `~/.m2` instead.
 
-## Patchers
+## Creating and applying a patch
 
-| Patcher | `PatcherId` | Best for |
+```kotlin
+val patch = Kiff.createPatch(source, target)
+val restored = Kiff.applyPatch(source, patch)  // == target, byte for byte
+```
+
+The same with paths writes the patch, and the restored file, to disk:
+
+```kotlin
+Kiff.createPatch("foo-1.0.apk", "foo-1.1.apk", "foo.kiff")
+Kiff.applyPatch("foo-1.0.apk", "foo.kiff", "foo-1.1-restored.apk")
+```
+
+### How structure is detected
+
+`createPatch` looks at what the target is as a whole and describes it accordingly:
+
+| The target is | It is described | The header records |
 | --- | --- | --- |
-| `binary` | `BINARY` | Any pair of files, treated as opaque byte streams |
-| `zip` | `ZIP` | Zip archives, compared entry by entry |
-| `apk` | `APK` | Android packages: zip structure plus dex, native library and signing block awareness |
+| a zip that carries an `AndroidManifest.xml` | as an APK: entry by entry, with its dex files searched together and paired by ordinal | `apk` |
+| any other zip whose directory reads | entry by entry, each against the entry it came from | `zip` |
+| anything else | as plain bytes: copies from anywhere in the source, plus what is new | `binary` |
 
-A patcher decides how the two files are carved into regions worth comparing: `binary` compares them
-whole, `zip` and `apk` walk the archive and compare each entry against the entry it came from. What
-searches the bytes inside a region is a separate concern - a *delta algorithm* - and all three
-patchers drive the same one.
+Inside an archive, a zip or a dex is found wherever it sits, and taken apart when that makes the
+patch smaller. When the source cannot be taken apart the way the target is, such as an APK patched
+from a file that is no archive, the target is described whole.
 
-Every patcher implements the same [`Patcher`](library/src/commonMain/kotlin/com/linroid/kiff/Patcher.kt)
-contract, writes the same self-describing patch container, and restores the target exactly:
+Applying needs none of this. A patch records the structure it was built with, so `applyPatch`
+applies every patch the same way. The header's `patcher` byte, read back as `PatchInfo.patcher`,
+says what the writer took the target to be. It is informational, and it is the code Kiff 0.1.0's
+patcher for that kind of file wrote.
 
-```kotlin
-val patch = Kiff.binary.createPatch(source, target)
-val restored = Kiff.binary.applyPatch(source, patch)  // == target, byte for byte
-```
-
-File-level helpers pick the patcher out of the patch itself, so restoring never needs to be told
-which one produced it:
+What can be changed is in `KiffOptions`: the delta `algorithm`, the `planner` that picks an encoding
+for each region of an archive, the `lineAlgorithm` behind text regions, and `containers`, the
+formats looked for in the file as a whole and inside it. An empty registry describes every file as
+plain bytes:
 
 ```kotlin
-Kiff.createPatch(Kiff.binary, "foo-1.0.bin", "foo-1.1.bin", "foo.patch")
-Kiff.applyPatch("foo-1.0.bin", "foo.patch", "foo-1.1-restored.bin")
+Kiff.createPatch(source, target, KiffOptions(containers = ContainerRegistry.Empty))
 ```
+
+`KiffReports` answers questions about two files without keeping a patch: `zip` and `apk` list what
+changed entry by entry, and `explain` and `explainApk` say where the bytes of the patch
+`createPatch` would build go.
+
+### Coming from 0.1
+
+Kiff 0.1 had a *patcher* chosen for every patch: `Kiff.binary`, `Kiff.zip` or `Kiff.apk`. They
+still work in 0.2, deprecated, and write exactly the patches they wrote before. They are removed in
+0.3.0.
+
+| 0.1 | 0.2 |
+| --- | --- |
+| `Kiff.apk.createPatch(source, target)` | `Kiff.createPatch(source, target)` |
+| `Kiff.binary.applyPatch(source, patch)` | `Kiff.applyPatch(source, patch)` |
+| `Kiff.createPatch(Kiff.apk, from, to, patch)` | `Kiff.createPatch(from, to, patch)` |
+| `ZipPatcher(containers = ...)` | `Kiff.createPatch(source, target, KiffOptions(containers = ...))` |
+| `Kiff.zip.analyze`, `Kiff.apk.analyze` | `KiffReports.zip`, `KiffReports.apk` |
+| `Kiff.zip.explain`, `Kiff.apk.explainKinds` | `KiffReports.explain`, `KiffReports.explainApk` |
+| `Kiff.apk.isApk`, `Kiff.apk.kindOf` | `KiffReports.isApk`, `KiffReports.apkEntryKind` |
+
+On a file that is no archive, `Kiff.createPatch` writes the patch `Kiff.binary` wrote, and on a zip
+or an APK the one `Kiff.zip` or `Kiff.apk` wrote. Code that built archive patches with
+`Kiff.binary` therefore gets a different patch, which records `zip` or `apk`. An app still on 0.1.0
+applies it with `Kiff.applyPatch` on paths, or with the patcher
+`Kiff.patcher(Kiff.info(patch).patcher)` returns, but not with `Kiff.binary.applyPatch`, which
+refuses a patch another patcher built.
 
 ## CLI
 
@@ -49,17 +89,21 @@ The `cli` module is a small command-line front end for the library, installed as
 
 ```console
 $ ./gradlew :cli:installDist
-$ ./cli/build/install/kiff/bin/kiff create -p binary foo-1.0.apk foo-1.1.apk foo.patch
-Created foo.patch with the binary patcher
-  Patcher:     binary (format v1)
+$ ./cli/build/install/kiff/bin/kiff create foo-1.0.apk foo-1.1.apk foo.patch
+Created foo.patch
+  Read as:     apk (format v1)
   Source:      67.4 MiB crc32=fa4b3b57
   Target:      71.7 MiB crc32=0d0e6723
-  Patch:       13.7 MiB (19.19% of target)
-  Took:        2450 ms
+  Patch:       13.5 MiB (18.82% of target)
+  Took:        2200 ms
 
 $ ./cli/build/install/kiff/bin/kiff apply foo-1.0.apk foo.patch foo-1.1-restored.apk
 $ ./cli/build/install/kiff/bin/kiff info foo.patch
 ```
+
+`create` reads each file the way [the library](#how-structure-is-detected) does, where 0.1 read
+every file as plain bytes unless `-p` said otherwise. `-p` and `--patcher` are still accepted until
+0.3.0, and ignored with a warning.
 
 `kiff changes foo-1.0.apk foo-1.1.apk` lists what differs entry by entry, without building a
 patch. For an APK it also groups the entries the way the package is built:
@@ -142,7 +186,7 @@ downloading the whole file would cost about as much:
 $ kiff release --to v1.3.0=foo-1.3.0.apk \
     --from v1.2.0=foo-1.2.0.apk --from v1.0.0=foo-1.0.0.apk \
     --out patches --base-url https://example.com/foo/v1.3.0
-foo-1.3.0.apk (v1.3.0), 71.7 MiB, apk patcher
+foo-1.3.0.apk (v1.3.0), 71.7 MiB
   v1.2.0     4.6 MiB    6.42%  restored  foo-1.3.0.apk.from-v1.2.0.kiff
   v1.0.0    60.2 MiB   83.96%  dropped, over --max-ratio 0.8
 Wrote patches/kiff-patches.json (1 patch)
@@ -151,9 +195,9 @@ Wrote patches/kiff-patches.json (1 patch)
 
 A file is given as `LABEL=FILE`, or as `FILE` to go by its name. The text before the first `=` is a
 label only when it holds no path separator, so `builds/v=2/foo.apk` is a file; a file with an `=` in
-its own name takes a label (`v1=a=b.apk`) or a leading `./`. `--patcher auto`, the default, picks
-`apk` for a `.apk` file, `zip` for any other zip archive and `binary` for the rest. `--name` names
-the patches from `{target}`, the new file's name, and the labels `{from}` and `{to}`.
+its own name takes a label (`v1=a=b.apk`) or a leading `./`. Each patch is built the way `kiff
+create` builds it, from what the new file is. `--name` names the patches from `{target}`, the new
+file's name, and the labels `{from}` and `{to}`.
 
 The manifest is what an updater reads. For each file it lists the patches that rebuild it, with what
 an updater needs to check before applying one and after:
@@ -190,7 +234,8 @@ an updater needs to check before applying one and after:
 }
 ```
 
-An updater takes the patch whose `source.sha256` is the file it holds and whose `format` is in
+A patch's `patcher` is what its header records, `apk`, `zip` or `binary`, and is for display. An
+updater takes the patch whose `source.sha256` is the file it holds and whose `format` is in
 `Kiff.readableFormats`, and checks what it restores against the file's own `sha256`. Running
 `kiff release` again with the same manifest replaces that file's entry and keeps the others, so one
 manifest can cover every file a release ships. The manifest is a contract with those updaters: a
@@ -205,7 +250,7 @@ created or verified. The other patches are still written, and the manifest lists
 of the one you started:
 
 ```console
-$ kiff --use 0.1.0 create old.apk new.apk patch.kiff
+$ kiff --use 0.1.0 create -p apk old.apk new.apk patch.kiff
 Downloading kiff 0.1.0 from https://github.com/linroid/Kiff/releases/download/v0.1.0/kiff-0.1.0.zip
 Created patch.kiff with the apk patcher
   Patcher:     apk (format v1)
@@ -476,11 +521,13 @@ class TarFormat : ContainerFormat {
   override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* members */
 }
 
-val patcher = ApkPatcher(containers = NestedContainers + TarFormat())
+val options = KiffOptions(containers = NestedContainers + TarFormat())
+val patch = Kiff.createPatch(source, target, options)
 ```
 
 `NestedContainers` already holds `ZipFormat` and `DexFormat`, so an archive inside an archive, and
-a dex inside either, are taken apart without being asked.
+a dex inside either, are taken apart without being asked. The registry is asked about the file as
+a whole too, so a tar is taken apart whether it is the file being patched or inside one.
 
 Nothing else moves. The patch format does not change, because a decomposed region is more nodes of
 the same four kinds; the reader does not change, because a patch records the structure it used
@@ -500,11 +547,14 @@ not name - a preamble, alignment padding, an APK signing block, a trailer - is s
 an unnamed one. A patch restores byte for byte only because every byte belongs to something.
 `ContainerFormatTiling.describe(format, bytes)` asserts this; call it from your tests.
 
-Decomposing is weighed, not assumed. A nested region is encoded both ways and the bigger result is
-discarded, so a format that does not pay off costs encode time and never patch size. That matters
-more than it sounds: a byte search that copies from anywhere in the source is already good at
-finding moved and edited content, so on *stored* content today, decomposing mostly breaks even. It
-will earn its keep on compressed children, which cannot be compared at all without being decoded.
+Decomposing is weighed, not assumed. A nested region, or a whole file of any format but a zip, is
+encoded both ways and the bigger result is discarded, so a format that does not pay off costs encode
+time and never patch size. That matters more than it sounds: a byte search that copies from
+anywhere in the source is already good at finding moved and edited content, so on *stored* content
+today, decomposing mostly breaks even. It will earn its keep on compressed children, which cannot be
+compared at all without being decoded. A zip that is the whole file is the exception: it is always
+taken apart, as 0.1's zip and apk patchers did, since weighing it would mean searching the largest
+input Kiff is given twice.
 
 `COLUMNS` is what a format's knowledge is worth. A table of ids is the renumbering problem in its
 purest form: every entry of a dex's `string_ids` is an offset into the file, so inserting one string
@@ -559,7 +609,8 @@ The two whole-file checksums do real work too: `applyPatch` refuses a source fil
 built against (`KiffException.SourceMismatch`) and refuses to hand back a target whose checksum does
 not match what was recorded at creation time (`KiffException.VerificationFailed`).
 
-The delta algorithm - the search that produces those instructions - is what every patcher drives.
+The delta algorithm - the search that produces those instructions - is what every region is
+described with.
 The one Kiff ships, `RollingHashAlgorithm`, finds copies with a rolling hash over 16-byte blocks of
 the source, sampled every 4-16 bytes depending on how large a range is indexed, which keeps the
 index small enough to diff APK-sized files in a couple of seconds. Between copies it tracks the
@@ -569,13 +620,13 @@ altogether, it looks for the shifted offset up to 128 bytes either side before f
 literals, so rebuilt code that has no exact match left in it still realigns.
 
 Because the instruction set is fixed, a different algorithm needs no change to the patch format or
-to any patcher: it is an encode-side choice that the same reader decodes. That is what makes the
-search pluggable.
+to how a file is taken apart: it is an encode-side choice that the same reader decodes. That is what
+makes the search pluggable.
 
 ## Plugging in your own algorithm
 
-`DeltaAlgorithm` is public. Implement it to change how bytes are matched, and hand it to any
-patcher:
+`DeltaAlgorithm` is public. Implement it to change how bytes are matched, and pass it in
+`KiffOptions`:
 
 ```kotlin
 object MyAlgorithm : DeltaAlgorithm {
@@ -589,13 +640,13 @@ object MyAlgorithm : DeltaAlgorithm {
   }
 }
 
-val patch = BinaryPatcher(MyAlgorithm).createPatch(source, target)
-val restored = Kiff.binary.applyPatch(source, patch)  // the stock patcher reads it back
+val patch = Kiff.createPatch(source, target, KiffOptions(algorithm = MyAlgorithm))
+val restored = Kiff.applyPatch(source, patch)  // read back with no options at all
 ```
 
 The algorithm is not recorded in the patch and nothing needs to know it ran: the regions a scanner
 reports must simply tile the target exactly. An algorithm prepares a scanner over a source range
-once, and a patcher reuses that scanner across many target regions, so the index is built one time
+once, and Kiff reuses that scanner across many target regions, so the index is built one time
 per range rather than once per region.
 
 ## Inputs are addressed, not streamed
@@ -614,13 +665,13 @@ interface SeekableSource : AutoCloseable {
 `ByteArray.asSource()` wraps bytes already in memory; `fileSource(path)` opens a file for random
 access on every target that has a file system (browser JS does not). Checksums are taken straight
 off a source, a chunk at a time, so a file is never read whole for them. The `ByteArray` overloads
-on `Patcher` are conveniences over `ByteArraySource`.
+on `Kiff` are conveniences over `ByteArraySource`.
 
 Applying a patch never holds either file. A patch describes its target front to back, so the
 restore is written out as it is produced, and the source is addressed rather than read in:
 
 ```kotlin
-Kiff.apk.applyPatch(sourceFile, patch, target)   // target is a RestoreTarget
+Kiff.applyPatch(sourceFile, patch, target)   // target is a RestoreTarget
 ```
 
 A streamed restore can only be checked as it goes, so a target receives bytes before they are
@@ -637,25 +688,25 @@ public API and okio is an implementation detail: no okio type appears in a publi
 is not on a consumer's compile classpath. Only reaching a `FileSystem` is per-platform, because on
 JS it ships in a separate artifact.
 
-**Current limit:** the bundled `RollingHashAlgorithm` still indexes a `ByteArray`, so a patcher
+**Current limit:** the bundled `RollingHashAlgorithm` still indexes a `ByteArray`, so Kiff
 materializes both inputs once before encoding and refuses an input above 2 GB with
 `KiffException.UnsupportedInput`. The format and the algorithm contract address more than that; a
 bounded-memory search is the next piece of work, and it needs no format change when it lands.
 
 ## Zip archives
 
-`ZipPatcher` reads both archives' layouts and describes the target region by region, pairing each
-target entry with the source entry it came from - by name, or by content fingerprint when an entry
+A zip is described from both archives' layouts, region by region, pairing each target entry with
+the source entry it came from - by name, or by content fingerprint when an entry
 was renamed. An unchanged entry then costs a single copy instruction no matter how far it moved, and
 a changed entry is indexed against its counterpart alone rather than against the whole archive,
 which buys a finer sampling stride and far fewer hash collisions.
 
 Regions the format does not name are described too - the preamble, alignment padding, an APK signing
 block, the central directory - which is what makes the restored archive identical to the last byte.
-If either input turns out not to be a readable zip, the patcher falls back to a whole-file byte
-scan, so it always produces a working patch.
+If the source turns out not to be a readable zip, the target is described as one whole region, so
+there is always a working patch.
 
-`ZipPatcher.analyze(source, target)` reports the same pairing as data, without building a patch.
+`KiffReports.zip(source, target)` reports the same pairing as data, without building a patch.
 
 **Entry data is never recompressed.** That is what makes a restore byte-exact - re-deflating would
 have to reproduce the original compressor's output bit for bit - but it also means a patch for a
@@ -665,7 +716,7 @@ content is compared directly.
 
 ## Android packages
 
-`ApkPatcher` is the zip patcher plus what is specific to an APK:
+An APK is described as a zip, plus what is specific to an APK:
 
 - **Dex files are paired by ordinal.** A build that gains a dex renumbers the rest, so a
   `classes4.dex` with no counterpart by name or content is still compared against the source's
@@ -673,7 +724,7 @@ content is compared directly.
 - **The signing block is a first-class region.** The unnamed run of bytes a v2+ signed APK carries
   between its last entry and the central directory is located, reproduced exactly, and reported on.
 - **Entries are classified** as dex, native library, manifest, resource table, resource, asset,
-  signature, metadata or other, which is what makes `ApkPatcher.analyze` readable.
+  signature, metadata or other, which is what makes `KiffReports.apk` readable.
 
 Storing `.so`, `.dex` and `resources.arsc` uncompressed is the norm for current Android builds - 108
 of the 191 entries in the APK above - so the entries that dominate the package are compared as their
@@ -681,10 +732,11 @@ real content, not as compressed bytes.
 
 ## Benchmark
 
-Two consecutive release builds of the same app, 67.4 MiB and 71.7 MiB, on an M-series Mac. All
-three restore a byte-identical file, checked against the target's SHA-256:
+Two consecutive release builds of the same app, 67.4 MiB and 71.7 MiB, on an M-series Mac, read as
+the APK they are, and for comparison as a plain zip and as plain bytes, the way 0.1's three
+patchers read them. All three restore a byte-identical file, checked against the target's SHA-256:
 
-| Patcher | Patch | Create | Apply |
+| Read as | Patch | Create | Apply |
 | --- | --- | --- | --- |
 | `binary` | 13.7 MiB (19.19%) | 2.5 s | 0.7 s |
 | `zip` | 13.5 MiB (18.82%) | 2.3 s | 0.8 s |
@@ -692,9 +744,9 @@ three restore a byte-identical file, checked against the target's SHA-256:
 
 The three land close together on *this* pair because ~70% of the target sits in a handful of large
 entries that genuinely changed - a replaced native library, a rebuilt dex - and no amount of
-structure awareness makes new content smaller. The structural patchers pull ahead when entries
-move, when an archive is repacked, or when only part of it was rebuilt; `apk` and `zip` agree here
-because every dex in this pair still pairs by name.
+structure awareness makes new content smaller. Structure pulls ahead when entries move, when an
+archive is repacked, or when only part of it was rebuilt; `apk` and `zip` agree here because every
+dex in this pair still pairs by name.
 
 ## Layout
 
@@ -702,11 +754,11 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 
 | Package | Holds |
 | --- | --- |
-| `com.linroid.kiff` | `Kiff`, `Patcher`, `PatcherId`, `PatchInfo`, `KiffException`, and the three patchers |
+| `com.linroid.kiff` | `Kiff`, `KiffOptions`, `KiffReports`, `PatchInfo`, `PatcherId`, `KiffException`, and the deprecated patchers |
 | `.delta` | the algorithm seam - `DeltaAlgorithm`, `DeltaScanner`, `DeltaSink` - plus the bundled rolling-hash search and the instruction codec |
 | `.io` | `SeekableSource`, `ByteArraySource`, `fileSource`, whole-file helpers |
 | `.format` | the patch container and its primitives: varint I/O, CRC-32, the content codec |
-| `.zip` / `.apk` | archive parsing and region encoding, each with the report type its patcher returns |
+| `.zip` / `.apk` | archive parsing and region encoding, each with the report type `KiffReports` returns |
 | `.text` | the line-based Myers diff, which is not part of the patch pipeline |
 
 ## Targets
@@ -714,7 +766,7 @@ Everything a caller needs is in `com.linroid.kiff`; the subpackages are the piec
 `jvm`, `iosArm64`, `iosSimulatorArm64`, `macosArm64`, `macosX64`, `linuxX64`, `mingwX64`,
 `js(nodejs, browser)`.
 
-Patchers address both files through `SeekableSource` rather than reading them as streams, because a
+Kiff addresses both files through `SeekableSource` rather than reading them as streams, because a
 delta copies from arbitrary source offsets. Until the bundled search is converted to bounded memory,
 peak memory is still roughly source + target + patch + index.
 

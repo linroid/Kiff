@@ -9,8 +9,8 @@ import com.linroid.kiff.io.SeekableSource
  * sampled every 4-16 bytes depending on how large the indexed range is, which keeps the index small
  * enough to diff APK-sized files in a couple of seconds.
  *
- * The search itself works over a [ByteArray], so [scanner] materializes the range it indexes. A
- * patcher materializes once before encoding and every scanner after that reuses the same array, so
+ * The search itself works over a [ByteArray], so [scanner] materializes the range it indexes. Kiff
+ * materializes once before encoding and every scanner after that reuses the same array, so
  * a file is read one time rather than per region.
  */
 object RollingHashAlgorithm : DeltaAlgorithm {

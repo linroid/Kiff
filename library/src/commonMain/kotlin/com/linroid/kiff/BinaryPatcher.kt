@@ -1,25 +1,20 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff
 
 import com.linroid.kiff.delta.DeltaAlgorithm
 import com.linroid.kiff.delta.RollingHashAlgorithm
-import com.linroid.kiff.delta.encodeWhole
-import com.linroid.kiff.format.ByteWriter
-import com.linroid.kiff.format.RegionNode
-import com.linroid.kiff.format.encoding
-import com.linroid.kiff.format.structureBytes
-import com.linroid.kiff.io.ByteArraySource
-import com.linroid.kiff.region.RegionCost
-import com.linroid.kiff.region.RegionKind
-import com.linroid.kiff.region.RegionRecorder
-import com.linroid.kiff.region.WHOLE_FILE_REGION
 
 /**
- * General purpose binary patcher: it treats both files as opaque byte streams and describes the
- * target as copies from anywhere in the source plus literal and run-length fill.
+ * Treats both files as opaque byte streams and describes the target as copies from anywhere in the
+ * source plus literal and run-length fill.
  *
- * Works on any pair of files. The archive-aware patchers produce smaller patches for archives
- * because they can tell which regions are worth comparing.
+ * [Kiff.createPatch] does exactly this for a file it finds no structure in.
  */
+@Deprecated(
+  "Kiff.createPatch detects what a file is, and describes one it finds no structure in " +
+    "exactly as this does. Patchers are removed in 0.3.0."
+)
 class BinaryPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm
 ) : DeltaPatcher() {
@@ -27,25 +22,7 @@ class BinaryPatcher(
   override val id: PatcherId = PatcherId.BINARY
   override val name: String = "binary"
 
-  override fun encode(
-    source: ByteArraySource,
-    target: ByteArraySource,
-    literals: ByteWriter,
-    recorder: RegionRecorder?
-  ): RegionNode {
-    val literalsBefore = literals.size
-    // There is only ever one region here: this patcher does not carve the target up at all.
-    val node = encodeWhole(source, target, algorithm, literals)
-    recorder?.record(
-      RegionCost(
-        name = WHOLE_FILE_REGION,
-        kind = RegionKind.WHOLE,
-        encoding = node.encoding(),
-        targetBytes = target.size,
-        instructionBytes = node.structureBytes(),
-        literalBytes = (literals.size - literalsBefore).toLong()
-      )
-    )
-    return node
-  }
+  override val options: KiffOptions = KiffOptions(algorithm = algorithm)
+
+  override val structure: Structure = Structure.Bytes
 }

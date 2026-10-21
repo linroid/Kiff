@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff.delta
 
 import com.linroid.kiff.BinaryPatcher

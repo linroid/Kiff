@@ -1,6 +1,7 @@
 package com.linroid.kiff.apk
 
 import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffReports
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.structuredBytes
 import kotlin.test.Test
@@ -25,7 +26,7 @@ class ApkPatchReportTest {
 
   @Test
   fun costIsGroupedByEntryKind() {
-    val report = Kiff.apk.explainKinds(source, target)
+    val report = KiffReports.explainApk(source, target)
     val kinds = report.kinds.associateBy { it.kind }
 
     val dex = kinds.getValue(ApkEntryKind.DEX)
@@ -41,20 +42,20 @@ class ApkPatchReportTest {
   fun theChangedKindDominatesTheReport() {
     // Only classes.dex differs between the two builds, so dex should lead the ranking - which is
     // the question the report exists to answer.
-    val report = Kiff.apk.explainKinds(source, target)
+    val report = KiffReports.explainApk(source, target)
     assertEquals(ApkEntryKind.DEX, report.kinds.first().kind)
   }
 
   @Test
   fun kindBytesAddUpToTheEntryRegions() {
-    val report = Kiff.apk.explainKinds(source, target)
+    val report = KiffReports.explainApk(source, target)
     val entryBytes = report.regions.bytes(RegionKind.CONTENT)
     assertEquals(entryBytes, report.kinds.sumOf { it.patchBytes })
   }
 
   @Test
   fun gapsAndDirectoryAreReportedSeparately() {
-    val report = Kiff.apk.explainKinds(source, target)
+    val report = KiffReports.explainApk(source, target)
     assertTrue(
       report.kinds.none { it.kind == ApkEntryKind.OTHER },
       "the signing block is a gap, not an entry of an unknown kind"
@@ -65,8 +66,8 @@ class ApkPatchReportTest {
 
   @Test
   fun totalsMatchThePatchItDescribes() {
-    val report = Kiff.apk.explainKinds(source, target)
+    val report = KiffReports.explainApk(source, target)
     assertEquals(target.size.toLong(), report.targetSize)
-    assertEquals(Kiff.apk.createPatch(source, target).size.toLong(), report.patchSize)
+    assertEquals(Kiff.createPatch(source, target).size.toLong(), report.patchSize)
   }
 }

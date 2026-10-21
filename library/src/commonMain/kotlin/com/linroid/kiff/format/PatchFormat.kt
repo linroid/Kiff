@@ -4,7 +4,7 @@ import com.linroid.kiff.KiffException
 import com.linroid.kiff.PatcherId
 
 /**
- * Patch container shared by every patcher:
+ * The patch container:
  *
  * ```
  * "KIFF"  4 bytes
@@ -19,8 +19,8 @@ import com.linroid.kiff.PatcherId
  * Sizes and the source offsets inside the delta are 64-bit varints, so a patch can describe
  * inputs beyond 2 GB.
  *
- * The checksums are what let [Patcher.applyPatch] refuse the wrong source file and prove the
- * restored bytes are exactly the ones the patch was built from.
+ * The checksums are what let [com.linroid.kiff.Kiff.applyPatch] refuse the wrong source file and
+ * prove the restored bytes are exactly the ones the patch was built from.
  */
 internal object PatchFormat {
 

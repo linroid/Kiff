@@ -12,7 +12,7 @@ import com.linroid.kiff.io.RestoreTarget
  * the whole trick. Splitting on `"\n"` and dropping empty trailing entries - which is what the
  * CLI's reader used to do - loses whether the file ended in a newline, so it can show a diff but
  * never restore one. Carrying the terminator inside the line means concatenating lines reproduces the
- * region byte for byte, which is what [com.linroid.kiff.Patcher] promises. CRLF needs no special
+ * region byte for byte, which is what every patch promises. CRLF needs no special
  * case: the `\r` simply belongs to the line it ends.
  *
  * Why bother, when the delta encoding can describe any bytes? Because a line-level script says

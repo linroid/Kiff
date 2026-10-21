@@ -1,34 +1,27 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff
 
-import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.format.ByteWriter
-import com.linroid.kiff.format.RegionNode
-import com.linroid.kiff.delta.RollingHashAlgorithm
-import com.linroid.kiff.io.ByteArraySource
-import com.linroid.kiff.region.RegionPlanner
-import com.linroid.kiff.region.RegionRecorder
-import com.linroid.kiff.region.TextAwareRegionPlanner
-import com.linroid.kiff.container.ContainerEncoder
 import com.linroid.kiff.container.ContainerRegistry
 import com.linroid.kiff.container.ZipFormat
+import com.linroid.kiff.delta.DeltaAlgorithm
+import com.linroid.kiff.delta.RollingHashAlgorithm
+import com.linroid.kiff.region.RegionPlanner
+import com.linroid.kiff.region.TextAwareRegionPlanner
 import com.linroid.kiff.text.LineDiffAlgorithm
 import com.linroid.kiff.text.MyersDiffAlgorithm
 import com.linroid.kiff.zip.ZipDiffReport
-import com.linroid.kiff.zip.analyzeArchives
 
 /**
- * Structure-aware diff for zip archives.
+ * Takes its target to be a zip archive, entries, gaps and directory, whatever it is.
  *
- * It reads both archives' layouts and compares each target region against the region it
- * corresponds to - entries paired by name, or by content fingerprint when an entry was renamed - so
- * an unchanged entry costs one copy instruction and a changed entry is compared only against its
- * counterpart.
- *
- * Entry data is never recompressed, which is what makes a restore byte-exact; the flip side is that
- * a patch for a *deflated* entry can only be as small as the change in its compressed bytes.
- *
- * Falls back to a whole-file byte scan when either input is not a readable zip.
+ * [Kiff.createPatch] does exactly this for a readable zip that is not an Android package, and
+ * falls back the same way when the source is not one.
  */
+@Deprecated(
+  "Kiff.createPatch detects what a file is, and describes a zip exactly as this does. " +
+    "Patchers are removed in 0.3.0."
+)
 class ZipPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
   /** Chooses how each leaf region is described; see [RegionPlanner]. */
@@ -41,19 +34,19 @@ class ZipPatcher(
   override val id: PatcherId = PatcherId.ZIP
   override val name: String = "zip"
 
-  override fun encode(
-    source: ByteArraySource,
-    target: ByteArraySource,
-    literals: ByteWriter,
-    recorder: RegionRecorder?
-  ): RegionNode = ContainerEncoder(
-    source, target, algorithm, planner, lineAlgorithm, containers
-  ).encode(ZipFormat(), literals, recorder)
+  override val options: KiffOptions = KiffOptions(algorithm, planner, containers, lineAlgorithm)
+
+  override val structure: Structure = Structure.Archive(ZipFormat())
 
   /**
    * Reports what changed entry by entry, without building a patch.
    *
    * @throws KiffException.UnsupportedInput if either input is not a readable zip archive.
    */
-  fun analyze(source: ByteArray, target: ByteArray): ZipDiffReport = analyzeArchives(source, target)
+  @Deprecated(
+    "KiffReports.zip makes the same report.",
+    ReplaceWith("KiffReports.zip(source, target)", "com.linroid.kiff.KiffReports")
+  )
+  fun analyze(source: ByteArray, target: ByteArray): ZipDiffReport =
+    KiffReports.zip(source, target)
 }

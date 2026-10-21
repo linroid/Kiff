@@ -4,7 +4,7 @@ import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffReports
 import com.linroid.kiff.apk.ApkPatchReport
 import com.linroid.kiff.io.KiffFiles
 import com.linroid.kiff.region.RegionCost
@@ -32,13 +32,14 @@ class ExplainCommand : KiffCommand(name = "explain") {
     val sourceBytes = KiffFiles.readBytes(source)
     val targetBytes = KiffFiles.readBytes(target)
 
-    if (Kiff.apk.isApk(sourceBytes) || Kiff.apk.isApk(targetBytes)) {
-      val report = Kiff.apk.explainKinds(sourceBytes, targetBytes)
+    // The patch is the one `kiff create` makes; only the grouping by kind is for APKs alone.
+    if (KiffReports.isApk(sourceBytes) || KiffReports.isApk(targetBytes)) {
+      val report = KiffReports.explainApk(sourceBytes, targetBytes)
       echoTotals(report.regions)
       echoKinds(report)
       echoRegions(report.regions)
     } else {
-      val report = Kiff.zip.explain(sourceBytes, targetBytes)
+      val report = KiffReports.explain(sourceBytes, targetBytes)
       echoTotals(report)
       echoRegions(report)
     }

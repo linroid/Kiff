@@ -51,7 +51,7 @@ class FileHelpersJvmTest {
 
   @Test
   fun aPatchForAnotherSourceLeavesTheOutputAsItWas() {
-    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val patch = write("delta.patch", Kiff.createPatch(source, target))
     val wrong = write("other.bin", source.copyOf().also { it[10] = (it[10] + 1).toByte() })
     val output = write("restored.bin", previous)
 
@@ -66,7 +66,7 @@ class FileHelpersJvmTest {
   fun aRestoreRefusedAfterItsLastByteLeavesTheOutputAsItWas() {
     // Break only the target checksum in the header: every region restores, every byte is written,
     // and the refusal comes at the very end - the case a streamed restore cannot take back.
-    val bytes = Kiff.binary.createPatch(source, target)
+    val bytes = Kiff.createPatch(source, target)
     val header = ByteReader(bytes).also { PatchFormat.readHeader(it) }
     val checksumAt = header.offset - 4
     bytes[checksumAt] = (bytes[checksumAt] + 1).toByte()
@@ -90,7 +90,7 @@ class FileHelpersJvmTest {
 
   @Test
   fun aFileCanBeUpdatedInPlace() {
-    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val patch = write("delta.patch", Kiff.createPatch(source, target))
     val file = write("app.bin", source)
 
     Kiff.applyPatch(file.path, patch.path, file.path)
@@ -101,7 +101,7 @@ class FileHelpersJvmTest {
   @Test
   fun aRefusedUpdateInPlaceLeavesTheSourceIntact() {
     // Writing straight to the output truncated it first, and here the output is the source.
-    val patch = write("delta.patch", Kiff.binary.createPatch(target, source))
+    val patch = write("delta.patch", Kiff.createPatch(target, source))
     val file = write("app.bin", source)
 
     assertFailsWith<KiffException.SourceMismatch> {
@@ -117,8 +117,8 @@ class FileHelpersJvmTest {
     val updated = write("new.bin", target)
     val patch = write("delta.patch", ByteArray(200_000) { 0x5A })
 
-    val info = Kiff.createPatch(Kiff.binary, input.path, updated.path, patch.path)
-    assertContentEquals(Kiff.binary.createPatch(source, target), patch.readBytes())
+    val info = Kiff.createPatch(input.path, updated.path, patch.path)
+    assertContentEquals(Kiff.createPatch(source, target), patch.readBytes())
     assertEquals(patch.length(), info.patchSize)
     assertNoTemporaryFilesLeft()
   }
@@ -128,7 +128,7 @@ class FileHelpersJvmTest {
     // The replacement is a new file, and it used to get the default mode: an executable updated
     // in place could no longer run, and a private file became readable by everyone.
     if ("posix" !in FileSystems.getDefault().supportedFileAttributeViews()) return
-    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val patch = write("delta.patch", Kiff.createPatch(source, target))
     for (mode in listOf("rwxr-x---", "rw-------", "r--r--r--")) {
       val file = write("app-$mode.bin", source)
       Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString(mode))
@@ -144,7 +144,7 @@ class FileHelpersJvmTest {
   @Test
   fun anUpdateThroughASymlinkUpdatesTheFileItNames() {
     // The link itself used to be replaced by a regular file, leaving what it named unchanged.
-    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val patch = write("delta.patch", Kiff.createPatch(source, target))
     val real = write("app-1.0.bin", source)
     val link = File(dir, "app.bin").toPath()
     Files.createSymbolicLink(link, real.toPath().fileName)
@@ -167,7 +167,7 @@ class FileHelpersJvmTest {
 
   @Test
   fun aDirectoryIsRefusedByTheNameItWasGiven() {
-    val patch = write("delta.patch", Kiff.binary.createPatch(source, target))
+    val patch = write("delta.patch", Kiff.createPatch(source, target))
     val input = write("old.bin", source)
     val folder = File(dir, "out").apply { mkdirs() }
     for (name in listOf(folder.path, folder.path + "/")) {
@@ -186,7 +186,7 @@ class FileHelpersJvmTest {
     val updated = write("new.bin", target)
     for (patchPath in listOf(input.path, updated.path)) {
       val failure = assertFailsWith<IOException> {
-        Kiff.createPatch(Kiff.binary, input.path, updated.path, patchPath)
+        Kiff.createPatch(input.path, updated.path, patchPath)
       }
       assertTrue(failure.message.orEmpty().startsWith("Cannot write $patchPath"), failure.message)
     }
@@ -214,7 +214,7 @@ class FileHelpersJvmTest {
 
   @Test
   fun infoReadsTheHeaderAlone() {
-    val bytes = Kiff.binary.createPatch(source, target)
+    val bytes = Kiff.createPatch(source, target)
     val patch = write("delta.patch", bytes)
     assertEquals(Kiff.info(bytes), Kiff.info(patch.path))
 

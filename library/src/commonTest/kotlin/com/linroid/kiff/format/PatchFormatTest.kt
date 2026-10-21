@@ -19,15 +19,15 @@ class PatchFormatTest {
 
   @Test
   fun patchesAreWrittenAsVersionOne() {
-    assertEquals(1, Kiff.info(Kiff.binary.createPatch(source, target)).formatVersion)
+    assertEquals(1, Kiff.info(Kiff.createPatch(source, target)).formatVersion)
   }
 
   @Test
   fun unknownVersionsAreRejected() {
-    val patch = Kiff.binary.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val future = patch.copyOf().also { it[VERSION_BYTE] = 2 }
     val failure = assertFailsWith<KiffException.InvalidPatch> {
-      Kiff.binary.applyPatch(source, future)
+      Kiff.applyPatch(source, future)
     }
     assertTrue("2" in failure.message.orEmpty(), failure.message.orEmpty())
   }
@@ -36,25 +36,25 @@ class PatchFormatTest {
   fun everyReservedFlagBitIsRefused() {
     // A flag changes how the payload reads, so one this build does not know has to stop it on every
     // path - including the header alone, which is all an updater looks at before downloading.
-    val patch = Kiff.binary.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     for (bit in 1..7) {
       val flagged = patch.copyOf().also {
         it[FLAGS_BYTE] = (PatchFormat.FLAG_REGION_CHECKSUMS or (1 shl bit)).toByte()
       }
       assertFailsWith<KiffException.InvalidPatch>("bit $bit") { Kiff.info(flagged) }
       assertFailsWith<KiffException.InvalidPatch>("bit $bit") {
-        Kiff.binary.applyPatch(source, flagged)
+        Kiff.applyPatch(source, flagged)
       }
       assertFailsWith<KiffException.InvalidPatch>("bit $bit, streaming") {
         val out = ByteArrayRestoreTarget(target.size)
-        Kiff.binary.applyPatch(ByteArraySource(source), flagged, out)
+        Kiff.applyPatch(ByteArraySource(source), flagged, out)
       }
     }
   }
 
   @Test
   fun readableFormatsNameWhatThisBuildWritesAndNothingItRefuses() {
-    val written = Kiff.info(Kiff.binary.createPatch(source, target)).formatVersion
+    val written = Kiff.info(Kiff.createPatch(source, target)).formatVersion
     assertTrue(written in Kiff.readableFormats)
     // The version unknownVersionsAreRejected shows refused: an updater skipping by this set has to
     // skip exactly what applyPatch would turn down.
@@ -63,7 +63,7 @@ class PatchFormatTest {
 
   @Test
   fun sizesAreReportedAsLong() {
-    val info = Kiff.info(Kiff.binary.createPatch(source, target))
+    val info = Kiff.info(Kiff.createPatch(source, target))
     assertEquals(source.size.toLong(), info.sourceSize)
     assertEquals(target.size.toLong(), info.targetSize)
   }

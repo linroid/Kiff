@@ -1,39 +1,30 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff
 
 import com.linroid.kiff.apk.ApkDiffReport
-import com.linroid.kiff.apk.ApkEntries
 import com.linroid.kiff.apk.ApkEntryKind
 import com.linroid.kiff.apk.ApkPatchReport
-import com.linroid.kiff.apk.analyzeApk
 import com.linroid.kiff.apk.groupApkCost
 import com.linroid.kiff.container.ApkFormat
-import com.linroid.kiff.container.ContainerEncoder
 import com.linroid.kiff.container.ContainerRegistry
+import com.linroid.kiff.delta.DeltaAlgorithm
+import com.linroid.kiff.delta.RollingHashAlgorithm
+import com.linroid.kiff.region.RegionPlanner
+import com.linroid.kiff.region.TextAwareRegionPlanner
 import com.linroid.kiff.text.LineDiffAlgorithm
 import com.linroid.kiff.text.MyersDiffAlgorithm
-import com.linroid.kiff.apk.looksLikeApk
-import com.linroid.kiff.delta.DeltaAlgorithm
-import com.linroid.kiff.format.ByteWriter
-import com.linroid.kiff.format.RegionNode
-import com.linroid.kiff.delta.RollingHashAlgorithm
-import com.linroid.kiff.io.ByteArraySource
-import com.linroid.kiff.region.RegionPlanner
-import com.linroid.kiff.region.RegionRecorder
-import com.linroid.kiff.region.TextAwareRegionPlanner
 
 /**
- * Structure-aware diff for Android packages.
+ * Takes its target to be an Android package, whatever it is: a zip whose dex files are searched
+ * together and paired by ordinal when a build renumbers them.
  *
- * An APK is a zip, so this builds on the same region-by-region encoding, and adds what is specific
- * to the format: dex files are paired by ordinal when a build renumbers them, the signing block
- * between the last entry and the central directory is reproduced as its own region, and
- * [analyze] groups the differences the way the package is actually built.
- *
- * Like [ZipPatcher] it never recompresses, which is what makes a restore byte-exact. That matters
- * more here than for zips in general: current Android builds store `.dex`, `.so` and
- * `resources.arsc` uncompressed, so the entries that dominate an APK are compared as their real
- * content.
+ * [Kiff.createPatch] does exactly this for a readable zip that carries an `AndroidManifest.xml`.
  */
+@Deprecated(
+  "Kiff.createPatch detects what a file is, and describes an APK exactly as this does. " +
+    "Patchers are removed in 0.3.0."
+)
 class ApkPatcher(
   override val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
   /** Chooses how each leaf region is described; see [RegionPlanner]. */
@@ -46,33 +37,40 @@ class ApkPatcher(
   override val id: PatcherId = PatcherId.APK
   override val name: String = "apk"
 
-  override fun encode(
-    source: ByteArraySource,
-    target: ByteArraySource,
-    literals: ByteWriter,
-    recorder: RegionRecorder?
-  ): RegionNode = ContainerEncoder(
-    source, target, algorithm, planner, lineAlgorithm, containers
-  ).encode(ApkFormat(), literals, recorder)
+  override val options: KiffOptions = KiffOptions(algorithm, planner, containers, lineAlgorithm)
+
+  override val structure: Structure = Structure.Archive(ApkFormat())
 
   /**
    * Reports what changed, entry by entry and grouped by kind, without building a patch.
    *
    * @throws KiffException.UnsupportedInput if either input is not a readable zip archive.
    */
-  fun analyze(source: ByteArray, target: ByteArray): ApkDiffReport = analyzeApk(source, target)
+  @Deprecated(
+    "KiffReports.apk makes the same report.",
+    ReplaceWith("KiffReports.apk(source, target)", "com.linroid.kiff.KiffReports")
+  )
+  fun analyze(source: ByteArray, target: ByteArray): ApkDiffReport =
+    KiffReports.apk(source, target)
 
-  /**
-   * [explain], with the regions grouped the way the package is actually built.
-   *
-   * Entry kinds are what makes the attribution actionable: knowing a patch is 80% dex says which
-   * part of the encoder is worth work, where a list of entry names does not.
-   */
+  /** [explain], with the regions grouped the way the package is actually built. */
+  @Deprecated(
+    "KiffReports.explainApk reports on the patch Kiff.createPatch builds.",
+    ReplaceWith("KiffReports.explainApk(source, target)", "com.linroid.kiff.KiffReports")
+  )
   fun explainKinds(source: ByteArray, target: ByteArray): ApkPatchReport =
-    groupApkCost(explain(source, target))
+    groupApkCost(KiffReports.explainAs(source, target, options, structure))
 
   /** True when [bytes] is a zip archive that carries an `AndroidManifest.xml`. */
-  fun isApk(bytes: ByteArray): Boolean = looksLikeApk(bytes)
+  @Deprecated(
+    "KiffReports.isApk answers the same question.",
+    ReplaceWith("KiffReports.isApk(bytes)", "com.linroid.kiff.KiffReports")
+  )
+  fun isApk(bytes: ByteArray): Boolean = KiffReports.isApk(bytes)
 
-  fun kindOf(entryName: String): ApkEntryKind = ApkEntries.kindOf(entryName)
+  @Deprecated(
+    "KiffReports.apkEntryKind answers the same question.",
+    ReplaceWith("KiffReports.apkEntryKind(entryName)", "com.linroid.kiff.KiffReports")
+  )
+  fun kindOf(entryName: String): ApkEntryKind = KiffReports.apkEntryKind(entryName)
 }

@@ -3,33 +3,30 @@ package com.linroid.kiff.cli
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.UsageError
+import com.github.ajalt.clikt.core.terminal
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.linroid.kiff.Kiff
-import com.linroid.kiff.Patcher
 import com.linroid.kiff.PatchInfo
 import com.linroid.kiff.io.KiffFiles
 
 class CreateCommand : KiffCommand(name = "create") {
   override fun help(context: Context) = "Create a patch that turns SOURCE into TARGET"
 
-  private val patcherName by option(
-    "-p",
-    "--patcher",
-    help = "Patcher to use: ${Kiff.patchers.joinToString("|") { it.name }}"
-  ).default("binary")
+  override fun helpEpilog(context: Context) = DETECTION_HELP
+
+  private val patcherName by ignoredPatcherOption()
   private val source by argument(help = "Original file")
   private val target by argument(help = "Updated file")
   private val patch by argument(help = "Patch file to write")
 
   override fun execute() {
-    val patcher = resolvePatcher(patcherName)
+    warnIgnoredPatcher(patcherName)
     requireFile(source)
     requireFile(target)
     val elapsed = measureMillis {
-      val info = Kiff.createPatch(patcher, source, target, patch)
-      echo("Created $patch with the ${patcher.name} patcher")
+      val info = Kiff.createPatch(source, target, patch)
+      echo("Created $patch")
       echoInfo(info)
     }
     echo("  Took:        ${elapsed} ms")
@@ -48,7 +45,7 @@ class ApplyCommand : KiffCommand(name = "apply") {
     requireFile(patch)
     val elapsed = measureMillis {
       val info = Kiff.applyPatch(source, patch, output)
-      echo("Restored $output with the ${info.patcher.name.lowercase()} patcher")
+      echo("Restored $output")
       echoInfo(info)
     }
     echo("  Took:        ${elapsed} ms")
@@ -67,7 +64,7 @@ class InfoCommand : KiffCommand(name = "info") {
 }
 
 private fun CliktCommand.echoInfo(info: PatchInfo) {
-  echo("  Patcher:     ${info.patcher.name.lowercase()} (format v${info.formatVersion})")
+  echo("  Read as:     ${info.patcher.name.lowercase()} (format v${info.formatVersion})")
   echo("  Source:      ${formatBytes(info.sourceSize)} crc32=${hex(info.sourceCrc32)}")
   echo("  Target:      ${formatBytes(info.targetSize)} crc32=${hex(info.targetCrc32)}")
   val share = formatPercent(info.ratio)
@@ -76,10 +73,30 @@ private fun CliktCommand.echoInfo(info: PatchInfo) {
 
 private fun hex(value: UInt) = value.toString(16).padStart(8, '0')
 
-internal fun resolvePatcher(name: String): Patcher = Kiff.patcherOrNull(name)
-  ?: throw UsageError(
-    "Unknown patcher '$name'. Available: ${Kiff.patchers.joinToString(", ") { it.name }}"
+/** How `create` and `release` decide what a file is, for their help. */
+internal const val DETECTION_HELP =
+  "An APK - a zip that carries an AndroidManifest.xml - is compared entry by entry, with its " +
+    "dex files searched together. Any other zip is compared entry by entry, and any other file " +
+    "as plain bytes. Inside an archive, archives and dex files are taken apart where that " +
+    "makes the patch smaller."
+
+/**
+ * `-p`/`--patcher`, which Kiff 0.1 used to choose how a file was read and which this one works out
+ * from the file instead. Hidden, and accepted only so that scripts passing it keep working until
+ * 0.3.0 refuses it.
+ */
+internal fun KiffCommand.ignoredPatcherOption() =
+  option("-p", "--patcher", metavar = "PATCHER", hidden = true)
+
+internal fun KiffCommand.warnIgnoredPatcher(name: String?) {
+  if (name == null) return
+  val label = currentContext.terminal.theme.warning("Warning:")
+  echo(
+    "$label --patcher $name is ignored: kiff works out whether a file is an APK, a zip or " +
+      "neither. Kiff 0.3.0 will refuse the option.",
+    err = true
   )
+}
 
 internal fun requireFile(path: String) {
   if (!KiffFiles.exists(path)) throw UsageError("File not found: $path")

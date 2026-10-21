@@ -64,18 +64,18 @@ class StreamingRestoreTest {
 
   @Test
   fun streamingProducesExactlyWhatCollectingDoes() {
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val recorded = Recording()
-    Kiff.zip.applyPatch(ByteArraySource(source), patch, recorded)
+    Kiff.applyPatch(ByteArraySource(source), patch, recorded)
     assertContentEquals(target, recorded.bytes.toByteArray())
-    assertContentEquals(target, Kiff.zip.applyPatch(source, patch))
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 
   @Test
   fun theTargetArrivesInOrderAndInPieces() {
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val recorded = Recording()
-    Kiff.zip.applyPatch(ByteArraySource(source), patch, recorded)
+    Kiff.applyPatch(ByteArraySource(source), patch, recorded)
     assertEquals(target.size, recorded.bytes.size)
     assertTrue(recorded.writes > 1, "a restore of this shape should arrive in pieces")
     assertTrue(
@@ -86,20 +86,20 @@ class StreamingRestoreTest {
 
   @Test
   fun aSourceThatHandsOverOneByteAtATimeStillWorks() {
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val trickling = Trickling(source, limit = 1)
     val recorded = Recording()
-    Kiff.zip.applyPatch(trickling, patch, recorded)
+    Kiff.applyPatch(trickling, patch, recorded)
     assertContentEquals(target, recorded.bytes.toByteArray())
     assertTrue(trickling.reads > source.size / 2, "should have read in small pieces")
   }
 
   @Test
   fun aSourceThatIsNotTheRightOneIsStillRefused() {
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val wrong = source.copyOf().also { it[100] = (it[100] + 1).toByte() }
     assertFailsWith<KiffException.SourceMismatch> {
-      Kiff.zip.applyPatch(ByteArraySource(wrong), patch, Recording())
+      Kiff.applyPatch(ByteArraySource(wrong), patch, Recording())
     }
   }
 
@@ -107,10 +107,10 @@ class StreamingRestoreTest {
   fun aCorruptedPatchIsStillCaughtWhileStreaming() {
     // The bytes are already gone by the time a whole-file check could run, so the region checksums
     // are what stop a streamed restore from quietly emitting the wrong thing.
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val corrupted = patch.copyOf().also { it[it.size - 60] = (it[it.size - 60] + 1).toByte() }
     val failure = assertFailsWith<KiffException> {
-      Kiff.zip.applyPatch(ByteArraySource(source), corrupted, Recording())
+      Kiff.applyPatch(ByteArraySource(source), corrupted, Recording())
     }
     assertTrue(
       failure is KiffException.VerificationFailed || failure is KiffException.InvalidPatch,
@@ -135,9 +135,9 @@ class StreamingRestoreTest {
     // out again, so the second chunk was whatever the target left.
     val plain = structuredBytes(300_000, seed = 3)
     val updated = plain.copyOf().also { it.fill(7, 100_000, 300_000) }
-    val patch = Kiff.binary.createPatch(plain, updated)
+    val patch = Kiff.createPatch(plain, updated)
     val scrambled = Scrambling()
-    Kiff.binary.applyPatch(plain.asSource(), patch, scrambled)
+    Kiff.applyPatch(plain.asSource(), patch, scrambled)
     assertContentEquals(updated, scrambled.bytes.toByteArray())
   }
 
@@ -145,14 +145,14 @@ class StreamingRestoreTest {
   fun aRefusedRestoreHasAlreadyStreamedWhatItWrote() {
     // The contract a streaming target has to live with: the final checksum is compared after the
     // last byte, so a refusal can come once everything has been handed over.
-    val patch = Kiff.zip.createPatch(source, target)
+    val patch = Kiff.createPatch(source, target)
     val header = ByteReader(patch)
     PatchFormat.readHeader(header)
     patch[header.offset - 1] = (patch[header.offset - 1] + 1).toByte()
 
     val recording = Recording()
     assertFailsWith<KiffException.VerificationFailed> {
-      Kiff.zip.applyPatch(source.asSource(), patch, recording)
+      Kiff.applyPatch(source.asSource(), patch, recording)
     }
     assertEquals(target.size, recording.bytes.size)
   }

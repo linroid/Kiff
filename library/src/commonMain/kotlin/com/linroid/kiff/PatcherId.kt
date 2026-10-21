@@ -1,6 +1,12 @@
 package com.linroid.kiff
 
-/** Identifies the patcher that produced a patch, so patches can be applied without guessing. */
+/**
+ * The header's `patcher` byte: what the writer took the target to be as a whole.
+ *
+ * Kiff picks it from the target, and reads it back as [PatchInfo.patcher] for display. Nothing in
+ * a patch's payload depends on it, so it never decides how a patch is applied. Version 1 of the
+ * format has these three codes, and a reader refuses any other.
+ */
 enum class PatcherId(val code: Int) {
   BINARY(1),
   ZIP(2),
