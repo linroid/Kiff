@@ -52,3 +52,56 @@ sha256_of() {
   fi
   printf '%s' "${line%% *}"
 }
+
+# The ref the action was loaded from: $1, which action.yml passes from github.action_ref, when the
+# action's path $2 agrees that it is linroid/Kiff at that ref; nothing otherwise. The runner keeps
+# a downloaded action in _actions/OWNER/NAME/REF. github.action_ref is empty for uses: ./, and is
+# another action's when a composite action runs this one (actions/runner#2473), which the path
+# then contradicts.
+action_ref() {
+  local ref=$1 path=${2//\\//}
+  path=$(lowercase "${path%/}")
+  if [[ -n $ref && $path == */_actions/linroid/kiff/"$(lowercase "$ref")" ]]; then
+    printf '%s' "$ref"
+  fi
+}
+
+# The version of the Kiff release tagged at the commit that ref $1, a tag or a full commit SHA,
+# names, read from the output of git ls-remote --tags on stdin; nothing when there is none. An
+# annotated tag's commit is on its peeled line, TAG^{}. The ref itself wins when it is a release
+# tag, and otherwise a final release wins over a prerelease at the same commit.
+release_at() {
+  local ref=$1 sha=''
+  if [[ $ref =~ ^[0-9a-fA-F]{40}$ ]]; then
+    sha=$(lowercase "$ref")
+  fi
+  awk -v ref="$ref" -v sha="$sha" '
+    substr($2, 1, 10) == "refs/tags/" {
+      name = substr($2, 11)
+      if (substr(name, length(name) - 2) == "^{}") {
+        peeled[substr(name, 1, length(name) - 3)] = $1
+      } else {
+        direct[name] = $1
+        names[++count] = name
+      }
+    }
+    function commit(tag) {
+      return (tag in peeled) ? peeled[tag] : direct[tag]
+    }
+    END {
+      target = sha != "" ? sha : ((ref in direct) ? commit(ref) : "")
+      for (i = 1; target != "" && i <= count; i++) {
+        name = names[i]
+        if (commit(name) != target) continue
+        if (name !~ /^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/) continue
+        if (tolower(name) ~ /-snapshot$/) continue
+        if (name == ref) {
+          best = name
+          break
+        }
+        if (best == "" || (best ~ /-/ && name !~ /-/)) best = name
+      }
+      if (best != "") print substr(best, 2)
+    }
+  '
+}

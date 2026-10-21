@@ -8,6 +8,8 @@ on:
     paths:
       - action.yml
       - action/**
+      - build.gradle.kts
+      - gradle.properties
       - cli/**
       - library/**
       - .github/scripts/**
@@ -17,6 +19,8 @@ on:
     paths:
       - action.yml
       - action/**
+      - build.gradle.kts
+      - gradle.properties
       - cli/**
       - library/**
       - .github/scripts/**
@@ -47,6 +51,9 @@ jobs:
 
       - name: Check the scripts
         run: shellcheck --external-sources action/*.sh .github/scripts/*.sh
+
+      - name: Test how the action finds its own release
+        run: .github/scripts/test-lib.sh
 
   action:
     name: Action (${{ matrix.os }})
@@ -129,10 +136,27 @@ jobs:
             exit 1
           fi
 
+      # uses: ./ has no ref to find a release by, so the action builds this checkout, which is
+      # no release whatever its tags.
+      - name: Check the action built a snapshot of this commit
+        env:
+          MANIFEST: ${{ steps.latest.outputs.manifest }}
+        run: |
+          said=$(cli/build/install/kiff/bin/kiff --version)
+          expected="kiff 0.0.0-SNAPSHOT ($(git rev-parse --short HEAD))"
+          if [[ $said != "$expected" ]]; then
+            echo "::error::The action's build of this checkout says '$said', not '$expected'."
+            exit 1
+          fi
+          generator=$(jq -r .generator "$MANIFEST")
+          if [[ $generator != 'kiff 0.0.0-SNAPSHOT' ]]; then
+            echo "::error::The manifest's generator is $generator, not kiff 0.0.0-SNAPSHOT."
+            exit 1
+          fi
+
       - name: Restore every patch of v1.3.0
         env:
           MANIFEST: ${{ steps.latest.outputs.manifest }}
-        # uses: ./ builds the CLI from this checkout, since main's version is a snapshot.
         run: |
           .github/scripts/restore-patches.sh cli/build/install/kiff/bin/kiff "$MANIFEST" \
             "$FIXTURES"
