@@ -299,7 +299,11 @@ internal class KiffVersions(
     if (javaHome != null) return
     val java = if (isWindows) "java.exe" else "java"
     val home = environment("JAVA_HOME")?.takeIf { it.isNotBlank() }
-    val found = if (home != null) fileSystem.exists(home.toPath() / "bin" / java) else onPath(java)
+    val found = if (home != null) {
+      fileSystem.exists(platformPath(home) / "bin" / java)
+    } else {
+      onPath(java)
+    }
     if (found) return
     val where = if (home != null) "JAVA_HOME is $home, which has no bin/$java" else
       "set JAVA_HOME, or put java on the PATH"
@@ -308,7 +312,7 @@ internal class KiffVersions(
 
   private fun onPath(program: String): Boolean =
     environment("PATH").orEmpty().split(if (isWindows) ';' else ':')
-      .any { it.isNotEmpty() && fileSystem.exists(it.toPath() / program) }
+      .any { it.isNotEmpty() && fileSystem.exists(platformPath(it) / program) }
 
   private fun launcherIn(dir: Path): Path? = LAUNCHERS.map { dir / "bin" / it }
     .firstOrNull { fileSystem.metadataOrNull(it)?.isRegularFile == true }
@@ -338,7 +342,7 @@ internal class KiffVersions(
      */
     fun fromEnvironment(log: (String) -> Unit = ::printError): KiffVersions {
       val home = environment("KIFF_HOME")?.takeIf { it.isNotBlank() }
-        ?: (homeDirectory().toPath() / ".kiff").toString()
+        ?: (platformPath(homeDirectory()) / ".kiff").toString()
       val baseUrl = environment("KIFF_DOWNLOAD_URL")?.takeIf { it.isNotBlank() } ?: RELEASES
       return KiffVersions(absolute(home), baseUrl, log)
     }
