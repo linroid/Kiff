@@ -1,0 +1,209 @@
+name: Install
+
+# Runs install.sh as its users do, piped from curl, against release-shaped files that a mirror on
+# localhost serves through KIFF_DOWNLOAD_URL. Only finding the latest release asks github.com, so
+# that path is not run here.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - install.sh
+      - cli/**
+      - .github/workflows/install.yml
+  # No branches filter, so a pull request stacked on another one is tested too.
+  pull_request:
+    paths:
+      - install.sh
+      - cli/**
+      - .github/workflows/install.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  MIRROR: http://127.0.0.1:8765
+
+jobs:
+  lint:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check the installer
+        run: shellcheck install.sh
+
+  install:
+    name: Install (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # 0.0.2-test is the same zip under a checksum it does not have. The mirror also serves
+      # install.sh, so each run fetches it with curl as the README's one-liner does.
+      - name: Serve test releases of the CLI
+        run: |
+          ./gradlew -Pversion=0.0.1-test :cli:distZip
+          mirror=$RUNNER_TEMP/mirror
+          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test"
+          cp install.sh "$mirror/"
+          cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.1-test/"
+          cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.2-test/kiff-0.0.2-test.zip"
+          cd "$mirror/v0.0.1-test"
+          if command -v sha256sum > /dev/null; then
+            sha256sum kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
+          else
+            shasum -a 256 kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
+          fi
+          printf '%064d  kiff-0.0.2-test.zip\n' 0 > "$mirror/v0.0.2-test/kiff-0.0.2-test.zip.sha256"
+          nohup python3 -m http.server 8765 --bind 127.0.0.1 --directory "$mirror" \
+            > "$RUNNER_TEMP/mirror.log" 2>&1 &
+          for _ in $(seq 50); do
+            if curl -fsS -o /dev/null "$MIRROR/install.sh"; then
+              {
+                echo "KIFF_DOWNLOAD_URL=$MIRROR"
+                echo "KIFF_HOME=$RUNNER_TEMP/home"
+                echo "KIFF_INSTALL=$RUNNER_TEMP/bin"
+              } >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 0.2
+          done
+          echo "::error::The test mirror did not start."
+          cat "$RUNNER_TEMP/mirror.log"
+          exit 1
+
+      - name: Install a release
+        run: |
+          curl -fsSL "$MIRROR/install.sh" | KIFF_VERSION=0.0.1-test bash
+          version=$("$KIFF_INSTALL/kiff" --version)
+          if [[ $version != 'kiff 0.0.1-test' ]]; then
+            echo "::error::The installed kiff --version printed '$version', not 'kiff 0.0.1-test'."
+            exit 1
+          fi
+          # The layout kiff --use keeps its versions in, with no temporary directory left over.
+          target=$(readlink "$KIFF_INSTALL/kiff")
+          if [[ $target != "$KIFF_HOME/versions/0.0.1-test/bin/kiff" ]]; then
+            echo "::error::$KIFF_INSTALL/kiff links to $target, not into $KIFF_HOME/versions."
+            exit 1
+          fi
+          left=$(ls -A "$KIFF_HOME/versions")
+          if [[ $left != 0.0.1-test ]]; then
+            echo "::error::$KIFF_HOME/versions should hold 0.0.1-test alone, but holds: $left"
+            exit 1
+          fi
+
+      - name: Install the same release again
+        run: |
+          curl -fsSL "$MIRROR/install.sh" | KIFF_VERSION=v0.0.1-test bash
+          # The zip and its checksum, once each, by the first install.
+          requests=$(grep -c 'GET /v0.0.1-test/' "$RUNNER_TEMP/mirror.log" || true)
+          if [[ $requests != 2 ]]; then
+            echo "::error::The release should have been downloaded once, but the mirror had" \
+              "$requests requests for it."
+            cat "$RUNNER_TEMP/mirror.log"
+            exit 1
+          fi
+
+      - name: Refuse a release that does not match its checksum
+        run: |
+          home=$RUNNER_TEMP/tampered-home
+          bin=$RUNNER_TEMP/tampered-bin
+          if curl -fsSL "$MIRROR/install.sh" \
+            | KIFF_VERSION=0.0.2-test KIFF_HOME=$home KIFF_INSTALL=$bin bash; then
+            echo "::error::A zip that does not match its checksum should fail the installer."
+            exit 1
+          fi
+          # The mirror served both files, so the installer failed on the checksum.
+          for file in kiff-0.0.2-test.zip kiff-0.0.2-test.zip.sha256; do
+            if ! grep -q "\"GET /v0.0.2-test/$file HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
+              echo "::error::The installer should have downloaded $file before refusing it."
+              cat "$RUNNER_TEMP/mirror.log"
+              exit 1
+            fi
+          done
+          for dir in "$home" "$bin"; do
+            if [[ -e $dir ]]; then
+              echo "::error::The refused release left $dir behind:"
+              find "$dir"
+              exit 1
+            fi
+          done
+
+      - name: Refuse to replace a kiff it did not install
+        run: |
+          home=$RUNNER_TEMP/occupied-home
+          bin=$RUNNER_TEMP/occupied-bin
+          mkdir -p "$bin"
+          printf '#!/bin/sh\necho mine\n' > "$bin/kiff"
+          chmod +x "$bin/kiff"
+          if curl -fsSL "$MIRROR/install.sh" \
+            | KIFF_VERSION=0.0.1-test KIFF_HOME=$home KIFF_INSTALL=$bin bash; then
+            echo "::error::The installer should refuse to replace $bin/kiff."
+            exit 1
+          fi
+          if [[ -L $bin/kiff || $("$bin/kiff") != mine ]]; then
+            echo "::error::The installer replaced $bin/kiff."
+            exit 1
+          fi
+          if [[ -e $home ]]; then
+            echo "::error::The installer installed into $home before refusing."
+            exit 1
+          fi
+
+      - name: Install without Java
+        run: |
+          bin=$RUNNER_TEMP/no-java-bin
+          curl -fsSL "$MIRROR/install.sh" \
+            | KIFF_VERSION=0.0.1-test KIFF_INSTALL=$bin JAVA_HOME=$RUNNER_TEMP/no-java bash \
+            2> "$RUNNER_TEMP/no-java.log"
+          cat "$RUNNER_TEMP/no-java.log"
+          if ! grep -q 'kiff needs Java 17 or newer' "$RUNNER_TEMP/no-java.log"; then
+            echo "::error::The installer should warn that it found no Java."
+            exit 1
+          fi
+          if [[ $(readlink "$bin/kiff") != "$KIFF_HOME/versions/0.0.1-test/bin/kiff" ]]; then
+            echo "::error::The installer should link kiff without Java too."
+            exit 1
+          fi
+
+      # Another version of the CLI, since kiff --use runs its own version in-process.
+      - name: Run the installed release through kiff --use
+        run: |
+          ./gradlew -Pversion=0.0.0-test :cli:installDist
+          version=$(cli/build/install/kiff/bin/kiff --use 0.0.1-test --version \
+            2> "$RUNNER_TEMP/use.log")
+          cat "$RUNNER_TEMP/use.log"
+          if [[ $version != 'kiff 0.0.1-test' ]]; then
+            echo "::error::kiff --use 0.0.1-test --version printed '$version'."
+            exit 1
+          fi
+          if grep -q Downloading "$RUNNER_TEMP/use.log" \
+            || [[ $(grep -c 'GET /v0.0.1-test/' "$RUNNER_TEMP/mirror.log") != 2 ]]; then
+            echo "::error::kiff --use should have run the installed copy without downloading it."
+            cat "$RUNNER_TEMP/mirror.log"
+            exit 1
+          fi
