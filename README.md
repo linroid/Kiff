@@ -262,8 +262,9 @@ jobs:
 ```
 
 Publishing `v1.3.0` with `app-1.3.0.apk` then attaches a patch from each of the three releases
-before it, such as `app-1.3.0.apk.from-v1.2.0.kiff`, and the manifest. The job summary lists every
-patch with its size, its share of the file and what became of it:
+before it, such as `app-1.3.0.apk.from-v1.2.0.kiff`, and the manifest. The job summary names the
+kiff that made the patches, and lists every patch with its size, its share of the file and what
+became of it:
 
 | File | From | Patch size | Share of file | Result |
 | --- | --- | ---: | ---: | --- |
@@ -352,7 +353,8 @@ and zips with stored entries are where patches pay off.
 | `previous` | `3` | How many earlier releases to patch from |
 | `from` | | Tags to patch from, one per line, in place of `previous` |
 | `prereleases` | `false` | Whether prereleases can be patched from |
-| `patcher` | `auto` | `auto`, `binary`, `zip` or `apk`, as for `kiff release` |
+| `kiff-version` | the action's | Released Kiff to make the patches with: the oldest one embedded in an app you update |
+| `patcher` | | Deprecated and ignored, with a warning: `kiff release` reads each file's structure itself |
 | `max-ratio` | `0.8` | Drop a patch larger than this share of its file |
 | `name` | `{target}.from-{from}.kiff` | Patch name: `{target}` is the file's name, `{from}` and `{to}` the tags |
 | `manifest` | `kiff-patches.json` | Manifest name; give each workflow its own if several patch one release |
@@ -375,16 +377,38 @@ CDN instead. A project that does not use GitHub releases at all can run `kiff re
 
 ### Versions
 
-The action and the CLI are released together, so `linroid/Kiff@v0.1.0` runs kiff 0.1.0, downloaded
-from that release and checked against its checksum. Any other ref, such as a branch or a commit,
-builds the CLI from the action's own source first, which adds a few minutes. Kiff has not been
-released yet, so until v0.1.0 is out, pin a commit of `main`.
+A patch is applied on the user's device, by the Kiff inside the app they already have, and that
+Kiff refuses a patch format newer than it knows. So set `kiff-version` to the oldest Kiff still
+embedded in a build of the app you update:
 
-Pin an exact version or commit, not a branch, and move it together with the Kiff that your app uses.
-Every patch records the version of the patch format it was written in, and the Kiff inside an app
-refuses a format newer than it knows. An action ahead of the app's Kiff can write patches that no
-installed copy of the app can read, so it should never be ahead of the oldest app version you still
-update.
+```yaml
+      - uses: linroid/Kiff@v0.1.0
+        with:
+          assets: app-*.apk
+          kiff-version: 0.1.0
+```
+
+A newer Kiff reads every patch an older one wrote, which `FormatVectorsTest` holds each build to,
+so patches from the oldest one apply on every later app as well. Raise `kiff-version` once no app
+you still update embeds anything older. The action downloads exactly that release's
+`kiff-VERSION.zip`, refuses it unless it matches the `kiff-VERSION.zip.sha256` beside it, and runs
+it; a release or zip it cannot download fails the run. It takes a released version such as `0.1.0`
+and refuses a `-SNAPSHOT`. The job summary and the manifest's `generator` say which kiff made the
+patches. As for `kiff --use`, `KIFF_DOWNLOAD_URL` replaces
+`https://github.com/linroid/Kiff/releases/download` with a mirror that serves the same two files at
+`vVERSION/kiff-VERSION.zip`.
+
+Without `kiff-version`, the action runs the CLI of its own version, which it shares with its tag:
+`linroid/Kiff@v0.1.0` runs kiff 0.1.0, downloaded from that release in the same way. Any other ref,
+such as a branch or a commit, builds the CLI from the action's own source first, which adds a few
+minutes. Pin the action to an exact version or commit, not a branch. With `kiff-version` set, the
+action itself can move ahead of your apps, since the format comes from the kiff it runs.
+
+The `patcher` input is deprecated. `kiff release` reads each file's structure itself, so the action
+no longer passes it on, and setting it only gives a warning.
+
+The v0.1.0 GitHub release is still a draft, and a draft has nothing to download. Until it is
+published, leave `kiff-version` empty and pin a commit of `main`.
 
 ### Updating from the manifest
 

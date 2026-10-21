@@ -232,3 +232,92 @@ jobs:
             echo "::error::The name input should give app-1.3.0.apk.v1.1.0-v1.3.0.kiff, not $name."
             exit 1
           fi
+
+      # No Kiff release can be downloaded while v0.1.0 is a draft, so a mirror on localhost serves
+      # release-shaped files instead, through KIFF_DOWNLOAD_URL as kiff --use reads it. 0.0.2-test
+      # is the same zip under a checksum it does not have.
+      - name: Serve test releases of the CLI
+        run: |
+          ./gradlew -Pversion=0.0.1-test :cli:distZip
+          mirror=$RUNNER_TEMP/mirror
+          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test"
+          cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.1-test/"
+          cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.2-test/kiff-0.0.2-test.zip"
+          cd "$mirror/v0.0.1-test"
+          if command -v sha256sum > /dev/null; then
+            sha256sum kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
+          else
+            shasum -a 256 kiff-0.0.1-test.zip > kiff-0.0.1-test.zip.sha256
+          fi
+          printf '%064d  kiff-0.0.2-test.zip\n' 0 > "$mirror/v0.0.2-test/kiff-0.0.2-test.zip.sha256"
+          nohup python3 -m http.server 8765 --bind 127.0.0.1 --directory "$mirror" \
+            > "$RUNNER_TEMP/mirror.log" 2>&1 &
+          for _ in $(seq 50); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8765/; then
+              exit 0
+            fi
+            sleep 0.2
+          done
+          echo "::error::The test mirror did not start."
+          cat "$RUNNER_TEMP/mirror.log"
+          exit 1
+
+      # patcher is deprecated: setting it gives a warning and changes nothing.
+      - name: Patch v1.2.1 with a chosen release of the CLI
+        id: chosen
+        uses: ./
+        env:
+          KIFF_DOWNLOAD_URL: http://127.0.0.1:8765
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.2.1
+          assets: tool-*.bin
+          kiff-version: 0.0.1-test
+          patcher: binary
+          upload: false
+
+      - name: Check the chosen release made the patches
+        env:
+          PATCHES: ${{ steps.chosen.outputs.patches }}
+          MANIFEST: ${{ steps.chosen.outputs.manifest }}
+        run: |
+          .github/scripts/expect-patches.sh <<'EOF'
+          tool-1.2.1.bin v1.2.0
+          tool-1.2.1.bin v1.0.0
+          EOF
+          generator=$(jq -r .generator "$MANIFEST")
+          if [[ $generator != 'kiff 0.0.1-test' ]]; then
+            echo "::error::kiff-version 0.0.1-test should have made the patches, not $generator."
+            exit 1
+          fi
+
+      - name: Refuse a release of the CLI that does not match its checksum
+        id: tampered
+        continue-on-error: true
+        uses: ./
+        env:
+          KIFF_DOWNLOAD_URL: http://127.0.0.1:8765
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.2.1
+          assets: tool-*.bin
+          kiff-version: 0.0.2-test
+          upload: false
+
+      # The mirror served both files, so the step failed on the checksum rather than a download.
+      - name: Check the tampered release was refused
+        env:
+          OUTCOME: ${{ steps.tampered.outcome }}
+        run: |
+          if [[ $OUTCOME != failure ]]; then
+            echo "::error::A zip that does not match its checksum should fail the action," \
+              "but its outcome is $OUTCOME."
+            exit 1
+          fi
+          for file in kiff-0.0.2-test.zip kiff-0.0.2-test.zip.sha256; do
+            if ! grep -q "\"GET /v0.0.2-test/$file HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
+              echo "::error::The action should have downloaded $file before refusing it."
+              cat "$RUNNER_TEMP/mirror.log"
+              exit 1
+            fi
+          done
