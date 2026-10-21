@@ -907,14 +907,13 @@ class FormatVectorsTest {
       val patch = bytes(vector.patch)
       val info = Kiff.info(patch)
       assertEquals(target.size.toLong(), info.targetSize, "'${vector.name}' declares another size")
-      val patcher = Kiff.patcher(info.patcher)
       assertContentEquals(
         target,
-        patcher.applyPatch(source, patch),
+        Kiff.applyPatch(source, patch),
         "frozen patch '${vector.name}' no longer restores its target"
       )
       val streamed = Collected()
-      patcher.applyPatch(ByteArraySource(source), patch, streamed)
+      Kiff.applyPatch(ByteArraySource(source), patch, streamed)
       assertContentEquals(
         target,
         streamed.bytes(),

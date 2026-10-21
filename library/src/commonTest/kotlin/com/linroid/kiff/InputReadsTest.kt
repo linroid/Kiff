@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff
 
 import com.linroid.kiff.format.Crc32
@@ -34,7 +32,7 @@ class InputReadsTest {
   fun eachInputIsReadOnce() {
     // A checksum pass and then a second read for the search: twice the I/O, and on a source over
     // a network twice the transfer.
-    for (patcher in Kiff.patchers) {
+    for (patcher in listOf(asBytes(), asZip(), asApk())) {
       val from = Counting(source)
       val to = Counting(target)
       patcher.createPatch(from, to)
@@ -49,7 +47,7 @@ class InputReadsTest {
       override val size: Long get() = 3L shl 30
     }
     val small = Counting(target)
-    assertFailsWith<KiffException.UnsupportedInput> { Kiff.binary.createPatch(small, huge) }
+    assertFailsWith<KiffException.UnsupportedInput> { asBytes().createPatch(small, huge) }
     assertEquals(0L, small.read, "the source was read before the target was refused")
     assertEquals(0L, huge.read)
   }
@@ -74,7 +72,7 @@ class InputReadsTest {
     assertFailsWith<KiffException.UnsupportedInput> {
       Crc32.compute(StallsOnce(source, at = 65_536))
     }
-    val patch = Kiff.binary.createPatch(StallsOnce(source, at = 65_536), target.asSource())
-    assertContentEquals(target, Kiff.binary.applyPatch(source, patch))
+    val patch = asBytes().createPatch(StallsOnce(source, at = 65_536), target.asSource())
+    assertContentEquals(target, Kiff.applyPatch(source, patch))
   }
 }

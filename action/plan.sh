@@ -51,10 +51,6 @@ elif [[ ! $kiff_version =~ $released ]]; then
   fail "kiff-version is '$kiff_version', not a released Kiff version such as 0.1.0."
 fi
 
-if [[ -n $(trim "${INPUT_PATCHER:-}") ]]; then
-  warn "patcher is deprecated and ignored: kiff release reads each file's structure itself."
-fi
-
 manifest=$(trim "${INPUT_MANIFEST:-kiff-patches.json}")
 if [[ -z $manifest || $manifest == . || $manifest == .. || $manifest == */* || $manifest == *\\* ]]
 then

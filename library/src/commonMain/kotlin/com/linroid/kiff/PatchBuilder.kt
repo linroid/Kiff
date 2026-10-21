@@ -37,7 +37,7 @@ internal object PatchBuilder {
    * Recording rides along with the ordinary encode instead of replacing it, so a measured patch is
    * byte for byte the patch an unmeasured one would have been.
    *
-   * [structure] overrides detection; only the deprecated patchers pass it, each its own.
+   * [structure] overrides detection, so a test can describe a target as another kind of file.
    */
   fun build(
     source: SeekableSource,

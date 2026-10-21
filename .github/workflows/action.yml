@@ -262,7 +262,6 @@ jobs:
           cat "$RUNNER_TEMP/mirror.log"
           exit 1
 
-      # patcher is deprecated: setting it gives a warning and changes nothing.
       - name: Patch v1.2.1 with a chosen release of the CLI
         id: chosen
         uses: ./
@@ -273,7 +272,6 @@ jobs:
           tag: v1.2.1
           assets: tool-*.bin
           kiff-version: 0.0.1-test
-          patcher: binary
           upload: false
 
       - name: Check the chosen release made the patches

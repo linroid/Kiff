@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff
 
 import com.linroid.kiff.zip.TestZipBuilder
@@ -13,9 +11,9 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class ZipPatcherTest {
+class ZipPatchTest {
 
-  private val patcher = ZipPatcher()
+  private val patcher = asZip()
 
   private fun archive(block: TestZipBuilder.() -> Unit): ByteArray =
     TestZipBuilder().apply(block).build()
@@ -206,7 +204,7 @@ class ZipPatcherTest {
     assertNull(ZipReader.parseOrNull(source))
 
     val zip = assertRestores(patcher, source, target)
-    val binary = assertRestores(Kiff.binary, source, target)
+    val binary = assertRestores(asBytes(), source, target)
     assertTrue(zip <= binary + 64, "should cost what a byte scan does: $zip against $binary")
   }
 
@@ -224,8 +222,8 @@ class ZipPatcherTest {
     for (i in 0 until 4) target[entry + 42 + i] = (0x7FFFFFF0 ushr (8 * i)).toByte()
 
     assertNull(ZipReader.parseOrNull(target))
-    assertRestores(Kiff.zip, source, target)
-    assertRestores(Kiff.apk, target, source)
+    assertRestores(asZip(), source, target)
+    assertRestores(asApk(), target, source)
   }
 
   @Test
@@ -245,7 +243,7 @@ class ZipPatcherTest {
       entry("added.txt", "new")
     }
 
-    val report = patcher.analyze(source, target)
+    val report = KiffReports.zip(source, target)
     assertEquals(1, report.count(ZipEntryStatus.UNCHANGED))
     assertEquals(1, report.count(ZipEntryStatus.METADATA_CHANGED))
     assertEquals(1, report.count(ZipEntryStatus.MODIFIED))
@@ -261,17 +259,17 @@ class ZipPatcherTest {
   fun analyzeRejectsNonArchives() {
     val zip = archive { entry("a.txt", "hello") }
     assertFailsWith<KiffException.UnsupportedInput> {
-      patcher.analyze(structuredBytes(100, seed = 25), zip)
+      KiffReports.zip(structuredBytes(100, seed = 25), zip)
     }
     assertFailsWith<KiffException.UnsupportedInput> {
-      patcher.analyze(zip, structuredBytes(100, seed = 26))
+      KiffReports.zip(zip, structuredBytes(100, seed = 26))
     }
   }
 
   @Test
-  fun anyPatcherAppliesAnyPatch() {
-    // Patchers differ in how they describe a target, not in how a patch is read, so the patcher
-    // byte in a header says who built the patch and nothing about how to apply it.
+  fun aPatchAppliesHoweverItsTargetWasDescribed() {
+    // Structures differ in how they describe a target, not in how a patch is read, so the patcher
+    // byte in a header says what the writer took the target to be and nothing about applying it.
     val source = archive {
       entry("a.bin", structuredBytes(4_000, seed = 31))
       entry("b.txt", "one\ntwo\nthree\n")
@@ -280,15 +278,9 @@ class ZipPatcherTest {
       entry("a.bin", structuredBytes(4_000, seed = 32))
       entry("b.txt", "one\n2\nthree\n")
     }
-    for (builder in Kiff.patchers) {
+    for (builder in listOf(asBytes(), asZip(), asApk())) {
       val patch = builder.createPatch(source, target)
-      for (applier in Kiff.patchers) {
-        assertContentEquals(
-          target,
-          applier.applyPatch(source, patch),
-          "a ${builder.name} patch applied by ${applier.name}"
-        )
-      }
+      assertContentEquals(target, Kiff.applyPatch(source, patch), "a ${builder.name} patch")
     }
   }
 
@@ -298,6 +290,6 @@ class ZipPatcherTest {
     val target = archive { entry("a.bin", structuredBytes(2_100, seed = 28)) }
     val patch = patcher.createPatch(source, target)
     val other = archive { entry("a.bin", structuredBytes(2_000, seed = 29)) }
-    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(other, patch) }
+    assertFailsWith<KiffException.SourceMismatch> { Kiff.applyPatch(other, patch) }
   }
 }

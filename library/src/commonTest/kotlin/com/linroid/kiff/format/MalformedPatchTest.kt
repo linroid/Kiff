@@ -1,10 +1,10 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff.format
 
+import com.linroid.kiff.ForcedStructure
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
-import com.linroid.kiff.Patcher
+import com.linroid.kiff.asBytes
+import com.linroid.kiff.asZip
 import com.linroid.kiff.container.TestDexBuilder
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.io.RestoreTarget
@@ -37,15 +37,15 @@ class MalformedPatchTest {
   }
 
   /** One case per encoding, so a corruption can land anywhere the format goes. */
-  private fun cases(): List<Triple<String, Patcher, Pair<ByteArray, ByteArray>>> = listOf(
+  private fun cases(): List<Triple<String, ForcedStructure, Pair<ByteArray, ByteArray>>> = listOf(
     Triple(
-      "binary", Kiff.binary,
+      "binary", asBytes(),
       structuredBytes(400, 1) to structuredBytes(400, 1).also {
         for (at in it.indices step 16) it[at] = (it[at] + 3).toByte()
       }
     ),
     Triple(
-      "zip with text", Kiff.zip,
+      "zip with text", asZip(),
       TestZipBuilder().entry("a.txt", (1..30).joinToString("\n") { "line $it" } + "\n").build() to
         TestZipBuilder().entry(
           "a.txt",
@@ -53,13 +53,13 @@ class MalformedPatchTest {
         ).build()
     ),
     Triple(
-      "zip with an added entry", Kiff.zip,
+      "zip with an added entry", asZip(),
       TestZipBuilder().entry("a.bin", structuredBytes(150, 2)).build() to
         TestZipBuilder().entry("a.bin", structuredBytes(150, 2))
           .entry("b.bin", structuredBytes(120, 3)).build()
     ),
     Triple(
-      "dex columns", Kiff.zip,
+      "dex columns", asZip(),
       TestZipBuilder().entry(
         "classes.dex",
         TestDexBuilder().section(0x0001, table(80, 300))
@@ -105,13 +105,13 @@ class MalformedPatchTest {
 
   private fun check(
     label: String,
-    patcher: Patcher,
+    patcher: ForcedStructure,
     source: ByteArray,
     target: ByteArray,
     patch: ByteArray
   ) {
     var restored = ByteArray(0)
-    val collected = accepted(label) { restored = patcher.applyPatch(source, patch) }
+    val collected = accepted(label) { restored = Kiff.applyPatch(source, patch) }
     if (collected && !restored.contentEquals(target)) {
       fail("$label restored ${restored.size} bytes that are not the target, without complaining")
     }
@@ -119,7 +119,7 @@ class MalformedPatchTest {
     // late to take back what was written, so it cannot be skipped when the other one refuses.
     val out = Collecting(target)
     val streamed = accepted("$label streaming") {
-      patcher.applyPatch(ByteArraySource(source), patch, out)
+      Kiff.applyPatch(ByteArraySource(source), patch, out)
     }
     if (streamed && !out.holdsExactly()) {
       fail("$label streamed ${out.count} bytes that are not the target, without complaining")
@@ -161,10 +161,10 @@ class MalformedPatchTest {
       for (extra in listOf(1, 7, 64)) {
         val padded = patch + ByteArray(extra) { 0x5A }
         assertFailsWith<KiffException.InvalidPatch>("$label plus $extra bytes") {
-          patcher.applyPatch(source, padded)
+          Kiff.applyPatch(source, padded)
         }
         assertFailsWith<KiffException.InvalidPatch>("$label plus $extra bytes, streaming") {
-          patcher.applyPatch(ByteArraySource(source), padded, Collecting(target))
+          Kiff.applyPatch(ByteArraySource(source), padded, Collecting(target))
         }
       }
     }
@@ -195,7 +195,7 @@ class MalformedPatchTest {
     // describing more than it could use - and, left unchecked, a way to exhaust memory.
     val source = structuredBytes(400, 11)
     val target = structuredBytes(400, 12)
-    val patch = Kiff.binary.createPatch(source, target)
+    val patch = asBytes().createPatch(source, target)
 
     val reader = ByteReader(patch)
     val header = PatchFormat.readHeader(reader)
@@ -211,7 +211,7 @@ class MalformedPatchTest {
     out.writeBytes(patch, payload.offset, patch.size)
 
     val failure = assertFailsWith<KiffException.InvalidPatch> {
-      Kiff.binary.applyPatch(source, out.toByteArray())
+      Kiff.applyPatch(source, out.toByteArray())
     }
     assertTrue("content" in failure.message.orEmpty(), failure.message.orEmpty())
     assertTrue(header.targetSize == 400L)
@@ -224,7 +224,7 @@ class MalformedPatchTest {
       for (fill in listOf(0, 0xFF, 0x4B)) {
         val rubbish = ByteArray(size) { fill.toByte() }
         try {
-          Kiff.binary.applyPatch(source, rubbish)
+          Kiff.applyPatch(source, rubbish)
           fail("accepted $size bytes of ${fill.toString(16)} as a patch")
         } catch (e: KiffException) {
           // expected

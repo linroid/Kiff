@@ -18,6 +18,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -324,33 +325,25 @@ class ReleaseCommandTest {
   }
 
   @Test
-  fun aPatcherIsIgnoredWithAWarning() {
+  fun aPatcherIsRefused() {
     val target = zip("app-1.2.zip", app(2))
     val source = zip("app-1.1.zip", app(1))
     for (option in listOf("--patcher", "-p")) {
-      out.deleteRecursively()
-      val run = capturingErr {
+      val release = capturingErr {
         kiff("release", "--to", target, "--from", source, "--out", out.path, option, "binary")
       }
+      assertNotEquals(0, release.status, option)
+      assertTrue(option in release.err, release.err)
 
-      assertEquals(0, run.status, option)
-      assertTrue("Warning: --patcher binary is ignored" in run.err, run.err)
-      assertEquals("zip", manifest().files().single().patches().single().string("patcher"))
+      val created = File(dir, "created.kiff")
+      val create = capturingErr { kiff("create", option, "apk", source, target, created.path) }
+      assertNotEquals(0, create.status, option)
+      assertFalse(created.exists(), option)
     }
-
-    val created = File(dir, "created.kiff")
-    val run = capturingErr { kiff("create", "-p", "apk", source, target, created.path) }
-    assertEquals(0, run.status)
-    assertTrue("Warning: --patcher apk is ignored" in run.err, run.err)
-    assertEquals(PatcherId.ZIP, Kiff.info(created.path).patcher)
-
-    val quiet = capturingErr { kiff("create", source, target, created.path) }
-    assertEquals(0, quiet.status)
-    assertEquals("", quiet.err)
   }
 
   @Test
-  fun thePatcherIsNotOfferedInHelp() {
+  fun helpSaysHowAFileIsRead() {
     for (command in listOf("create", "release")) {
       val help = ByteArrayOutputStream()
       val original = System.out
@@ -362,7 +355,6 @@ class ReleaseCommandTest {
       }
       val text = help.toString(Charsets.UTF_8)
       assertTrue("AndroidManifest.xml" in text, text)
-      assertFalse("--patcher" in text, text)
     }
   }
 

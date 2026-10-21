@@ -1,5 +1,3 @@
-@file:Suppress("DEPRECATION")
-
 package com.linroid.kiff
 
 import com.linroid.kiff.format.ByteReader
@@ -11,9 +9,9 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class BinaryPatcherTest {
+class BinaryPatchTest {
 
-  private val patcher = BinaryPatcher()
+  private val patcher = asBytes()
 
   @Test
   fun restoresEmptyInputs() {
@@ -194,10 +192,10 @@ class BinaryPatcherTest {
     val patch = patcher.createPatch(source, target)
 
     val truncated = source.copyOfRange(0, 4000)
-    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(truncated, patch) }
+    assertFailsWith<KiffException.SourceMismatch> { Kiff.applyPatch(truncated, patch) }
 
     val corrupted = source.copyOf().also { it[0] = (it[0] + 1).toByte() }
-    assertFailsWith<KiffException.SourceMismatch> { patcher.applyPatch(corrupted, patch) }
+    assertFailsWith<KiffException.SourceMismatch> { Kiff.applyPatch(corrupted, patch) }
   }
 
   @Test
@@ -219,7 +217,7 @@ class BinaryPatcherTest {
     )
     out.writeBytes(patch.copyOfRange(reader.offset, patch.size))
     assertFailsWith<KiffException.InvalidPatch> {
-      patcher.applyPatch(ByteArray(0), out.toByteArray())
+      Kiff.applyPatch(ByteArray(0), out.toByteArray())
     }
   }
 
@@ -249,7 +247,7 @@ class BinaryPatcherTest {
     out.writeBytes(patch.copyOfRange(reader.offset, patch.size))
 
     val failure = assertFailsWith<KiffException.VerificationFailed> {
-      patcher.applyPatch(source, out.toByteArray())
+      Kiff.applyPatch(source, out.toByteArray())
     }
     assertTrue(expected.toHex() in failure.message.orEmpty(), failure.message.orEmpty())
   }
@@ -261,13 +259,13 @@ class BinaryPatcherTest {
     val patch = patcher.createPatch(source, target)
 
     assertFailsWith<KiffException.InvalidPatch> {
-      patcher.applyPatch(source, "not a patch at all".encodeToByteArray())
+      Kiff.applyPatch(source, "not a patch at all".encodeToByteArray())
     }
     assertFailsWith<KiffException.InvalidPatch> {
-      patcher.applyPatch(source, patch.copyOfRange(0, patch.size / 2))
+      Kiff.applyPatch(source, patch.copyOfRange(0, patch.size / 2))
     }
     assertFailsWith<KiffException.InvalidPatch> {
-      patcher.applyPatch(source, patch.copyOf().also { it[5] = 9 })
+      Kiff.applyPatch(source, patch.copyOf().also { it[5] = 9 })
     }
   }
 

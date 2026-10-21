@@ -39,12 +39,6 @@ inputs:
       build of the app you update, since that Kiff applies them. Defaults to the action's own.
     required: false
     default: ''
-  patcher:
-    description: >-
-      Deprecated and ignored. kiff release reads each file's structure itself, so the input only
-      gives a warning.
-    required: false
-    default: ''
   max-ratio:
     description: Drop a patch larger than this share of the file it rebuilds.
     required: false
@@ -107,7 +101,6 @@ runs:
         INPUT_FROM: ${{ inputs.from }}
         INPUT_PRERELEASES: ${{ inputs.prereleases }}
         INPUT_KIFF_VERSION: ${{ inputs.kiff-version }}
-        INPUT_PATCHER: ${{ inputs.patcher }}
         INPUT_MAX_RATIO: ${{ inputs.max-ratio }}
         INPUT_MANIFEST: ${{ inputs.manifest }}
         INPUT_UPLOAD: ${{ inputs.upload }}
