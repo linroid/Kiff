@@ -7,27 +7,27 @@ import com.linroid.kiff.io.SeekableSource
  * A patcher: it turns a `(source, target)` pair into a self-describing patch and rebuilds the exact
  * target bytes from the source plus that patch.
  *
- * Patchers differ in how they carve the two files into regions worth comparing - the whole file, or
- * the entries of an archive - not in how those bytes are searched. The search itself is a
- * [com.linroid.kiff.delta.DeltaAlgorithm], and one algorithm serves every patcher.
- *
- * Inputs are [SeekableSource] rather than streams because a delta is not a sequential transform: a
- * copy instruction names an arbitrary source offset, and applying one reads it back. The
- * [ByteArray] overloads are conveniences over [com.linroid.kiff.io.ByteArraySource].
+ * Patchers differ only in what they take the target to be as a whole - plain bytes, a zip or an
+ * APK - which [Kiff.createPatch] now works out from the file itself. Every patcher applies every
+ * patch, the same way [Kiff.applyPatch] does.
  */
+@Deprecated(
+  "Kiff.createPatch detects what a file is, and Kiff.applyPatch applies any patch. " +
+    "Patchers are removed in 0.3.0."
+)
 interface Patcher {
   val id: PatcherId
   val name: String
 
   /** Returns a patch that rebuilds [target] from [source]. */
+  @Deprecated(
+    "Kiff.createPatch detects what the target is, so on an archive it may describe it differently.",
+    ReplaceWith("Kiff.createPatch(source, target)", "com.linroid.kiff.Kiff")
+  )
   fun createPatch(source: SeekableSource, target: SeekableSource): ByteArray
 
   /**
    * Rebuilds the target bytes from [source] and [patch].
-   *
-   * The result is held whole, at the size the patch's own header declares - and a patch of a few
-   * dozen bytes can validly declare gigabytes. For a patch you did not make, check
-   * `Kiff.info(patch).targetSize` against what you expect first, or restore into a [RestoreTarget].
    *
    * Any patcher applies any patch, whichever one built it: they differ only in how they describe a
    * target, and every patch is read the same way.
@@ -36,24 +36,33 @@ interface Patcher {
    * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail the recorded checksum.
    */
+  @Deprecated(
+    "Kiff.applyPatch applies any patch.",
+    ReplaceWith("Kiff.applyPatch(source, patch)", "com.linroid.kiff.Kiff")
+  )
   fun applyPatch(source: SeekableSource, patch: ByteArray): ByteArray
 
   /**
    * Rebuilds the target into [target] rather than returning it.
    *
-   * A patch describes its target in order, so a restore never needs the result in memory - only
-   * somewhere to put it. Prefer this wherever the result is large or the machine is small, which
-   * is most places a patch is actually applied.
-   *
    * [target] has received every byte before the final checksum is compared, so treat what it holds
    * as unverified until this returns, and discard it if this throws. See [RestoreTarget].
-   *
-   * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
-   * @throws KiffException.VerificationFailed if the rebuilt bytes fail a recorded checksum.
    */
+  @Deprecated(
+    "Kiff.applyPatch applies any patch.",
+    ReplaceWith("Kiff.applyPatch(source, patch, target)", "com.linroid.kiff.Kiff")
+  )
   fun applyPatch(source: SeekableSource, patch: ByteArray, target: RestoreTarget)
 
+  @Deprecated(
+    "Kiff.createPatch detects what the target is, so on an archive it may describe it differently.",
+    ReplaceWith("Kiff.createPatch(source, target)", "com.linroid.kiff.Kiff")
+  )
   fun createPatch(source: ByteArray, target: ByteArray): ByteArray
 
+  @Deprecated(
+    "Kiff.applyPatch applies any patch.",
+    ReplaceWith("Kiff.applyPatch(source, patch)", "com.linroid.kiff.Kiff")
+  )
   fun applyPatch(source: ByteArray, patch: ByteArray): ByteArray
 }

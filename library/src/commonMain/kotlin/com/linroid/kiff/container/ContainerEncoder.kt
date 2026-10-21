@@ -55,9 +55,10 @@ internal class ContainerEncoder(
   /**
    * Describes the whole target.
    *
-   * [rootFormat] is applied without asking [ContainerFormat.detect], because the patcher already
-   * decided: a zip patcher on a zip with a preamble should decompose it even though the file does
-   * not begin with a local header. Detection is for regions found along the way.
+   * [rootFormat] is applied without asking [ContainerFormat.detect], because the file as a whole
+   * was already looked at more closely than a region is: a zip with a preamble should be taken
+   * apart even though it does not begin with a local header. Detection is for regions found along
+   * the way.
    */
   fun encode(
     rootFormat: ContainerFormat?,

@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff.container
 
 import com.linroid.kiff.Kiff

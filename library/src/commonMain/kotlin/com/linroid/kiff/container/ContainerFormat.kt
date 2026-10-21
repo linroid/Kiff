@@ -1,6 +1,7 @@
 package com.linroid.kiff.container
 
 import com.linroid.kiff.region.RegionKind
+import com.linroid.kiff.zip.ZipReader
 
 /**
  * How a container is taken apart.
@@ -129,7 +130,7 @@ data class Child(
 }
 
 /**
- * The formats a patcher will try, in order; the first that detects a range wins.
+ * The formats Kiff will try, in order; the first that detects a range wins.
  *
  * Order is the only precedence there is, so put the specific before the general - an APK is a zip,
  * and whichever is asked first is the one that gets to decompose it.
@@ -140,6 +141,20 @@ class ContainerRegistry(private val formats: List<ContainerFormat>) {
 
   fun formatFor(bytes: ByteArray, from: Int, to: Int): ContainerFormat? =
     formats.firstOrNull { it.detect(bytes, from, to) }
+
+  /**
+   * The first format that claims [bytes] as a whole file.
+   *
+   * A file is asked once, so it gets a closer look than a region does: a zip is a zip when its
+   * directory reads, whether or not a preamble comes before its first entry.
+   */
+  internal fun formatOfFile(bytes: ByteArray): ContainerFormat? = formats.firstOrNull { format ->
+    if (format is ZipFormat) {
+      ZipReader.parseOrNull(bytes) != null
+    } else {
+      format.detect(bytes, 0, bytes.size)
+    }
+  }
 
   operator fun plus(format: ContainerFormat) = ContainerRegistry(formats + format)
 

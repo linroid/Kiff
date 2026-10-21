@@ -9,7 +9,7 @@ interface DeltaScanner : AutoCloseable {
    * Describes `target[from, to)` by driving [sink].
    *
    * @param initialAlignment source offset that `target[from]` is expected to correspond to, minus
-   *   [from]; archive patchers pass the offset of the matching entry so a changed entry can start
+   *   [from]; an archive entry passes the offset of the matching entry so a changed entry can start
    *   out aligned. Pass 0 when nothing is known.
    */
   fun scan(

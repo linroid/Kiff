@@ -55,7 +55,7 @@ class FileSourceJvmTest {
     val patchFile = File(dir, "delta.patch")
     val outputFile = File(dir, "restored.bin")
 
-    val created = Kiff.createPatch(Kiff.binary, sourceFile.path, targetFile.path, patchFile.path)
+    val created = Kiff.createPatch(sourceFile.path, targetFile.path, patchFile.path)
     assertEquals(source.size.toLong(), created.sourceSize)
     assertEquals(target.size.toLong(), created.targetSize)
     assertTrue(created.patchSize < target.size / 4, "patch was ${created.patchSize} bytes")
@@ -72,9 +72,9 @@ class FileSourceJvmTest {
     val targetFile = write("b.bin", target)
 
     val fromFiles = fileSource(sourceFile.path).use { s ->
-      fileSource(targetFile.path).use { t -> Kiff.binary.createPatch(s, t) }
+      fileSource(targetFile.path).use { t -> Kiff.createPatch(s, t) }
     }
-    assertContentEquals(Kiff.binary.createPatch(source, target), fromFiles)
+    assertContentEquals(Kiff.createPatch(source, target), fromFiles)
   }
 
   /**
@@ -115,7 +115,7 @@ class FileSourceJvmTest {
     val patchFile = File(dir, "p.kiff")
     val outputFile = File(dir, "restored.bin")
 
-    val created = Kiff.createPatch(Kiff.binary, sourceFile.path, fifo.path, patchFile.path)
+    val created = Kiff.createPatch(sourceFile.path, fifo.path, patchFile.path)
     assertEquals(target.size.toLong(), created.targetSize)
     Kiff.applyPatch(sourceFile.path, patchFile.path, outputFile.path)
     assertContentEquals(target, outputFile.readBytes())

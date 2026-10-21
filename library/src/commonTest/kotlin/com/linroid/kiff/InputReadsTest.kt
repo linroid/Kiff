@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.linroid.kiff
 
 import com.linroid.kiff.format.Crc32

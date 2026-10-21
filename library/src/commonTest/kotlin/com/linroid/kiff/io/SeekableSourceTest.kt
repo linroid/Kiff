@@ -55,7 +55,7 @@ class SeekableSourceTest {
       }
     }
     val target = data.copyOf().also { it[10] = 99 }
-    val patch = com.linroid.kiff.Kiff.binary.createPatch(dribbling, target.asSource())
-    assertContentEquals(target, com.linroid.kiff.Kiff.binary.applyPatch(dribbling, patch))
+    val patch = com.linroid.kiff.Kiff.createPatch(dribbling, target.asSource())
+    assertContentEquals(target, com.linroid.kiff.Kiff.applyPatch(dribbling, patch))
   }
 }

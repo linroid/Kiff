@@ -3,10 +3,10 @@ package com.linroid.kiff.region
 /**
  * How one leaf region's bytes get described.
  *
- * This is the choice the region tree exists to make possible. A patcher decides what the regions
- * *are*; a plan decides, per region, which encoding suits the bytes inside it - so the manifest in
- * an archive can be diffed as lines while the native library beside it is diffed as bytes, in the
- * same patch.
+ * This is the choice the region tree exists to make possible. A container format decides what the
+ * regions *are*; a plan decides, per region, which encoding suits the bytes inside it - so the
+ * manifest in an archive can be diffed as lines while the native library beside it is diffed as
+ * bytes, in the same patch.
  */
 enum class RegionAlgorithm {
   /** The delta instruction set: a byte-level search over the source. Suits anything. */
@@ -49,7 +49,7 @@ fun interface RegionPlanner {
 }
 
 /**
- * Byte-level for everything, which is what every patcher did before regions could choose.
+ * Byte-level for everything, which is how every region was described before regions could choose.
  */
 val BinaryRegionPlanner: RegionPlanner = RegionPlanner { RegionAlgorithm.BINARY }
 

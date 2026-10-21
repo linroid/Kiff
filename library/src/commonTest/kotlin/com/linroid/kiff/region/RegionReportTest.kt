@@ -1,6 +1,7 @@
 package com.linroid.kiff.region
 
 import com.linroid.kiff.Kiff
+import com.linroid.kiff.KiffReports
 import com.linroid.kiff.format.RegionEncoding
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
@@ -26,7 +27,7 @@ class RegionReportTest {
 
   @Test
   fun everyTargetByteBelongsToExactlyOneRegion() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     assertEquals(target.size.toLong(), report.regions.sumOf { it.targetBytes })
     assertEquals(target.size.toLong(), report.targetSize)
   }
@@ -35,13 +36,13 @@ class RegionReportTest {
   fun measuringDoesNotChangeThePatch() {
     // The whole point of recording around the encode rather than inside it: an explained patch is
     // the patch createPatch would have produced, so the numbers describe the real thing.
-    val measured = Kiff.zip.explain(source, target).patchSize
-    assertEquals(Kiff.zip.createPatch(source, target).size.toLong(), measured)
+    val measured = KiffReports.explain(source, target).patchSize
+    assertEquals(Kiff.createPatch(source, target).size.toLong(), measured)
   }
 
   @Test
   fun anUnchangedEntryCarriesNoContentButStillCostsAnInstruction() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     val unchanged = report.regions.single { it.name == "stable.bin" }
     assertEquals(0L, unchanged.literalBytes, "an identical entry carries no content")
     assertTrue(unchanged.carriedNothing)
@@ -55,7 +56,7 @@ class RegionReportTest {
 
   @Test
   fun theChangedEntryCarriesTheCost() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     val mostExpensive = report.costly.first()
     assertEquals("changing.bin", mostExpensive.name)
     assertEquals(RegionKind.CONTENT, mostExpensive.kind)
@@ -64,14 +65,14 @@ class RegionReportTest {
 
   @Test
   fun instructionsAndLiteralsAddUpToTheAttributedTotal() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     assertEquals(report.attributedBytes, report.instructionBytes + report.literalBytes)
     assertTrue(report.instructionBytes > 0, "describing anything costs instructions")
   }
 
   @Test
   fun theDirectoryIsReportedAsIndex() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     val directory = report.regions.single { it.kind == RegionKind.INDEX }
     assertTrue(directory.targetBytes > 0, "the central directory covers bytes")
   }
@@ -86,7 +87,7 @@ class RegionReportTest {
       .entry("a.bin", stable)
       .beforeDirectory(structuredBytes(4_000, seed = 905))
       .build()
-    val report = Kiff.zip.explain(withGap, changed)
+    val report = KiffReports.explain(withGap, changed)
     val gap = report.regions.single { it.kind == RegionKind.GAP }
     assertEquals(4_000L, gap.targetBytes)
     assertTrue(gap.literalBytes > 0, "a changed gap has to be carried")
@@ -94,7 +95,7 @@ class RegionReportTest {
 
   @Test
   fun theBinaryPatcherReportsTheWholeFileAsOneRegion() {
-    val report = Kiff.binary.explain(stable, other)
+    val report = KiffReports.explain(stable, other)
     val whole = assertNotNull(report.regions.singleOrNull())
     assertEquals(RegionKind.WHOLE, whole.kind)
     assertEquals(other.size.toLong(), whole.targetBytes)
@@ -115,7 +116,7 @@ class RegionReportTest {
     val outerA = com.linroid.kiff.zip.TestZipBuilder().entry("bundle.zip", innerA).build()
     val outerB = com.linroid.kiff.zip.TestZipBuilder().entry("bundle.zip", innerB).build()
 
-    val report = Kiff.zip.explain(outerA, outerB)
+    val report = KiffReports.explain(outerA, outerB)
     assertTrue(
       report.allRegions.size > report.regions.size,
       "nested regions should be reported as well as the top level"
@@ -146,7 +147,7 @@ class RegionReportTest {
       .entry("a.bin", structuredBytes(30_000, seed = 90))
       .entry("new.bin", structuredBytes(5_000, seed = 92))
       .build()
-    val stored = Kiff.zip.explain(base, added).allRegions.first { it.name == "new.bin" }
+    val stored = KiffReports.explain(base, added).allRegions.first { it.name == "new.bin" }
     assertEquals(RegionEncoding.RAW, stored.encoding, "no counterpart, so nothing to make of it")
     assertTrue(stored.wasStored)
 
@@ -155,14 +156,14 @@ class RegionReportTest {
       for (at in bytes.indices step 24) bytes[at] = (bytes[at] + 3).toByte()
     }
     val shifted = com.linroid.kiff.zip.TestZipBuilder().entry("a.bin", nudged).build()
-    val delta = Kiff.zip.explain(base, shifted).allRegions.first { it.name == "a.bin (data)" }
+    val delta = KiffReports.explain(base, shifted).allRegions.first { it.name == "a.bin (data)" }
     assertEquals(RegionEncoding.DELTA, delta.encoding)
     assertFalse(delta.wasStored)
   }
 
   @Test
   fun attributionCoversTheDeltaItReports() {
-    val report = Kiff.zip.explain(source, target)
+    val report = KiffReports.explain(source, target)
     // Literals are packed after the regions are measured, so the attributed total is the delta
     // before compression rather than an exact accounting of the patch on disk.
     assertEquals(report.regions.sumOf { it.patchBytes }, report.attributedBytes)

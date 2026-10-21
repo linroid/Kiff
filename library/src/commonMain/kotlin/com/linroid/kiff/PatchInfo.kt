@@ -1,6 +1,13 @@
 package com.linroid.kiff
 
+/** What a patch's header says, and how large the patch is. */
 data class PatchInfo(
+  /**
+   * What the writer took the target to be: plain bytes, a zip or an APK.
+   *
+   * Informational only. Every patch is applied the same way whatever this says, and a format
+   * added through [KiffOptions.containers] records [PatcherId.BINARY].
+   */
   val patcher: PatcherId,
   val formatVersion: Int,
   val sourceSize: Long,
