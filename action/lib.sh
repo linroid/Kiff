@@ -54,7 +54,7 @@ sha256_of() {
 }
 
 # The ref the action was loaded from: $1, which action.yml passes from github.action_ref, when the
-# action's path $2 agrees that it is linroid/Kiff at that ref; nothing otherwise. The runner keeps
+# action's path $2 agrees that it is linroid/kiff at that ref; nothing otherwise. The runner keeps
 # a downloaded action in _actions/OWNER/NAME/REF. github.action_ref is empty for uses: ./, and is
 # another action's when a composite action runs this one (actions/runner#2473), which the path
 # then contradicts.

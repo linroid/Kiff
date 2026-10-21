@@ -79,7 +79,7 @@ mavenPublishing {
       "Kotlin Multiplatform file diffing: turn two versions of a file into a patch, and " +
         "rebuild the second byte for byte from the first plus that patch."
     )
-    url.set("https://github.com/linroid/Kiff")
+    url.set("https://github.com/linroid/kiff")
     licenses {
       license {
         name.set("The Apache License, Version 2.0")
@@ -94,9 +94,9 @@ mavenPublishing {
       }
     }
     scm {
-      url.set("https://github.com/linroid/Kiff")
-      connection.set("scm:git:https://github.com/linroid/Kiff.git")
-      developerConnection.set("scm:git:ssh://git@github.com/linroid/Kiff.git")
+      url.set("https://github.com/linroid/kiff")
+      connection.set("scm:git:https://github.com/linroid/kiff.git")
+      developerConnection.set("scm:git:ssh://git@github.com/linroid/kiff.git")
     }
   }
 }
