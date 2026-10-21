@@ -3,6 +3,8 @@ package com.linroid.kiff.format
 import com.linroid.kiff.Kiff
 import com.linroid.kiff.KiffException
 import com.linroid.kiff.PatcherId
+import com.linroid.kiff.io.ByteArrayRestoreTarget
+import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.structuredBytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,6 +30,26 @@ class PatchFormatTest {
       Kiff.binary.applyPatch(source, future)
     }
     assertTrue("2" in failure.message.orEmpty(), failure.message.orEmpty())
+  }
+
+  @Test
+  fun everyReservedFlagBitIsRefused() {
+    // A flag changes how the payload reads, so one this build does not know has to stop it on every
+    // path - including the header alone, which is all an updater looks at before downloading.
+    val patch = Kiff.binary.createPatch(source, target)
+    for (bit in 1..7) {
+      val flagged = patch.copyOf().also {
+        it[FLAGS_BYTE] = (PatchFormat.FLAG_REGION_CHECKSUMS or (1 shl bit)).toByte()
+      }
+      assertFailsWith<KiffException.InvalidPatch>("bit $bit") { Kiff.info(flagged) }
+      assertFailsWith<KiffException.InvalidPatch>("bit $bit") {
+        Kiff.binary.applyPatch(source, flagged)
+      }
+      assertFailsWith<KiffException.InvalidPatch>("bit $bit, streaming") {
+        val out = ByteArrayRestoreTarget(target.size)
+        Kiff.binary.applyPatch(ByteArraySource(source), flagged, out)
+      }
+    }
   }
 
   @Test
@@ -61,5 +83,8 @@ class PatchFormatTest {
   private companion object {
     /** Right after the 4-byte "KIFF" magic. */
     const val VERSION_BYTE = 4
+
+    /** After the version and the patcher. */
+    const val FLAGS_BYTE = 6
   }
 }

@@ -45,9 +45,14 @@ import com.linroid.kiff.text.TextRegion
  */
 internal object PatchPayload {
 
-  /** Content encodings, as written in the payload header. */
+  /**
+   * Content encodings, as written in the payload header.
+   *
+   * Code 1 was LZ77 matching without the entropy coding. No released Kiff wrote it, and it is not
+   * part of version 1: its stored size bounds nothing it unpacks to, so it was the one way for a
+   * few bytes of patch to name an allocation as large as the target.
+   */
   const val CONTENT_STORED = 0
-  const val CONTENT_LZSS = 1
   const val CONTENT_LZ_HUFFMAN = 2
 
   fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): ByteArray {
@@ -108,9 +113,7 @@ internal object PatchPayload {
     val possible = when (literalFlag) {
       CONTENT_STORED -> storedLength.toLong()
       CONTENT_LZ_HUFFMAN -> LzHuffman.maxUnpackedSize(storedLength)
-      // An LZSS match can be any length, so nothing follows from its stored size and the target is
-      // its only bound. An encoding this does not know is refused below.
-      else -> literalLength.toLong()
+      else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
     }
     if (literalLength > possible || (literalFlag == CONTENT_STORED && literalLength < possible)) {
       throw KiffException.InvalidPatch(
@@ -121,13 +124,10 @@ internal object PatchPayload {
     val tree = ByteReader(patch, container.offset)
     container.skip(treeLength)
     val storedLiterals = container.readBytes(storedLength)
-    val literals = when (literalFlag) {
-      CONTENT_STORED -> storedLiterals
-      // Kept readable because patches written with it exist, including the frozen vectors. The
-      // encoder has no reason to choose it: it is the same matching without the entropy coding.
-      CONTENT_LZSS -> Lzss.decompress(storedLiterals, literalLength)
-      CONTENT_LZ_HUFFMAN -> LzHuffman.decompress(storedLiterals, literalLength)
-      else -> throw KiffException.InvalidPatch("Unknown content encoding $literalFlag")
+    val literals = if (literalFlag == CONTENT_STORED) {
+      storedLiterals
+    } else {
+      LzHuffman.decompress(storedLiterals, literalLength)
     }
 
     val checked = CheckedRestoreTarget(out, targetSize)

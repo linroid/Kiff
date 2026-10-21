@@ -10,6 +10,7 @@ import com.linroid.kiff.region.BinaryRegionPlanner
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
@@ -131,6 +132,42 @@ class RegionTreeTest {
       "Region [" in failure.message.orEmpty(),
       "should name the region that failed: ${failure.message}"
     )
+  }
+
+  @Test
+  fun theDeepestTreeAllowedStillRestores() {
+    // The root is at depth 0, so a leaf may sit at depth 16 and no deeper. Writers rely on exactly
+    // this boundary, so it is pinned from both sides.
+    fun chain(composites: Int): ByteArray {
+      val out = ByteWriter(64)
+      repeat(composites) {
+        out.writeVarLong(1)
+        out.writeByte(RegionEncoding.COMPOSITE.code)
+        out.writeVarInt(1)
+      }
+      out.writeVarLong(1)
+      out.writeByte(RegionEncoding.RAW.code)
+      val tree = out.toByteArray()
+      val payload = ByteWriter(64)
+      payload.writeVarInt(tree.size)
+      payload.writeVarInt(1)
+      payload.writeByte(0)
+      payload.writeVarInt(1)
+      payload.writeBytes(tree)
+      payload.writeByte(0x2A)
+      return payload.toByteArray()
+    }
+    fun restore(payload: ByteArray): ByteArray {
+      val out = ByteArrayRestoreTarget(1)
+      PatchPayload.apply(ByteArraySource(ByteArray(4)), payload, 0, 1, checksums = false, out = out)
+      return out.toByteArray()
+    }
+
+    assertContentEquals(byteArrayOf(0x2A), restore(chain(MAX_REGION_DEPTH)))
+    val failure = assertFailsWith<KiffException.InvalidPatch> {
+      restore(chain(MAX_REGION_DEPTH + 1))
+    }
+    assertTrue("nests" in failure.message.orEmpty(), failure.message.orEmpty())
   }
 
   @Test

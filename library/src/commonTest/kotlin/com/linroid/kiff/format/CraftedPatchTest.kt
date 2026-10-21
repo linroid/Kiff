@@ -270,19 +270,20 @@ class CraftedPatchTest {
   }
 
   @Test
-  fun anLzssBackReferenceThatWouldWrapIsRefused() {
-    // Four literal bytes, then a match whose stored distance is Int.MAX_VALUE: one more wraps it.
+  fun contentEncodingOneIsRefused() {
+    // LZ77 without the entropy coding, as unreleased builds wrote it: a four-byte literal run.
     val content = bytes {
       writeVarInt(4 shl 1)
       writeBytes("abcd".encodeToByteArray())
-      writeVarInt(1)
-      writeVarInt(Int.MAX_VALUE)
       writeVarInt(0)
     }
-    val payload = payload(
-      bytes { raw(8) }, content, unpacked = 8, encoding = PatchPayload.CONTENT_LZSS
-    )
-    assertRefused(payload, targetSize = 8)
+    val failure = assertFailsWith<KiffException.InvalidPatch> {
+      PatchPayload.apply(
+        ByteArraySource(source), payload(bytes { raw(4) }, content, unpacked = 4, encoding = 1),
+        0, 4, false, ByteArrayRestoreTarget(4)
+      )
+    }
+    assertTrue("encoding 1" in failure.message.orEmpty(), failure.message.orEmpty())
   }
 
   @Test

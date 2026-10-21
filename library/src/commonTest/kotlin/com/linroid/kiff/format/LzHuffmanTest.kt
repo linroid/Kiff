@@ -107,14 +107,6 @@ class LzHuffmanTest {
   }
 
   @Test
-  fun itBeatsTheOlderCodecOnRealisticContent() {
-    val data = structuredBytes(400_000, seed = 4)
-    val old = Lzss.compress(data).size
-    val new = LzHuffman.compress(data).size
-    assertTrue(new < old, "entropy coding should pay: $new against $old")
-  }
-
-  @Test
   fun corruptedInputIsRefusedRatherThanDecodedIntoNonsense() {
     val data = structuredBytes(20_000, seed = 5)
     val packed = LzHuffman.compress(data)
