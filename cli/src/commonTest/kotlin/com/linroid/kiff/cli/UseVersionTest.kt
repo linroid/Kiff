@@ -2,6 +2,7 @@ package com.linroid.kiff.cli
 
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -21,11 +22,15 @@ class UseVersionTest {
   fun runsTheCommandItselfWhenItIsThisVersion() {
     val a = dir.file("a", "x\n")
     val b = dir.file("b", "y\n")
+    // capture's versions fail the test if anything is fetched.
     val run = capture("--use", kiffVersion, "diff", a, b)
 
+    // Exactly what the command gives without --use. The names in the diff's header are the paths
+    // as given, which a Windows path's backslashes have quoted, as git quotes them.
+    val direct = capture("diff", a, b)
     assertEquals(1, run.status, run.err)
-    val diff = run.bytes.decodeToString()
-    assertTrue(diff.startsWith("--- $a\n+++ $b\n"), diff)
+    assertContentEquals(direct.bytes, run.bytes, run.bytes.decodeToString())
+    assertTrue(run.bytes.decodeToString().startsWith("--- "), run.bytes.decodeToString())
     assertEquals("", run.err)
   }
 
