@@ -199,6 +199,41 @@ field may be added, but anything else is a new `schema`.
 The exit status is 0 when every source gave a patch or was dropped, and 1 when any could not be
 created or verified. The other patches are still written, and the manifest lists only good ones.
 
+### Running another version
+
+`-v VERSION`, or `--use VERSION`, runs the command after it with that release of Kiff instead of
+the one you started:
+
+```console
+$ kiff -v 0.1.0 create foo-1.2.0.apk foo-1.3.0.apk foo.patch
+Downloading kiff 0.1.0 from https://github.com/linroid/Kiff/releases/download/v0.1.0/kiff-0.1.0.zip
+Created foo.patch with the apk patcher
+  Patcher:     apk (format v1)
+  ...
+```
+
+A patch is applied on the user's device, by the Kiff inside the app they already have, and that
+Kiff refuses a format newer than it knows. So build patches with the oldest Kiff still embedded in a
+version of the app you update. A newer Kiff reads every patch an older one wrote, which
+`FormatVectorsTest` holds each build to with patches frozen in the released format, so a patch from
+the oldest one applies on every later app as well.
+
+The first run of a version downloads `kiff-VERSION.zip` from its GitHub release, refuses it unless
+it matches the `kiff-VERSION.zip.sha256` beside it, and unpacks it into
+`$KIFF_HOME/versions/VERSION`, with `KIFF_HOME` at `~/.kiff` unless set. It is unpacked beside that
+directory and renamed into place, so an interrupted or concurrent run never leaves half a version
+there, and every later run starts the installed copy without the network. `KIFF_DOWNLOAD_URL`
+replaces `https://github.com/linroid/Kiff/releases/download` for a mirror, which serves the same two
+files at `vVERSION/kiff-VERSION.zip`. A draft release cannot be downloaded until it is published,
+and a `-SNAPSHOT` version is refused, since no snapshot has a release.
+
+Only the `kiff` you start needs this option. Everything after the version goes to the other one
+unread, so that can be any release, even one older than `-v`, with whatever commands and flags it
+has. Its exit status is returned as it is, and progress goes to standard error, so
+`kiff -v 0.1.0 diff a b | patch` still works. It runs on the same Java as this `kiff` when
+`JAVA_HOME` is unset. Naming the version that is running just runs the command, and
+`kiff --version` says which version that is.
+
 ## GitHub Action
 
 The action at the root of this repository runs `kiff release` for a project's GitHub releases. It

@@ -11,6 +11,7 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.clikt.parameters.types.restrictTo
 import com.linroid.kiff.io.KiffFiles
@@ -22,6 +23,19 @@ import kotlin.system.exitProcess
 
 class RootCommand : CliktCommand(name = "kiff") {
   override val invokeWithoutSubcommand = true
+
+  // Declared for --help alone: runKiff hands a leading -v to that version before Clikt reads
+  // anything, since the command after it may be one this build does not have.
+  @Suppress("unused")
+  private val use by option(
+    "-v", "--use",
+    metavar = "VERSION",
+    help = "Run the command with Kiff <version>, fetched once"
+  )
+
+  init {
+    versionOption(kiffVersion, message = { "kiff $it" })
+  }
 
   override fun run() {
     // With no command there is nothing to do, which a script has to hear as a failure.
@@ -104,8 +118,34 @@ internal fun kiff(out: OutputStream = System.out): RootCommand = RootCommand()
     ReleaseCommand()
   )
 
-/** Runs the command line [args] describe and answers the exit status, as Clikt's `main` would. */
-internal fun runKiff(args: Array<String>, out: OutputStream = System.out): Int {
+/**
+ * Runs the command line [args] describe and answers the exit status, as Clikt's `main` would. A
+ * leading `-v VERSION` runs the rest with that released Kiff instead, through [versions].
+ */
+internal fun runKiff(
+  args: Array<String>,
+  out: OutputStream = System.out,
+  versions: KiffVersions = KiffVersions.fromEnvironment()
+): Int {
+  val (version, rest) = leadingVersion(args) ?: return parse(args, out)
+  return try {
+    when (version) {
+      // Nothing to fetch: this build reads the rest itself, as if -v had not been there.
+      kiffVersion -> parse(rest.toTypedArray(), out)
+      // Handed over unread, since that version may take commands and flags this one lacks.
+      else -> {
+        checkReleased(version)
+        versions.run(version, rest)
+      }
+    }
+  } catch (e: UnavailableVersionException) {
+    versions.log.println("Error: ${e.message}")
+    // As statusOf: diff keeps 1 for "the files differ".
+    if (rest.firstOrNull() == "diff") 2 else 1
+  }
+}
+
+private fun parse(args: Array<String>, out: OutputStream): Int {
   val kiff = kiff(out)
   return try {
     kiff.parse(args)
