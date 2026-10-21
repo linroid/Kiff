@@ -5,6 +5,7 @@ import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.zip.ZipReader
 import kotlin.random.Random
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
@@ -266,14 +267,27 @@ class ZipPatcherTest {
   }
 
   @Test
-  fun patchesAreNotInterchangeableBetweenPatchers() {
-    val source = archive { entry("a.txt", "one") }
-    val target = archive { entry("a.txt", "two") }
-    val zipPatch = patcher.createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { BinaryPatcher().applyPatch(source, zipPatch) }
-
-    val binaryPatch = BinaryPatcher().createPatch(source, target)
-    assertFailsWith<KiffException.InvalidPatch> { patcher.applyPatch(source, binaryPatch) }
+  fun anyPatcherAppliesAnyPatch() {
+    // Patchers differ in how they describe a target, not in how a patch is read, so the patcher
+    // byte in a header says who built the patch and nothing about how to apply it.
+    val source = archive {
+      entry("a.bin", structuredBytes(4_000, seed = 31))
+      entry("b.txt", "one\ntwo\nthree\n")
+    }
+    val target = archive {
+      entry("a.bin", structuredBytes(4_000, seed = 32))
+      entry("b.txt", "one\n2\nthree\n")
+    }
+    for (builder in Kiff.patchers) {
+      val patch = builder.createPatch(source, target)
+      for (applier in Kiff.patchers) {
+        assertContentEquals(
+          target,
+          applier.applyPatch(source, patch),
+          "a ${builder.name} patch applied by ${applier.name}"
+        )
+      }
+    }
   }
 
   @Test

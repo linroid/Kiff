@@ -105,12 +105,9 @@ sealed class DeltaPatcher : Patcher {
     patch: ByteArray,
     reader: ByteReader
   ): PatchFormat.Header {
+    // The patcher byte says who built the patch, not how to read it: every patcher restores through
+    // this same path, so any of them applies any patch.
     val header = PatchFormat.readHeader(reader)
-    if (header.patcher != id) {
-      throw KiffException.InvalidPatch(
-        "Patch was built by ${header.patcher.name.lowercase()}, not $name"
-      )
-    }
     if (source.size != header.sourceSize) {
       throw KiffException.SourceMismatch(
         "Source is ${source.size} bytes, the patch expects ${header.sourceSize}"
