@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-# Runs a kiff executable on its own platform as a user would: what it says it is, a patch that
-# restores exactly, a diff's bytes and exit status, and kiff --use handing over to a release of each
-# kind, which a mirror on localhost serves.
+# Unpacks a release's archive of kiff on its own platform and runs it as a user would: what it says
+# it is, a patch that restores exactly, a diff's bytes and exit status, and kiff --use handing over
+# to a release of each kind, which a mirror on localhost serves.
 #
-# Usage: smoke-cli.sh KIFF PLATFORM JVM_ZIP
-#   KIFF      the executable, named as a release names it
+# Usage: smoke-cli.sh ARCHIVE PLATFORM JVM_ZIP
+#   ARCHIVE   the archive of the executable, named as a release names it, with its .sha256 beside it
 #   PLATFORM  its platform as a release names it, such as linux-x64 or windows-x64
 #   JVM_ZIP   kiff-OTHER.zip, the JVM build of another version, for --use to fall back to
-# VERSION is the version KIFF was built as, and OTHER the version JVM_ZIP was.
+# VERSION is the version ARCHIVE was built as, and OTHER the version JVM_ZIP was.
 set -euo pipefail
 
-kiff=$1
+archive=$1
 platform=$2
 jvm_zip=$3
 version=${VERSION:?}
 other=${OTHER:?}
+scripts=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+python=$(command -v python3 || command -v python)
 exe=''
 if [[ $platform == windows-* ]]; then
   exe=.exe
@@ -34,20 +36,59 @@ native_path() {
   fi
 }
 
+# The line sha256sum writes for the file $1 in the current directory, which is what a release
+# attaches beside each file.
 sha256_line() {
   if command -v sha256sum > /dev/null; then
-    (cd "$(dirname "$1")" && sha256sum "$(basename "$1")")
+    sha256sum "$1"
   else
-    (cd "$(dirname "$1")" && shasum -a 256 "$(basename "$1")")
+    shasum -a 256 "$1"
   fi
 }
 
-chmod +x "$kiff"
-kiff=$(native_path "$(cd "$(dirname "$kiff")" && pwd)/$(basename "$kiff")")
+# Serves the file $1 as $2 in the mirror's directory $3, with its checksum beside it.
+publish() {
+  mkdir -p "$3"
+  cp "$1" "$3/$2"
+  (cd "$3" && sha256_line "$2") > "$3/$2.sha256"
+}
+
+archive=$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")
 work=$(native_path "${RUNNER_TEMP:-$(mktemp -d)}/smoke")
 rm -rf "$work"
 mkdir -p "$work"
 cd "$work"
+
+echo "::group::The archive, checked and unpacked as a user would"
+if command -v sha256sum > /dev/null; then
+  (cd "$(dirname "$archive")" && sha256sum --check "$(basename "$archive").sha256")
+else
+  (cd "$(dirname "$archive")" && shasum -a 256 --check "$(basename "$archive").sha256")
+fi
+mkdir unpacked
+if [[ $platform == windows-* ]]; then
+  # Windows's own tar, which opens a zip; Git Bash's tar is GNU's, which cannot.
+  "$(cygpath -u -S)/tar.exe" -xf "$(native_path "$archive")" -C unpacked
+else
+  tar -xzf "$archive" -C unpacked
+fi
+root=kiff-$version-$platform
+kiff=$work/unpacked/$root/kiff$exe
+for file in "$kiff" "unpacked/$root/LICENSE" "unpacked/$root/README.md"; do
+  if [[ ! -f $file ]]; then
+    find unpacked
+    fail "$archive holds no $file."
+  fi
+done
+if [[ $(find unpacked -mindepth 1 | wc -l | tr -d ' ') != 4 ]]; then
+  find unpacked
+  fail "$archive should hold its $root directory with kiff$exe, LICENSE and README.md alone."
+fi
+# What a tar.gz has over a bare executable: it is runnable as it comes out.
+if [[ -z $exe && ! -x $kiff ]]; then
+  fail "$archive gives a kiff that is not executable."
+fi
+echo "::endgroup::"
 
 echo "::group::What it says it is"
 said=$("$kiff" --version)
@@ -85,22 +126,29 @@ fi
 echo "::endgroup::"
 
 echo "::group::kiff --use, from a mirror"
-# OTHER's JVM zip alone; NATIVE, this executable as a release of its own; TAMPERED, the same under
-# a checksum it does not have.
-native=0.0.2-smoke
+# OTHER's JVM zip alone; ARCHIVED, this executable in an archive of its own, as a release attaches
+# it; BARE, the same executable alone, as 0.2.0 attached it; TAMPERED, the archive under a checksum
+# it does not have.
+archived=0.0.2-smoke
 tampered=0.0.3-smoke
+bare=0.0.4-smoke
 mirror=$work/mirror
-mkdir -p "$mirror/v$other" "$mirror/v$native" "$mirror/v$tampered"
-cp "$jvm_zip" "$mirror/v$other/kiff-$other.zip"
-sha256_line "$mirror/v$other/kiff-$other.zip" > "$mirror/v$other/kiff-$other.zip.sha256"
-cp "$kiff" "$mirror/v$native/kiff-$native-$platform$exe"
-sha256_line "$mirror/v$native/kiff-$native-$platform$exe" \
-  > "$mirror/v$native/kiff-$native-$platform$exe.sha256"
-cp "$kiff" "$mirror/v$tampered/kiff-$tampered-$platform$exe"
-printf '%064d  kiff-%s-%s%s\n' 0 "$tampered" "$platform" "$exe" \
-  > "$mirror/v$tampered/kiff-$tampered-$platform$exe.sha256"
+publish "$jvm_zip" "kiff-$other.zip" "$mirror/v$other"
+for release in "$archived" "$tampered"; do
+  "$python" "$scripts/pack-cli.py" "$kiff" "$platform" "$release" "$work/packed"
+done
+suffix=.tar.gz
+if [[ -n $exe ]]; then
+  suffix=.zip
+fi
+publish "$work/packed/kiff-$archived-$platform$suffix" "kiff-$archived-$platform$suffix" \
+  "$mirror/v$archived"
+publish "$work/packed/kiff-$tampered-$platform$suffix" "kiff-$tampered-$platform$suffix" \
+  "$mirror/v$tampered"
+printf '%064d  kiff-%s-%s%s\n' 0 "$tampered" "$platform" "$suffix" \
+  > "$mirror/v$tampered/kiff-$tampered-$platform$suffix.sha256"
+publish "$kiff" "kiff-$bare-$platform$exe" "$mirror/v$bare"
 
-python=$(command -v python3 || command -v python)
 "$python" -m http.server 8765 --bind 127.0.0.1 --directory "$mirror" > "$work/mirror.log" 2>&1 &
 server=$!
 trap 'kill "$server" 2> /dev/null || true' EXIT
@@ -114,18 +162,28 @@ export KIFF_DOWNLOAD_URL=http://127.0.0.1:8765
 KIFF_HOME=$(native_path "$work/home")
 export KIFF_HOME
 
-# A release with an executable for this platform runs it.
-said=$("$kiff" --use "$native" --version)
-if [[ $said != "kiff $version" ]]; then
-  fail "kiff --use $native --version printed '$said', not this executable's 'kiff $version'."
+# A release with an archive for this platform runs the executable in it, kept as a bare one is.
+for release in "$archived" "$bare"; do
+  said=$("$kiff" --use "$release" --version)
+  if [[ $said != "kiff $version" ]]; then
+    fail "kiff --use $release --version printed '$said', not this executable's 'kiff $version'."
+  fi
+  if [[ ! -f $KIFF_HOME/versions/$release/bin/kiff$exe ]]; then
+    fail "kiff --use $release installed no bin/kiff$exe."
+  fi
+  status=0
+  "$kiff" --use "$release" diff a.txt b.txt > /dev/null || status=$?
+  if [[ $status != 1 ]]; then
+    fail "kiff --use $release diff exited $status, not the 1 of the version it handed over to."
+  fi
+done
+if [[ ! -f $KIFF_HOME/versions/$archived/LICENSE ]]; then
+  fail "kiff --use $archived should keep the LICENSE its archive holds."
 fi
-if [[ ! -f $KIFF_HOME/versions/$native/bin/kiff$exe ]]; then
-  fail "kiff --use $native installed no bin/kiff$exe."
-fi
-status=0
-"$kiff" --use "$native" diff a.txt b.txt > /dev/null || status=$?
-if [[ $status != 1 ]]; then
-  fail "kiff --use $native diff exited $status, not the 1 of the version it handed over to."
+# The bare executable is what a release without an archive has, as 0.2.0 has none.
+if ! grep -q "GET /v$bare/kiff-$bare-$platform$exe HTTP/1.[01]\" 200" "$work/mirror.log"; then
+  cat "$work/mirror.log"
+  fail "kiff --use $bare should have downloaded kiff-$bare-$platform$exe."
 fi
 
 # A release with only its JVM zip runs that, on the Java setup-java installed.
@@ -145,7 +203,7 @@ if [[ $status == 0 ]] || ! grep -q 'two words.kiff' info.log; then
   fail "kiff --use $other should pass 'two words.kiff' on as one argument."
 fi
 
-# One that does not match its checksum is refused, and nothing of it is kept.
+# One whose archive does not match its checksum is refused, and nothing of it is kept.
 if "$kiff" --use "$tampered" --version 2> tampered.log; then
   fail "kiff --use $tampered should refuse a release that does not match its checksum."
 fi

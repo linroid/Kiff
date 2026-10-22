@@ -1,8 +1,8 @@
 name: CLI Binaries
 
-# Builds the CLI as a release ships it, a bare executable for each platform and the JVM zip, and
-# runs each executable on a machine of its own platform. The release workflow calls this with the
-# tag's version and attaches what it builds. A pull request builds 0.0.0-ci.
+# Builds the CLI as a release ships it, an archive of the executable for each platform and the JVM
+# zip, and unpacks and runs each archive on a machine of its own platform. The release workflow
+# calls this with the tag's version and attaches what it builds. A pull request builds 0.0.0-ci.
 on:
   workflow_call:
     inputs:
@@ -24,6 +24,7 @@ on:
       - settings.gradle.kts
       - gradle.properties
       - gradle/**
+      - .github/scripts/pack-cli.py
       - .github/scripts/smoke-cli.sh
       - .github/workflows/cli-binaries.yml
   # No branches filter, so a pull request stacked on another one is tested too.
@@ -36,6 +37,7 @@ on:
       - settings.gradle.kts
       - gradle.properties
       - gradle/**
+      - .github/scripts/pack-cli.py
       - .github/scripts/smoke-cli.sh
       - .github/workflows/cli-binaries.yml
 
@@ -86,7 +88,7 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends binutils-mingw-w64-x86-64
           x86_64-w64-mingw32-strip cli/build/bin/mingwX64/releaseExecutable/kiff.exe
 
-      - name: Name them as a release does
+      - name: Name them by platform
         run: |
           mkdir dist
           bin=cli/build/bin
@@ -144,7 +146,7 @@ jobs:
           ./gradlew -Pversion="$VERSION" \
             :cli:linkReleaseExecutableMacosArm64 :cli:linkReleaseExecutableMacosX64
 
-      - name: Strip them and name them as a release does
+      - name: Strip them and name them by platform
         run: |
           mkdir dist
           bin=cli/build/bin
@@ -158,31 +160,101 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # Every archive is packed here, by one script on one machine, so the same executables give the
+  # same bytes.
+  package:
+    name: Pack the release files
+    needs: [ linux, macos ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-linux
+          path: built
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-macos
+          path: built
+
+      # Each executable with LICENSE and README.md in a kiff-VERSION-PLATFORM directory: a tar.gz,
+      # which keeps the executable bit through a browser's download, or a zip for Windows. Every
+      # entry is dated the commit's time.
+      - name: Pack each executable
+        run: |
+          mkdir dist
+          for platform in linux-x64 linux-arm64 macos-arm64 macos-x64 windows-x64; do
+            exe=''
+            if [[ $platform == windows-* ]]; then
+              exe=.exe
+            fi
+            .github/scripts/pack-cli.py "built/kiff-$VERSION-$platform$exe" "$platform" \
+              "$VERSION" dist
+          done
+          cp "built/kiff-$VERSION.zip" dist/
+
+      # The line sha256sum writes, which kiff --use, the action and install.sh read.
+      - name: Write a checksum for each
+        working-directory: dist
+        run: |
+          for file in kiff-*; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          sha256sum --check ./*.sha256
+          for file in kiff-*.tar.gz; do
+            tar -tvzf "$file"
+          done
+          unzip -Z "kiff-$VERSION-windows-x64.zip"
+          {
+            echo "| File | Bytes |"
+            echo "| --- | ---: |"
+            for file in kiff-*; do
+              [[ $file == *.sha256 ]] || echo "| \`$file\` | $(wc -c < "$file" | tr -d ' ') |"
+            done
+            echo
+            echo "| Executable, as it is packed | Bytes |"
+            echo "| --- | ---: |"
+            for file in ../built/kiff-*; do
+              [[ $file == *.zip ]] || echo "| \`${file##*/}\` | $(wc -c < "$file" | tr -d ' ') |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kiff-cli-release
+          path: dist/
+          if-no-files-found: error
+
   smoke:
     name: Run on ${{ matrix.platform }}
-    needs: [ linux, macos ]
+    needs: package
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: linux-x64
             runner: ubuntu-latest
-            built: cli-linux
+            archive: .tar.gz
           - platform: linux-arm64
             runner: ubuntu-24.04-arm
-            built: cli-linux
+            archive: .tar.gz
           - platform: macos-arm64
             runner: macos-latest
-            built: cli-macos
+            archive: .tar.gz
           - platform: macos-x64
             runner: macos-15-intel
-            built: cli-macos
+            archive: .tar.gz
           - platform: windows-x64
             runner: windows-latest
-            built: cli-linux
-            exe: .exe
+            archive: .zip
     runs-on: ${{ matrix.runner }}
     steps:
+      # The scripts, and LICENSE and README.md beside them, which a cone checkout always has.
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
@@ -191,7 +263,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.built }}
+          name: kiff-cli-release
           path: dist
 
       - uses: actions/download-artifact@v8
@@ -205,47 +277,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Run kiff as a user would
+      - name: Unpack kiff and run it as a user would
         env:
           PLATFORM: ${{ matrix.platform }}
-          EXE: ${{ matrix.exe }}
+          ARCHIVE: ${{ matrix.archive }}
         run: |
-          .github/scripts/smoke-cli.sh "dist/kiff-$VERSION-$PLATFORM$EXE" "$PLATFORM" \
+          .github/scripts/smoke-cli.sh "dist/kiff-$VERSION-$PLATFORM$ARCHIVE" "$PLATFORM" \
             "$PWD/other/kiff-$OTHER.zip"
-
-  release-files:
-    name: Collect the release files
-    needs: smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: cli-linux
-          path: dist
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: cli-macos
-          path: dist
-
-      # The line sha256sum writes, which kiff --use, the action and install.sh read.
-      - name: Write a checksum for each
-        working-directory: dist
-        run: |
-          for file in kiff-*; do
-            sha256sum "$file" > "$file.sha256"
-          done
-          sha256sum --check ./*.sha256
-          {
-            echo "| File | Bytes |"
-            echo "| --- | ---: |"
-            for file in kiff-*; do
-              [[ $file == *.sha256 ]] || echo "| \`$file\` | $(wc -c < "$file" | tr -d ' ') |"
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: kiff-cli-release
-          path: dist/
-          if-no-files-found: error
