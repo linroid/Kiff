@@ -6,6 +6,8 @@ import com.linroid.kiff.NestedContainers
 import com.linroid.kiff.apk.TestApkBuilder
 import com.linroid.kiff.asZip
 import com.linroid.kiff.assertRestores
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.asSource
 import com.linroid.kiff.region.RegionAlgorithm
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.structuredBytes
@@ -35,7 +37,7 @@ class ContainerFormatTest {
       "empty" to TestZipBuilder().build()
     )
     for ((shape, bytes) in shapes) {
-      assertNull(ContainerFormatTiling.describe(ZipFormat(), bytes), "zip, $shape")
+      assertNull(ContainerFormatTiling.describe(ZipFormat(), bytes.asSource()), "zip, $shape")
     }
   }
 
@@ -48,7 +50,7 @@ class ContainerFormatTest {
       .signatureFiles(seed = 11)
       .signingBlock(structuredBytes(800, seed = 12))
       .build()
-    assertNull(ContainerFormatTiling.describe(ApkFormat(), apk))
+    assertNull(ContainerFormatTiling.describe(ApkFormat(), apk.asSource()))
   }
 
   @Test
@@ -57,7 +59,7 @@ class ContainerFormatTest {
       listOf(structuredBytes(300, 20), structuredBytes(150, 21)),
       trailer = structuredBytes(17, 22)
     )
-    assertNull(ContainerFormatTiling.describe(TestSectionFormat(), file))
+    assertNull(ContainerFormatTiling.describe(TestSectionFormat(), file.asSource()))
   }
 
   @Test
@@ -66,14 +68,80 @@ class ContainerFormatTest {
     // the bytes between them.
     val leaky = object : ContainerFormat {
       override val name = "leaky"
-      override fun detect(bytes: ByteArray, from: Int, to: Int) = true
-      override fun decompose(bytes: ByteArray, from: Int, to: Int) = listOf(
+      override fun detect(input: SeekableSource, from: Long, to: Long) = true
+      override fun decompose(input: SeekableSource, from: Long, to: Long) = listOf(
         Child("head", RegionKind.CONTENT, from, from + 10),
         Child("tail", RegionKind.CONTENT, from + 20, to)
       )
     }
-    val complaint = ContainerFormatTiling.describe(leaky, ByteArray(100))
+    val complaint = ContainerFormatTiling.describe(leaky, ByteArray(100).asSource())
     assertTrue(complaint.orEmpty().contains("gap of 10 bytes"), complaint.orEmpty())
+  }
+
+  @Test
+  fun aDecompositionThatDoesNotTileIsNotUsed() {
+    // Kiff cannot restore from children with a hole between them, so it describes the range as if
+    // the format had not claimed it: the patch is the one it would have built without the format.
+    val leaky = object : ContainerFormat {
+      override val name = "leaky"
+      override fun detect(input: SeekableSource, from: Long, to: Long) =
+        TestSectionFormat().detect(input, from, to)
+      override fun decompose(input: SeekableSource, from: Long, to: Long) =
+        TestSectionFormat().decompose(input, from, to).filter { it.name != "section 1" }
+    }
+    val source = TestZipBuilder().entry("payload.sect", sectioned(false)).build()
+    val target = TestZipBuilder().entry("payload.sect", sectioned(true)).build()
+    for (asWholeFile in listOf(false, true)) {
+      val from = if (asWholeFile) sectioned(false) else source
+      val to = if (asWholeFile) sectioned(true) else target
+      val patch = Kiff.createPatch(from, to, KiffOptions(containers = NestedContainers + leaky))
+      assertContentEquals(Kiff.createPatch(from, to), patch, "as the whole file: $asWholeFile")
+      assertContentEquals(to, Kiff.applyPatch(from, patch))
+    }
+  }
+
+  @Test
+  fun zipTilesWhereverItSitsInsideSomethingElse() {
+    val archive = TestZipBuilder().preamble(structuredBytes(40, 1)).entry("a.txt", "alpha")
+      .entry("b.bin", structuredBytes(500, 2)).build()
+    val wrapped = structuredBytes(333, 3) + archive + structuredBytes(17, 4)
+    val from = 333L
+    val to = from + archive.size
+    assertNull(ContainerFormatTiling.describe(ZipFormat(), wrapped.asSource(), from, to))
+    // Read in its own coordinates and answered in its parent's: the same parts, moved by [from].
+    val alone = ZipFormat().decompose(archive.asSource(), 0, archive.size.toLong())
+    val inside = ZipFormat().decompose(wrapped.asSource(), from, to)
+    assertEquals(alone.map { it.name }, inside.map { it.name })
+    assertEquals(alone.map { it.from + from }, inside.map { it.from })
+    assertEquals(alone.map { it.contentFrom + from }, inside.map { it.contentFrom })
+  }
+
+  @Test
+  fun formatsReadTheirStructureAndNotTheirContent() {
+    val payload = structuredBytes(1_000_000, seed = 5)
+    val zip = TestZipBuilder().entry("a.txt", "alpha").entry("big.bin", payload)
+      .entry("z.txt", "zulu").build()
+    val dex = TestDexBuilder().section(0x0001, structuredBytes(800, 6)).section(0x2001, payload)
+      .build()
+    for ((format, bytes) in listOf(ZipFormat() to zip, DexFormat() to dex)) {
+      val counting = CountingSource(bytes)
+      assertTrue(format.detect(counting, 0, counting.size))
+      assertTrue(format.decompose(counting, 0, counting.size).size > 1)
+      assertTrue(
+        counting.bytesRead < 100_000,
+        "${format.name} read ${counting.bytesRead} of ${bytes.size} bytes to describe them"
+      )
+    }
+  }
+
+  private class CountingSource(private val bytes: ByteArray) : SeekableSource {
+    var bytesRead = 0L
+    override val size: Long get() = bytes.size.toLong()
+    override fun read(position: Long, into: ByteArray, offset: Int, length: Int): Int {
+      val count = bytes.asSource().read(position, into, offset, length)
+      if (count > 0) bytesRead += count
+      return count
+    }
   }
 
   // ---- what the seam is for ----------------------------------------------------------------
@@ -214,8 +282,8 @@ class ContainerFormatTest {
     val registry = ContainerRegistry.Empty + ZipFormat() + TestSectionFormat()
     val zip = TestZipBuilder().entry("a.txt", "alpha").build()
     val sect = TestSectionFormat.build(listOf(structuredBytes(100, 90)))
-    assertEquals("zip", registry.formatFor(zip, 0, zip.size)?.name)
-    assertEquals("sect", registry.formatFor(sect, 0, sect.size)?.name)
-    assertNull(registry.formatFor(structuredBytes(100, 91), 0, 100))
+    assertEquals("zip", registry.formatFor(zip.asSource(), 0, zip.size.toLong())?.name)
+    assertEquals("sect", registry.formatFor(sect.asSource(), 0, sect.size.toLong())?.name)
+    assertNull(registry.formatFor(structuredBytes(100, 91).asSource(), 0, 100))
   }
 }

@@ -1,5 +1,7 @@
 package com.linroid.kiff.container
 
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readBytes
 import com.linroid.kiff.region.RegionKind
 
 /**
@@ -24,53 +26,51 @@ public class DexFormat : ContainerFormat {
   override val name: String get() = "dex"
 
   /** `dex\n`, three version digits, and a NUL. */
-  override fun detect(bytes: ByteArray, from: Int, to: Int): Boolean {
+  override fun detect(input: SeekableSource, from: Long, to: Long): Boolean {
     if (to - from < HEADER_SIZE) return false
-    for (i in MAGIC.indices) if (bytes[from + i] != MAGIC[i]) return false
-    for (i in 4 until 7) {
-      val digit = bytes[from + i].toInt()
-      if (digit < '0'.code || digit > '9'.code) return false
-    }
-    return bytes[from + 7] == 0.toByte()
+    return hasMagic(input.readBytes(from, MAGIC_SIZE))
   }
 
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> {
-    if (!detect(bytes, from, to)) return emptyList()
+  /** Reads the header and the map list, and nothing the map list points at. */
+  override fun decompose(input: SeekableSource, from: Long, to: Long): List<Child> {
+    if (to - from < HEADER_SIZE) return emptyList()
+    val header = input.readBytes(from, HEADER_SIZE)
+    if (!hasMagic(header)) return emptyList()
     // Only little-endian dex files are described here; a byte-swapped one is rare enough that
     // getting it wrong quietly would be worse than leaving it whole.
-    if (u32(bytes, from + ENDIAN_TAG) != LITTLE_ENDIAN) return emptyList()
+    if (u32(header, ENDIAN_TAG) != LITTLE_ENDIAN) return emptyList()
 
-    // Offsets are the file's own, so they are checked against its size rather than added to [from]
-    // first: a dex nested anywhere but the start would wrap that sum for an offset near
-    // Int.MAX_VALUE, and pass.
+    // Offsets are the file's own, counted from its first byte, so each is checked against the
+    // file's size before it is added to [from] and read at.
     val size = to - from
-    val mapOffset = u32(bytes, from + MAP_OFF)
+    val mapOffset = u32(header, MAP_OFF)
     if (mapOffset < HEADER_SIZE || mapOffset > size - 4) return emptyList()
-    val count = u32(bytes, from + mapOffset)
+    val count = u32(input.readBytes(from + mapOffset, 4), 0)
     if (count <= 0 || count > MAX_SECTIONS) return emptyList()
     if (count * MAP_ITEM_SIZE > size - mapOffset - 4) return emptyList()
+    val map = input.readBytes(from + mapOffset + 4, count.toInt() * MAP_ITEM_SIZE)
 
-    val offsets = IntArray(count)
-    val types = IntArray(count)
-    var previous = -1
-    for (i in 0 until count) {
-      val at = from + mapOffset + 4 + i * MAP_ITEM_SIZE
-      types[i] = u16(bytes, at)
+    val offsets = LongArray(count.toInt())
+    val types = IntArray(count.toInt())
+    var previous = -1L
+    for (i in offsets.indices) {
+      val at = i * MAP_ITEM_SIZE
+      types[i] = u16(map, at)
       // map_item is: u16 type, u16 unused, u32 size, u32 offset - the offset is the last field.
-      val offset = u32(bytes, at + MAP_ITEM_OFFSET)
+      val offset = u32(map, at + MAP_ITEM_OFFSET)
       // The format requires the list sorted by offset and inside the file; anything else is not a
       // dex this can describe, and describing it wrongly would produce a patch that cannot restore.
       if (offset <= previous || offset > size) return emptyList()
       offsets[i] = offset
       previous = offset
     }
-    if (offsets[0] != 0) return emptyList()
+    if (offsets[0] != 0L) return emptyList()
 
-    val children = ArrayList<Child>(count)
-    for (i in 0 until count) {
+    val children = ArrayList<Child>(offsets.size)
+    for (i in offsets.indices) {
       // A section runs to wherever the next one starts, which absorbs any alignment padding after
       // it. The last runs to the end of the region, so trailing bytes belong to something too.
-      val end = if (i + 1 < count) from + offsets[i + 1] else to
+      val end = if (i + 1 < offsets.size) from + offsets[i + 1] else to
       children.add(
         Child(
           name = nameOf(types[i]),
@@ -82,6 +82,15 @@ public class DexFormat : ContainerFormat {
       )
     }
     return children
+  }
+
+  private fun hasMagic(header: ByteArray): Boolean {
+    for (i in MAGIC.indices) if (header[i] != MAGIC[i]) return false
+    for (i in 4 until 7) {
+      val digit = header[i].toInt()
+      if (digit < '0'.code || digit > '9'.code) return false
+    }
+    return header[7] == 0.toByte()
   }
 
   /**
@@ -119,19 +128,22 @@ public class DexFormat : ContainerFormat {
   private fun u16(bytes: ByteArray, at: Int): Int =
     (bytes[at].toInt() and 0xFF) or ((bytes[at + 1].toInt() and 0xFF) shl 8)
 
-  private fun u32(bytes: ByteArray, at: Int): Int {
-    var value = 0
-    for (i in 3 downTo 0) value = (value shl 8) or (bytes[at + i].toInt() and 0xFF)
+  /** Unsigned, as the format means it: an offset past 2 GB is an offset, not a negative one. */
+  private fun u32(bytes: ByteArray, at: Int): Long {
+    var value = 0L
+    for (i in 3 downTo 0) value = (value shl 8) or (bytes[at + i].toLong() and 0xFF)
     return value
   }
 
   private companion object {
     private val MAGIC = byteArrayOf(0x64, 0x65, 0x78, 0x0A) // "dex\n"
 
+    /** The magic, the version digits and their NUL. */
+    const val MAGIC_SIZE = 8
     const val HEADER_SIZE = 112
     const val ENDIAN_TAG = 0x28
     const val MAP_OFF = 0x34
-    const val LITTLE_ENDIAN = 0x12345678
+    const val LITTLE_ENDIAN = 0x12345678L
     const val MAP_ITEM_SIZE = 12
     const val MAP_ITEM_OFFSET = 8
     const val MAX_SECTIONS = 4096

@@ -1,6 +1,8 @@
 package com.linroid.kiff.container
 
 import com.linroid.kiff.apk.ApkEntries
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readBytes
 import com.linroid.kiff.region.RegionKind
 import com.linroid.kiff.zip.ZipGapKey
 import com.linroid.kiff.zip.ZipReader
@@ -33,17 +35,20 @@ public class ZipFormat internal constructor(
    * so it has to be cheap, and being wrong is recoverable: [decompose] answers an empty list for
    * anything it cannot describe exactly, and the range is then an ordinary leaf.
    */
-  override fun detect(bytes: ByteArray, from: Int, to: Int): Boolean {
+  override fun detect(input: SeekableSource, from: Long, to: Long): Boolean {
     if (to - from < MIN_ARCHIVE) return false
-    return startsWith(bytes, from, LOCAL_HEADER) || startsWith(bytes, from, EMPTY_ARCHIVE)
+    val magic = input.readBytes(from, LOCAL_HEADER.size)
+    return magic.contentEquals(LOCAL_HEADER) || magic.contentEquals(EMPTY_ARCHIVE)
   }
 
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> {
-    // Offsets inside a zip are relative to the archive's own start, so a nested one has to be read
-    // in its own coordinates and translated back.
-    val whole = from == 0 && to == bytes.size
-    val slice = if (whole) bytes else bytes.copyOfRange(from, to)
-    val layout = ZipReader.parseOrNull(slice) ?: return emptyList()
+  /**
+   * Reads the archive's end of central directory, its directory and each local header, and none
+   * of its entries' data.
+   */
+  override fun decompose(input: SeekableSource, from: Long, to: Long): List<Child> {
+    // Offsets inside a zip are relative to the archive's own start, so a nested one is read in its
+    // own coordinates and translated back.
+    val layout = ZipReader.parseOrNull(input, from, to) ?: return emptyList()
 
     return layout.regions.map { region ->
       when (region) {
@@ -83,12 +88,6 @@ public class ZipFormat internal constructor(
     else -> "(gap after ${key.afterEntry})"
   }
 
-  private fun startsWith(bytes: ByteArray, at: Int, signature: ByteArray): Boolean {
-    if (at + signature.size > bytes.size) return false
-    for (i in signature.indices) if (bytes[at + i] != signature[i]) return false
-    return true
-  }
-
   /** What makes two entries the same content without comparing their bytes. */
   private data class ContentKey(val crc32: UInt, val compressedSize: Int, val method: Int)
 
@@ -121,10 +120,11 @@ public class ApkFormat : ContainerFormat {
 
   override val name: String get() = "apk"
 
-  override fun detect(bytes: ByteArray, from: Int, to: Int): Boolean = zip.detect(bytes, from, to)
+  override fun detect(input: SeekableSource, from: Long, to: Long): Boolean =
+    zip.detect(input, from, to)
 
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> =
-    zip.decompose(bytes, from, to)
+  override fun decompose(input: SeekableSource, from: Long, to: Long): List<Child> =
+    zip.decompose(input, from, to)
 
   /**
    * Every dex is one group.

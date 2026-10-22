@@ -1,5 +1,6 @@
 package com.linroid.kiff.apk
 
+import com.linroid.kiff.io.SeekableSource
 import com.linroid.kiff.zip.ZipEntryStatus
 import com.linroid.kiff.zip.ZipEntry
 import com.linroid.kiff.zip.ZipLayout
@@ -64,7 +65,7 @@ internal fun groupApkCost(report: RegionReport): ApkPatchReport {
 }
 
 /** True when the archive looks like an Android package rather than a plain zip. */
-internal fun looksLikeApk(bytes: ByteArray): Boolean {
-  val layout = ZipReader.parseOrNull(bytes) ?: return false
+internal fun looksLikeApk(input: SeekableSource): Boolean {
+  val layout = ZipReader.parseOrNull(input) ?: return false
   return "AndroidManifest.xml" in layout.entriesByName
 }

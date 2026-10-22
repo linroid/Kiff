@@ -8,6 +8,7 @@ import com.linroid.kiff.asApk
 import com.linroid.kiff.asZip
 import com.linroid.kiff.assertRestores
 import com.linroid.kiff.format.RegionEncoding
+import com.linroid.kiff.io.asSource
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
 import kotlin.test.Test
@@ -30,7 +31,7 @@ class DexFormatTest {
 
   @Test
   fun itTilesTheWholeFile() {
-    assertNull(ContainerFormatTiling.describe(format, dex(seed = 1)))
+    assertNull(ContainerFormatTiling.describe(format, dex(seed = 1).asSource()))
   }
 
   @Test
@@ -39,12 +40,13 @@ class DexFormatTest {
     // else has to be read in its own coordinates and reported in its parent's.
     val bytes = dex(seed = 2)
     val wrapped = ByteArray(64) + bytes + ByteArray(32)
-    assertNull(ContainerFormatTiling.describe(format, wrapped, 64, 64 + bytes.size))
+    assertNull(ContainerFormatTiling.describe(format, wrapped.asSource(), 64, 64L + bytes.size))
   }
 
   @Test
   fun sectionsAreNamedAfterTheirMapType() {
-    val children = format.decompose(dex(seed = 3), 0, dex(seed = 3).size)
+    val bytes = dex(seed = 3)
+    val children = format.decompose(bytes.asSource(), 0, bytes.size.toLong())
     val names = children.map { it.name }
     assertEquals("header", names.first())
     assertEquals("map_list", names.last())
@@ -55,18 +57,18 @@ class DexFormatTest {
   @Test
   fun theHeaderIsNotSwallowedByTheFirstSection() {
     val bytes = dex(seed = 4)
-    val header = format.decompose(bytes, 0, bytes.size).first()
+    val header = format.decompose(bytes.asSource(), 0, bytes.size.toLong()).first()
     assertEquals(0, header.from)
     assertEquals(112, header.to, "the header runs to the first section, not past it")
   }
 
   @Test
   fun anythingThatIsNotADexIsLeftAlone() {
-    assertFalse(format.detect(structuredBytes(500, seed = 5), 0, 500))
-    assertFalse(format.detect(ByteArray(8), 0, 8), "too short to hold a header")
+    assertFalse(format.detect(structuredBytes(500, seed = 5).asSource(), 0, 500))
+    assertFalse(format.detect(ByteArray(8).asSource(), 0, 8), "too short to hold a header")
     // "dex\n" followed by something that is not three digits and a NUL.
     val impostor = "dex\nXYZ!".encodeToByteArray() + ByteArray(200)
-    assertFalse(format.detect(impostor, 0, impostor.size))
+    assertFalse(format.detect(impostor.asSource(), 0, impostor.size.toLong()))
   }
 
   @Test
@@ -81,7 +83,7 @@ class DexFormatTest {
     bytes[lastOffset + 2] = 0
     bytes[lastOffset + 3] = 0
     assertTrue(
-      format.decompose(bytes, 0, bytes.size).isEmpty(),
+      format.decompose(bytes.asSource(), 0, bytes.size.toLong()).isEmpty(),
       "a dex it cannot describe exactly must be left whole, not described wrongly"
     )
   }
@@ -186,7 +188,8 @@ class DexFormatTest {
     )
     for ((field, broken) in crafted) {
       val wrapped = ByteArray(64) + broken
-      assertTrue(format.decompose(wrapped, 64, wrapped.size).isEmpty(), "$field was trusted")
+      val children = format.decompose(wrapped.asSource(), 64, wrapped.size.toLong())
+      assertTrue(children.isEmpty(), "$field was trusted")
 
       val source = TestZipBuilder().entry("classes.dex", bytes).build()
       val target = TestZipBuilder().entry("classes.dex", broken).build()

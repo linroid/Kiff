@@ -57,7 +57,7 @@ internal object PatchBuilder {
     val sourceCrc = Crc32.compute(sourceBytes.bytes)
     val targetCrc = Crc32.compute(targetBytes.bytes)
 
-    val chosen = structure ?: Structure.detect(targetBytes.bytes, options.containers)
+    val chosen = structure ?: Structure.detect(targetBytes, options.containers)
     val inputs = Inputs(sourceBytes, targetBytes, options, chosen.name)
     val payload = when (chosen) {
       Structure.Bytes -> inputs.payload(recorder, inputs::whole)

@@ -69,7 +69,7 @@ public object KiffReports {
    * True when [bytes] is a zip archive that carries an `AndroidManifest.xml`: what
    * [Kiff.createPatch] takes for an APK.
    */
-  public fun isApk(bytes: ByteArray): Boolean = looksLikeApk(bytes)
+  public fun isApk(bytes: ByteArray): Boolean = looksLikeApk(bytes.asSource())
 
   /** The kind of entry [entryName] is in an Android package, as [apk] groups them. */
   public fun apkEntryKind(entryName: String): ApkEntryKind = ApkEntries.kindOf(entryName)

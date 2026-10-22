@@ -1,5 +1,7 @@
 package com.linroid.kiff.container
 
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.readBytes
 import com.linroid.kiff.region.RegionKind
 
 /**
@@ -14,18 +16,18 @@ class TestSectionFormat : ContainerFormat {
 
   override val name: String get() = "sect"
 
-  override fun detect(bytes: ByteArray, from: Int, to: Int): Boolean {
+  override fun detect(input: SeekableSource, from: Long, to: Long): Boolean {
     if (to - from < HEADER) return false
-    for (i in MAGIC.indices) if (bytes[from + i] != MAGIC[i]) return false
-    return true
+    return input.readBytes(from, MAGIC.size).contentEquals(MAGIC)
   }
 
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> {
-    if (!detect(bytes, from, to)) return emptyList()
-    val count = u32(bytes, from + MAGIC.size)
+  override fun decompose(input: SeekableSource, from: Long, to: Long): List<Child> {
+    if (!detect(input, from, to)) return emptyList()
+    val count = u32(input.readBytes(from + MAGIC.size, 4), 0)
     if (count < 0 || count > MAX_SECTIONS) return emptyList()
     val header = MAGIC.size + 4 + count * 4
     if (from + header > to) return emptyList()
+    val lengths = input.readBytes(from + MAGIC.size + 4, count * 4)
 
     val children = ArrayList<Child>(count + 1)
     // The header is a child like any other: every byte must belong to something.
@@ -34,7 +36,7 @@ class TestSectionFormat : ContainerFormat {
     )
     var cursor = from + header
     for (i in 0 until count) {
-      val length = u32(bytes, from + MAGIC.size + 4 + i * 4)
+      val length = u32(lengths, i * 4)
       if (length < 0 || cursor + length > to) return emptyList()
       children.add(
         Child(name = "section $i", kind = RegionKind.CONTENT, from = cursor, to = cursor + length)
