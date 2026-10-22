@@ -4,6 +4,7 @@ import com.linroid.kiff.container.ContainerRegistry
 import com.linroid.kiff.container.TestDexBuilder
 import com.linroid.kiff.container.TestSectionFormat
 import com.linroid.kiff.format.Crc32
+import com.linroid.kiff.format.withStoredTree
 import com.linroid.kiff.region.RegionKind
 import kotlin.random.Random
 import kotlin.test.Test
@@ -46,14 +47,33 @@ class StructureDetectionTest {
   @Test
   fun eachPatchIsTheOneItsPatcherWrote() {
     assertEquals(golden.keys, StructurePairs.all.map { it.name }.toSet())
+    val packed = mutableSetOf<String>()
     for (pair in StructurePairs.all) {
       val patch = Kiff.createPatch(pair.source, pair.target)
+      // Packing the tree is the one thing a writer has changed since, and only where it makes the
+      // patch smaller. Every other patch is still exactly the one written then, byte for byte, and
+      // a packed one is that patch once its tree is stored again.
+      val stored = if (Kiff.info(patch).treePacked) withStoredTree(patch) else patch
+      if (stored !== patch) {
+        packed += pair.name
+        assertTrue(patch.size < stored.size, "${pair.name} was packed for nothing")
+      }
       val expected = golden.getValue(pair.name)
-      assertEquals(expected.size, patch.size, "size of ${pair.name}")
-      assertEquals(expected.crc32, Crc32.compute(patch), "CRC-32 of ${pair.name}")
+      assertEquals(expected.size, stored.size, "size of ${pair.name}")
+      assertEquals(expected.crc32, Crc32.compute(stored), "CRC-32 of ${pair.name}")
       assertEquals(pair.expected, Kiff.info(patch).patcher, "patcher byte of ${pair.name}")
       assertContentEquals(pair.target, Kiff.applyPatch(pair.source, patch), pair.name)
     }
+    assertEquals(
+      setOf(
+        "an apk that gains a dex",
+        "an apk from a plain zip",
+        "an apk from bytes that are no archive",
+        "a zip from bytes that are no archive"
+      ),
+      packed,
+      "pairs whose tree is packed"
+    )
   }
 
   @Test

@@ -67,11 +67,12 @@ internal object PatchBuilder {
       is Structure.Weighed -> inputs.weighed(chosen.format, recorder)
     }
 
-    val out = ByteWriter(payload.size + HEADER_ESTIMATE)
+    val flags = if (payload.treePacked) FLAGS or PatchFormat.FLAG_PACKED_TREE else FLAGS
+    val out = ByteWriter(payload.bytes.size + HEADER_ESTIMATE)
     PatchFormat.writeHeader(
-      out, chosen.id, sourceBytes.size, sourceCrc, targetBytes.size, targetCrc, FLAGS
+      out, chosen.id, sourceBytes.size, sourceCrc, targetBytes.size, targetCrc, flags
     )
-    out.writeBytes(payload)
+    out.writeBytes(payload.bytes)
     return out.toByteArray()
   }
 
@@ -113,14 +114,14 @@ internal object PatchBuilder {
      *
      * A tie goes to the whole file, which is the patch Kiff 0.1.0 would have built.
      */
-    fun weighed(format: ContainerFormat, recorder: RegionRecorder?): ByteArray {
+    fun weighed(format: ContainerFormat, recorder: RegionRecorder?): PatchPayload.Written {
       val wholeCosts = ArrayList<RegionCost>()
       val asWhole = payload(RegionRecorder(wholeCosts::add), ::whole)
       val partsCosts = ArrayList<RegionCost>()
       val asParts = payload(RegionRecorder(partsCosts::add)) { literals, costs ->
         parts(format, literals, costs)
       }
-      val keepParts = asParts.size < asWhole.size
+      val keepParts = asParts.bytes.size < asWhole.bytes.size
       val costs = if (keepParts) partsCosts else wholeCosts
       if (recorder != null) for (cost in costs) recorder.record(cost)
       return if (keepParts) asParts else asWhole
@@ -130,7 +131,7 @@ internal object PatchBuilder {
     inline fun payload(
       recorder: RegionRecorder?,
       encode: (ByteWriter, RegionRecorder?) -> RegionNode
-    ): ByteArray {
+    ): PatchPayload.Written {
       val literals = ByteWriter((target.size / 8).coerceIn(64, 1L shl 20).toInt())
       val root = encode(literals, recorder)
       check(root.targetLength == target.size) {

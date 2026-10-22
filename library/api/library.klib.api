@@ -573,7 +573,7 @@ final class com.linroid.kiff/KiffOptions { // com.linroid.kiff/KiffOptions|null[
 }
 
 final class com.linroid.kiff/PatchInfo { // com.linroid.kiff/PatchInfo|null[0]
-    constructor <init>(com.linroid.kiff/PatcherId, kotlin/Int, kotlin/Long, kotlin/UInt, kotlin/Long, kotlin/UInt, kotlin/Long) // com.linroid.kiff/PatchInfo.<init>|<init>(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long){}[0]
+    constructor <init>(com.linroid.kiff/PatcherId, kotlin/Int, kotlin/Long, kotlin/UInt, kotlin/Long, kotlin/UInt, kotlin/Long, kotlin/Boolean) // com.linroid.kiff/PatchInfo.<init>|<init>(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.Boolean){}[0]
 
     final val formatVersion // com.linroid.kiff/PatchInfo.formatVersion|{}formatVersion[0]
         final fun <get-formatVersion>(): kotlin/Int // com.linroid.kiff/PatchInfo.formatVersion.<get-formatVersion>|<get-formatVersion>(){}[0]
@@ -591,6 +591,8 @@ final class com.linroid.kiff/PatchInfo { // com.linroid.kiff/PatchInfo|null[0]
         final fun <get-targetCrc32>(): kotlin/UInt // com.linroid.kiff/PatchInfo.targetCrc32.<get-targetCrc32>|<get-targetCrc32>(){}[0]
     final val targetSize // com.linroid.kiff/PatchInfo.targetSize|{}targetSize[0]
         final fun <get-targetSize>(): kotlin/Long // com.linroid.kiff/PatchInfo.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+    final val treePacked // com.linroid.kiff/PatchInfo.treePacked|{}treePacked[0]
+        final fun <get-treePacked>(): kotlin/Boolean // com.linroid.kiff/PatchInfo.treePacked.<get-treePacked>|<get-treePacked>(){}[0]
 
     final fun component1(): com.linroid.kiff/PatcherId // com.linroid.kiff/PatchInfo.component1|component1(){}[0]
     final fun component2(): kotlin/Int // com.linroid.kiff/PatchInfo.component2|component2(){}[0]
@@ -599,7 +601,8 @@ final class com.linroid.kiff/PatchInfo { // com.linroid.kiff/PatchInfo|null[0]
     final fun component5(): kotlin/Long // com.linroid.kiff/PatchInfo.component5|component5(){}[0]
     final fun component6(): kotlin/UInt // com.linroid.kiff/PatchInfo.component6|component6(){}[0]
     final fun component7(): kotlin/Long // com.linroid.kiff/PatchInfo.component7|component7(){}[0]
-    final fun copy(com.linroid.kiff/PatcherId = ..., kotlin/Int = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ...): com.linroid.kiff/PatchInfo // com.linroid.kiff/PatchInfo.copy|copy(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long){}[0]
+    final fun component8(): kotlin/Boolean // com.linroid.kiff/PatchInfo.component8|component8(){}[0]
+    final fun copy(com.linroid.kiff/PatcherId = ..., kotlin/Int = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ..., kotlin/Boolean = ...): com.linroid.kiff/PatchInfo // com.linroid.kiff/PatchInfo.copy|copy(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.Boolean){}[0]
     final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff/PatchInfo.equals|equals(kotlin.Any?){}[0]
     final fun hashCode(): kotlin/Int // com.linroid.kiff/PatchInfo.hashCode|hashCode(){}[0]
     final fun toString(): kotlin/String // com.linroid.kiff/PatchInfo.toString|toString(){}[0]

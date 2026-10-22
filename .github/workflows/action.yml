@@ -55,6 +55,9 @@ jobs:
       - name: Test how the action finds its own release
         run: .github/scripts/test-lib.sh
 
+      - name: Test when a release moves the major tag
+        run: .github/scripts/test-major-tag.sh
+
   action:
     name: Action (${{ matrix.os }})
     strategy:

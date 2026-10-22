@@ -4,6 +4,7 @@ import com.linroid.kiff.KiffException
 
 /**
  * The codec the content stream is packed with: LZ77 matching, then Huffman coding of what it found.
+ * A region tree is packed with it too, as a stream of its own, where that makes a patch smaller.
  *
  * Matching alone, with its tokens written as varints, spends a whole byte on a literal however
  * common that byte is, and a whole byte on a length however predictable. On a real patch that left
@@ -85,21 +86,25 @@ internal object LzHuffman {
     return if (symbolBits <= 0) 0 else symbolBits * MAX_MATCH / DENSEST_MATCH_BITS
   }
 
-  fun decompress(data: ByteArray, expectedSize: Int): ByteArray {
+  /**
+   * Unpacks [data] into exactly [expectedSize] bytes. [what] names the stream in a refusal, since
+   * the region tree is packed the same way as the content.
+   */
+  fun decompress(data: ByteArray, expectedSize: Int, what: String = "Content stream"): ByteArray {
     val result = ByteArray(expectedSize)
     if (expectedSize == 0) {
       // Packing nothing writes nothing, so nothing is the only stream that unpacks to nothing.
       if (data.isNotEmpty()) {
-        throw KiffException.InvalidPatch("Content stream holds ${data.size} byte(s) of nothing")
+        throw KiffException.InvalidPatch("$what holds ${data.size} byte(s) of nothing")
       }
       return result
     }
-    val bits = BitReader(data)
+    val bits = BitReader(data, what)
 
     val literalLengths = IntArray(LITERAL_SYMBOLS) { bits.read(CODE_LENGTH_BITS) }
     val distanceLengths = IntArray(DISTANCE_SYMBOLS) { bits.read(CODE_LENGTH_BITS) }
-    val literals = Decoder(literalLengths)
-    val distances = Decoder(distanceLengths)
+    val literals = Decoder(literalLengths, what)
+    val distances = Decoder(distanceLengths, what)
 
     var position = 0
     while (true) {
@@ -107,38 +112,38 @@ internal object LzHuffman {
       when {
         symbol == END -> break
         symbol < LITERALS -> {
-          if (position >= expectedSize) overflow(expectedSize)
+          if (position >= expectedSize) overflow(what, expectedSize)
           result[position++] = symbol.toByte()
         }
         else -> {
           val lengthIndex = symbol - LITERALS - 1
           if (lengthIndex >= LENGTH_BASE.size) {
-            throw KiffException.InvalidPatch("Unknown length symbol $symbol in the content stream")
+            throw KiffException.InvalidPatch("$what holds an unknown length symbol $symbol")
           }
           val length = LENGTH_BASE[lengthIndex] + bits.read(LENGTH_EXTRA[lengthIndex])
           val distanceIndex = distances.decode(bits)
           if (distanceIndex >= DISTANCE_BASE.size) {
-            throw KiffException.InvalidPatch("Unknown distance symbol in the content stream")
+            throw KiffException.InvalidPatch("$what holds an unknown distance symbol")
           }
           val distance = DISTANCE_BASE[distanceIndex] + bits.read(DISTANCE_EXTRA[distanceIndex])
           if (distance > position) {
-            throw KiffException.InvalidPatch("Content back-reference $distance before the start")
+            throw KiffException.InvalidPatch("$what refers back $distance bytes, before its start")
           }
-          if (length > expectedSize - position) overflow(expectedSize)
+          if (length > expectedSize - position) overflow(what, expectedSize)
           var from = position - distance
           repeat(length) { result[position++] = result[from++] }
         }
       }
     }
     if (position != expectedSize) {
-      throw KiffException.InvalidPatch("Content stream produced $position of $expectedSize bytes")
+      throw KiffException.InvalidPatch("$what produced $position of $expectedSize bytes")
     }
     bits.finish()
     return result
   }
 
-  private fun overflow(expectedSize: Int): Nothing =
-    throw KiffException.InvalidPatch("Content stream overflows $expectedSize bytes")
+  private fun overflow(what: String, expectedSize: Int): Nothing =
+    throw KiffException.InvalidPatch("$what overflows $expectedSize bytes")
 
   // ---- matching -------------------------------------------------------------------------
 
@@ -342,14 +347,14 @@ internal object LzHuffman {
   }
 
   /** Canonical decoder: counts per length, and the symbols of each length in order. */
-  private class Decoder(lengths: IntArray) {
+  private class Decoder(lengths: IntArray, private val what: String) {
     private val counts = IntArray(MAX_CODE_BITS + 1)
     private val symbols: IntArray
 
     init {
       for (length in lengths) {
         if (length < 0 || length > MAX_CODE_BITS) {
-          throw KiffException.InvalidPatch("Content stream declares a code length of $length")
+          throw KiffException.InvalidPatch("$what declares a code length of $length")
         }
         if (length > 0) counts[length]++
       }
@@ -359,7 +364,7 @@ internal object LzHuffman {
         available = available shl 1
         available -= counts[bits]
         if (available < 0) {
-          throw KiffException.InvalidPatch("Content stream declares an impossible Huffman tree")
+          throw KiffException.InvalidPatch("$what declares an impossible Huffman tree")
         }
       }
       // Where the symbols of each length start, which is also the order decode walks them in.
@@ -385,7 +390,7 @@ internal object LzHuffman {
         first = (first + count) shl 1
         code = code shl 1
       }
-      throw KiffException.InvalidPatch("Content stream holds a code no tree describes")
+      throw KiffException.InvalidPatch("$what holds a code no tree describes")
     }
   }
 
@@ -415,7 +420,7 @@ internal object LzHuffman {
     }
   }
 
-  private class BitReader(private val data: ByteArray) {
+  private class BitReader(private val data: ByteArray, private val what: String) {
     private var at = 0
     private var bits = 0
     private var count = 0
@@ -425,7 +430,7 @@ internal object LzHuffman {
       repeat(length) {
         if (count == 0) {
           if (at >= data.size) {
-            throw KiffException.InvalidPatch("Content stream ended mid-symbol")
+            throw KiffException.InvalidPatch("$what ended mid-symbol")
           }
           bits = data[at++].toInt() and 0xFF
           count = 8
@@ -442,7 +447,7 @@ internal object LzHuffman {
      */
     fun finish() {
       if (at != data.size || bits and ((1 shl count) - 1) != 0) {
-        throw KiffException.InvalidPatch("Content stream has bits after its end symbol")
+        throw KiffException.InvalidPatch("$what has bits after its end symbol")
       }
     }
   }
