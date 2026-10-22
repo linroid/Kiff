@@ -150,14 +150,16 @@ class DexFormatTest {
       }
       return out
     }
+    // Long enough for taking the dex apart to win clearly. At 400 rows the dex read whole, with its
+    // unchanged section copied, weighs exactly what its parts do before the patch is packed.
     val source = TestZipBuilder().entry(
       "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 500)).section(0x2001, structuredBytes(3_000, 1))
+      TestDexBuilder().section(0x0001, table(800, 500)).section(0x2001, structuredBytes(3_000, 1))
         .build()
     ).build()
     val target = TestZipBuilder().entry(
       "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 564)).section(0x2001, structuredBytes(3_000, 1))
+      TestDexBuilder().section(0x0001, table(800, 564)).section(0x2001, structuredBytes(3_000, 1))
         .build()
     ).build()
 

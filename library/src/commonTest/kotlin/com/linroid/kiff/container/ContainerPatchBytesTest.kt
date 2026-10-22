@@ -22,7 +22,8 @@ import kotlin.test.assertEquals
  * whole file, grouped dex files, columns, pairing by ordinal, nesting as deep as a reader goes, and
  * the malformed inputs a format has to leave whole. The values were captured before the format API
  * moved from arrays and `Int` offsets to sources and `Long` ones, so equal here means that change
- * left every patch byte for byte as it was.
+ * left every patch byte for byte as it was. Those the delta writer changed when it started copying
+ * long equal stretches out of a DIFF were captured again then.
  */
 class ContainerPatchBytesTest {
 
@@ -38,19 +39,19 @@ class ContainerPatchBytesTest {
   private val pinned = mapOf(
     "a registered format, whole" to Pinned(4786, 0x5b735002u),
     "a registered format inside a zip" to Pinned(4894, 0x5d9f9b45u),
-    "a dex, whole" to Pinned(2962, 0x1ac83d4au),
-    "a dex whose id table shifts" to Pinned(304, 0xb6020ff7u),
-    "a dex with an offset near Int.MAX_VALUE" to Pinned(280, 0x3823539eu),
+    "a dex, whole" to Pinned(2871, 0x745d0795u),
+    "a dex whose id table shifts" to Pinned(310, 0x44fd1eb7u),
+    "a dex with an offset near Int.MAX_VALUE" to Pinned(163, 0x3526ff37u),
     "an apk whose dex files are grouped" to Pinned(2745, 0x2bf3accfu),
-    "an apk that loses a dex" to Pinned(1136, 0xdca1813eu),
+    "an apk that loses a dex" to Pinned(1143, 0xcdc74444u),
     "an apk with ApkFormat registered" to Pinned(44609, 0x1c6e6c46u),
     "an apk without DexFormat" to Pinned(43401, 0xf4faa9d9u),
     "a reordered inner archive" to Pinned(323, 0x56148f92u),
-    "an inner archive with edited text" to Pinned(308, 0x5facc3b8u),
+    "an inner archive with edited text" to Pinned(308, 0xd9e8d096u),
     "a deflated inner archive" to Pinned(318, 0xe5948d61u),
-    "archives nested eight deep" to Pinned(764, 0xd3506813u),
+    "archives nested eight deep" to Pinned(763, 0xdc0be87fu),
     "archives nested twelve deep" to Pinned(12012, 0xebe2ccb0u),
-    "a zip with a gap before its directory" to Pinned(1166, 0x07953fafu)
+    "a zip with a gap before its directory" to Pinned(1164, 0xe7a78615u)
   )
 
   @Test
