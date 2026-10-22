@@ -58,12 +58,12 @@ class TestDexBuilder {
 }
 
 /**
- * A `string_ids` table: [rows] offsets of strings 11 to 17 bytes long. With [insertAt], a 64-byte
- * string goes in at that row, so every offset after it moves by 64.
+ * A `string_ids` table: [rows] offsets of strings 11 to 17 bytes long, the first at [firstOffset].
+ * With [insertAt], a 64-byte string goes in at that row, so every offset after it moves by 64.
  */
-fun stringIdTable(rows: Int, insertAt: Int? = null): ByteArray {
+fun stringIdTable(rows: Int, insertAt: Int? = null, firstOffset: Int = 500): ByteArray {
   val offsets = ArrayList<Int>(rows + 1)
-  var value = 500
+  var value = firstOffset
   for (row in 0 until rows) {
     offsets += value
     value += 11 + (row % 7)

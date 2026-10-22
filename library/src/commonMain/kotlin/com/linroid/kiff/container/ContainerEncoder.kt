@@ -250,9 +250,7 @@ internal class ContainerEncoder(
     )
     val flatBytes = flatScratch.toByteArray()
 
-    if (decomposed != null && packedCost(decomposed.node, decomposed.literals) <
-      packedCost(flat, flatBytes)
-    ) {
+    if (decomposed != null && decomposed.cost() < Candidate(flat, flatBytes).cost()) {
       literals.writeBytes(decomposed.literals)
       return Built(decomposed.node, decomposed.costs)
     }
@@ -294,9 +292,6 @@ internal class ContainerEncoder(
     val children = format.decompose(input, from, to)
     return if (ContainerFormatTiling.tiles(children, from, to)) children else emptyList()
   }
-
-  private fun packedCost(node: RegionNode, literals: ByteArray): Long =
-    node.structureBytes() + LzHuffman.estimate(literals)
 
   private fun addPart(
     into: MutableList<RegionNode>,
@@ -361,12 +356,12 @@ internal class ContainerEncoder(
     var best = binaryCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, shared)
     if (plan == RegionAlgorithm.TEXT) {
       val text = textCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo)
-      if (text != null && text.packedCost() < best.packedCost()) best = text
+      if (text != null && text.cost() < best.cost()) best = text
     }
     // A table only its format could recognise gets one more way of being read.
     if (columns != null) {
       val rearranged = columnsCandidate(span, sourceFrom, sourceTo, targetFrom, targetTo, columns)
-      if (rearranged != null && rearranged.packedCost() < best.packedCost()) best = rearranged
+      if (rearranged != null && rearranged.cost() < best.cost()) best = rearranged
     }
 
     if (!beatsStoringTarget(best.node.structureBytes(), best.literals, targetFrom, targetTo)) {
@@ -656,14 +651,36 @@ internal class ContainerEncoder(
    * Cost is measured on the packed content, because that is what reaches the patch. An unpacked
    * comparison systematically prefers whichever encoding emits fewer bytes over whichever emits
    * more compressible ones, and on real content those are rarely the same encoding.
+   *
+   * What content costs packed depends on the rest of the patch, which is not written yet. A packed
+   * stream opens with about 165 bytes of code lengths however little it holds, and a patch stores
+   * its content instead where packing would not make it smaller. So where the rest of the content
+   * is packed anyway, a candidate's adds only its share of the stream; where it is the only
+   * content, it costs itself packed or stored, whichever is smaller. A candidate is charged both,
+   * summed: between two, that keeps the one that loses less in whichever case it is wrong about.
+   *
+   * Either case alone was measured wrong. Charged as if packed anyway, a dex whose id table only
+   * moved tied with being described whole, though taken apart it left two bytes of content, and
+   * a patch that small stores them: 182 bytes against 303. Charged as the only content, an archive
+   * inside an archive was taken apart for 162 bytes of content counted as stored, against 208 for
+   * the 247 bytes it left whole packed; but the rest of the patch packed too, and the patch came
+   * out at 365 bytes against 334.
+   *
+   * A description weighed against storing its bytes, by [beatsStoring], is still charged as if
+   * packed anyway. Charged both there, small regions of three patches between real release APKs
+   * were stored rather than described, and each patch grew by 26 to 64 bytes.
    */
   private class Candidate(
     val node: RegionNode,
     val literals: ByteArray,
     val costs: List<RegionCost> = emptyList()
   ) {
-    fun packedCost(): Long =
-      node.structureBytes() + LzHuffman.estimate(literals)
+    fun cost(): Long {
+      val packed = LzHuffman.estimate(literals)
+      val share = maxOf(0, packed - LzHuffman.tableBytes)
+      val alone = minOf(literals.size, packed)
+      return 2 * node.structureBytes() + share + alone
+    }
   }
 
   private companion object {

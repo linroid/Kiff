@@ -26,7 +26,9 @@ import kotlin.test.assertEquals
  * the delta writer copying the long exact stretches inside a DIFF rather than storing zeroes for
  * them, and the content codec matching lazily, which packs the same regions tighter. The id table
  * gained an entry with the first: shifted alone, it no longer made taking the dex apart pay, and so
- * no longer reached columns.
+ * no longer reached columns. It does again, and is pinned as a case of its own, since a
+ * description's content is weighed as the patch might store it as well as packed; no other value
+ * here moved for that.
  */
 class ContainerPatchBytesTest {
 
@@ -44,6 +46,7 @@ class ContainerPatchBytesTest {
     "a registered format inside a zip" to Pinned(4834, 0xa1790ebau),
     "a dex, whole" to Pinned(2871, 0x745d0795u),
     "a dex whose id table shifts" to Pinned(348, 0xe9b9dd78u),
+    "a dex whose id table only moves" to Pinned(182, 0xfcb7082cu),
     "a dex with an offset near Int.MAX_VALUE" to Pinned(163, 0x3526ff37u),
     "an apk whose dex files are grouped" to Pinned(2741, 0x4a208fc0u),
     "an apk that loses a dex" to Pinned(1136, 0xe89d86e7u),
@@ -99,6 +102,11 @@ class ContainerPatchBytesTest {
         "a dex whose id table shifts",
         zip { entry("classes.dex", tableDex()) },
         zip { entry("classes.dex", tableDex(insertAt = 20)) }
+      ),
+      Case(
+        "a dex whose id table only moves",
+        zip { entry("classes.dex", tableDex()) },
+        zip { entry("classes.dex", tableDex(firstOffset = 564)) }
       ),
       Case(
         "a dex with an offset near Int.MAX_VALUE",
@@ -221,8 +229,8 @@ class ContainerPatchBytesTest {
     .build()
 
   /** A dex whose `string_ids` is a table of offsets that all shift when [firstOffset] does. */
-  private fun tableDex(insertAt: Int? = null): ByteArray = TestDexBuilder()
-    .section(0x0001, stringIdTable(400, insertAt))
+  private fun tableDex(insertAt: Int? = null, firstOffset: Int = 500): ByteArray = TestDexBuilder()
+    .section(0x0001, stringIdTable(400, insertAt, firstOffset))
     .section(0x2001, structuredBytes(3_000, 1))
     .build()
 
