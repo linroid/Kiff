@@ -58,6 +58,9 @@ jobs:
       - name: Test how the action lists a repository's releases
         run: .github/scripts/test-plan.sh
 
+      - name: Test when a release moves the major tag
+        run: .github/scripts/test-major-tag.sh
+
   action:
     name: Action (${{ matrix.os }})
     strategy:

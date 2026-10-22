@@ -32,6 +32,9 @@ Use the Gradle wrapper and JDK 17, matching CI.
 - `./gradlew publishToMavenLocal` publishes artifacts locally for integration testing.
 - Builds are `0.0.0-SNAPSHOT` unless given `-Pversion=X.Y.Z`, which the release workflow takes
   from the `vX.Y.Z` tag. Never put a version in `gradle.properties` or commit a version bump.
+- The release workflow moves the major tag `vX`, which `uses: linroid/kiff@vX` follows, to each
+  1.x-or-later release that is the highest of its major version, and refuses to when the
+  patch-format version in `FORMAT.md` changed: a new patch format needs a new major version.
 - `./gradlew :library:checkKotlinAbi` checks the library's public API against `library/api/`;
   `check` runs it too. See [Public API](#public-api).
 

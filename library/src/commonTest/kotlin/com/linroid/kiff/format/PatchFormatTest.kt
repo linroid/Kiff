@@ -7,6 +7,7 @@ import com.linroid.kiff.io.ByteArrayRestoreTarget
 import com.linroid.kiff.io.ByteArraySource
 import com.linroid.kiff.structuredBytes
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -37,7 +38,7 @@ class PatchFormatTest {
     // A flag changes how the payload reads, so one this build does not know has to stop it on every
     // path - including the header alone, which is all an updater looks at before downloading.
     val patch = Kiff.createPatch(source, target)
-    for (bit in 1..7) {
+    for (bit in 2..7) {
       val flagged = patch.copyOf().also {
         it[FLAGS_BYTE] = (PatchFormat.FLAG_REGION_CHECKSUMS or (1 shl bit)).toByte()
       }
@@ -53,12 +54,37 @@ class PatchFormatTest {
   }
 
   @Test
+  fun thePackedTreeFlagIsKnownButNotTakenOnTrust() {
+    // The flag changes where the payload's fields are, so setting or clearing it on a patch that
+    // was written the other way has to be refused when applied, not read as something else.
+    val patch = Kiff.createPatch(source, target)
+    assertFalse(Kiff.info(patch).treePacked)
+    val flagged = patch.copyOf().also {
+      it[FLAGS_BYTE] = (it[FLAGS_BYTE].toInt() or PatchFormat.FLAG_PACKED_TREE).toByte()
+    }
+    assertTrue(Kiff.info(flagged).treePacked)
+    assertFailsWith<KiffException.InvalidPatch> { Kiff.applyPatch(source, flagged) }
+
+    val packed = withPackedTree(patch)
+    assertContentEquals(target, Kiff.applyPatch(source, packed))
+    val unflagged = packed.copyOf().also {
+      it[FLAGS_BYTE] = (it[FLAGS_BYTE].toInt() and PatchFormat.FLAG_PACKED_TREE.inv()).toByte()
+    }
+    assertFailsWith<KiffException.InvalidPatch> { Kiff.applyPatch(source, unflagged) }
+    assertFailsWith<KiffException.InvalidPatch> {
+      Kiff.applyPatch(ByteArraySource(source), unflagged, ByteArrayRestoreTarget(target.size))
+    }
+  }
+
+  @Test
   fun readableFormatsNameWhatThisBuildWritesAndNothingItRefuses() {
     val written = Kiff.info(Kiff.createPatch(source, target)).formatVersion
     assertTrue(written in Kiff.readableFormats)
     // The version unknownVersionsAreRejected shows refused: an updater skipping by this set has to
     // skip exactly what applyPatch would turn down.
     assertFalse(2 in Kiff.readableFormats)
+    // A packed tree is a flag within version 1, not a version of its own.
+    assertEquals(setOf(1), Kiff.readableFormats)
   }
 
   @Test

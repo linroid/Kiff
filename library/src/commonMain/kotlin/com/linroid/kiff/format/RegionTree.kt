@@ -196,7 +196,7 @@ internal fun RegionNode.structureBytes(checksummed: Boolean = true): Long {
 private const val CHECKSUM_BYTES = 4L
 
 /** Bytes a varint of [value] occupies: seven bits at a time. */
-private fun varSize(value: Long): Long {
+internal fun varSize(value: Long): Long {
   var remaining = value
   var bytes = 1L
   while (remaining >= 0x80) {

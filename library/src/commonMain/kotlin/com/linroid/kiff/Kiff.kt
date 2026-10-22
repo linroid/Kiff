@@ -126,7 +126,8 @@ public object Kiff {
     sourceCrc32 = header.sourceCrc32,
     targetSize = header.targetSize,
     targetCrc32 = header.targetCrc32,
-    patchSize = patchSize
+    patchSize = patchSize,
+    treePacked = header.treePacked
   )
 
   /**

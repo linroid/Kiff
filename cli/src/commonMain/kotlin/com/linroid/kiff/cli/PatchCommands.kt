@@ -61,7 +61,8 @@ class InfoCommand : KiffCommand(name = "info") {
 }
 
 private fun CliktCommand.echoInfo(info: PatchInfo) {
-  echo("  Read as:     ${info.patcher.name.lowercase()} (format v${info.formatVersion})")
+  val packed = if (info.treePacked) ", packed tree" else ""
+  echo("  Read as:     ${info.patcher.name.lowercase()} (format v${info.formatVersion}$packed)")
   echo("  Source:      ${formatBytes(info.sourceSize)} crc32=${hex(info.sourceCrc32)}")
   echo("  Target:      ${formatBytes(info.targetSize)} crc32=${hex(info.targetCrc32)}")
   val share = formatPercent(info.ratio)

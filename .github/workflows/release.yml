@@ -2,7 +2,8 @@ name: Release
 
 on:
   push:
-    tags: [ 'v*' ]
+    # Not a major tag such as v1, which the major-tag job moves and is no release.
+    tags: [ 'v*', '!v[0-9]+' ]
   workflow_dispatch:
     inputs:
       tag:
@@ -197,3 +198,30 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+
+  # Points the major tag vX at this release, so that uses: linroid/kiff@vX runs it, once the CLI is
+  # attached and the library uploaded. Not for 0.x or a prerelease, nor for a release below the
+  # highest of its major version, and never across a change of patch format. A manual run that
+  # leaves Central out moves it too, since Central already has that version.
+  major-tag:
+    name: Move the major tag
+    needs: [ attach, maven ]
+    if: >-
+      !cancelled() && needs.attach.result == 'success' &&
+      (needs.maven.result == 'success' ||
+      (needs.maven.result == 'skipped' && github.event_name == 'workflow_dispatch'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      # Every tag and the commits they name, to compare with the release, and the token kept for
+      # the one push the script makes. A manual run takes the script from its branch.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Move the major tag
+        run: .github/scripts/major-tag.sh "$TAG"

@@ -138,16 +138,18 @@ patches with a manifest that the app's updater reads.
        permissions:
          contents: write
        steps:
-         - uses: linroid/kiff@vX.Y.Z
+         - uses: linroid/kiff@v1
            with:
              assets: app-*.apk
              kiff-version: X.Y.Z
    ```
 
-3. **Pin the versions.** Replace `vX.Y.Z` with the latest release, which the Release badge above
-   shows, and keep that exact tag rather than a branch. Set `kiff-version` to the oldest Kiff
-   embedded in an app build you still support, since that Kiff applies the patches; for an app that
-   first embeds Kiff now, that is the same release. [Versions](#versions) says why.
+3. **Choose the versions.** `@v1` is the easy choice: it runs the latest Kiff 1.x release. For the
+   strict choice, pin the action to a release, `@vX.Y.Z`, or the commit SHA it names, so it changes
+   only when you change it. Either way, set `kiff-version` to the oldest Kiff embedded in an app
+   build you still support, since that Kiff applies the patches; for an app that first embeds Kiff
+   now, that is the latest release, which the Release badge above shows. [Versions](#versions) says
+   why.
 4. **Publish a release.** The action attaches a patch from each of the three releases before it,
    and `kiff-patches.json`, and its job summary lists every patch. A release that another workflow
    publishes with the default `GITHUB_TOKEN` starts no `release` workflow, so a release workflow
@@ -384,8 +386,9 @@ It has to be the first argument. Anywhere later, `--use` belongs to the command 
 as it is.
 
 A patch is applied on the user's device, by the Kiff inside the app they already have, and that
-Kiff refuses a format newer than it knows. So build patches with the oldest Kiff still embedded in a
-version of the app you update. A newer Kiff reads every patch an older one wrote, which
+Kiff refuses a format newer than it knows, or a packed tree if it is 0.1 or 0.2 (see
+[Versions](#versions)). So build patches with the oldest Kiff still embedded in a version of the
+app you update. A newer Kiff reads every patch an older one wrote, which
 `FormatVectorsTest` holds each build to with patches frozen in the released format, so a patch from
 the oldest one applies on every later app as well.
 
@@ -467,7 +470,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: ./gradlew assembleRelease
       - run: gh release create "$GITHUB_REF_NAME" --draft app/build/outputs/apk/release/app-*.apk
-      - uses: linroid/kiff@vX.Y.Z
+      - uses: linroid/kiff@v1
         with:
           assets: app-*.apk
       - run: gh release edit "$GITHUB_REF_NAME" --draft=false
@@ -495,7 +498,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: linroid/kiff@vX.Y.Z
+      - uses: linroid/kiff@v1
         with:
           tag: ${{ inputs.tag }}
           assets: |
@@ -550,7 +553,7 @@ Kiff refuses a patch format newer than it knows. So set `kiff-version` to the ol
 embedded in a build of the app you update:
 
 ```yaml
-      - uses: linroid/kiff@vX.Y.Z
+      - uses: linroid/kiff@v1
         with:
           assets: app-*.apk
           kiff-version: 0.1.0
@@ -567,13 +570,29 @@ manifest's `generator` say which kiff made the patches. As for `kiff --use`, `KI
 replaces `https://github.com/linroid/kiff/releases/download` with a mirror that serves the same
 files under `vVERSION/`.
 
+`linroid/kiff@v1` is the easy choice. From Kiff 1.0.0 on, the tag `v1` moves to each 1.x release
+once that release is built and uploaded, but never back to a lower version, and never to a release
+whose `FORMAT.md` specifies another patch format than the one `v1` was at: a new patch format comes
+with a new major version, and a tag of its own. Pinning `linroid/kiff@vX.Y.Z`, or the commit SHA
+it names, is the strict choice, which changes only when you change it. Either way, `kiff-version`
+still pins which Kiff writes the patches.
+
 Without `kiff-version`, the action runs the Kiff release tagged at the commit it was loaded from,
 downloaded in the same way: `linroid/kiff@vX.Y.Z` runs kiff X.Y.Z, and so does the commit that
-`vX.Y.Z` names. A ref with no release at its commit, such as a branch, builds the CLI from the
-action's own source first, as `0.0.0-SNAPSHOT`, which adds a few minutes. So does a release whose
-files cannot be downloaded, as that release's version. Pin the action to a release tag or its
-commit, not a branch. With `kiff-version` set, the action itself can move ahead of your apps, since the
-format comes from the kiff it runs.
+`vX.Y.Z` names, and `linroid/kiff@v1` runs the highest release at the commit `v1` names. A ref
+with no release at its commit, such as a branch, builds the CLI from the action's own source
+first, as `0.0.0-SNAPSHOT`, which adds a few minutes. So does a release whose files cannot be
+downloaded, such as a draft, as that release's version. Use `v1`, a release tag or a commit, not a
+branch. With `kiff-version` set, the action itself can move ahead of your apps, since the format
+comes from the kiff it runs.
+
+Kiff after 0.2 packs a patch's region tree wherever that makes the patch smaller. That matters most
+for text: it took 10-19% off patches between 110 MiB R8 mapping files, against 1.0-1.5% off those
+between 72 MiB release APKs, which are packed all the same. The patch is still format 1, but Kiff
+0.1 and 0.2 refuse one whose tree is packed, as they refuse anything they do not know, so an app
+that embeds one of them falls back to downloading the full file. `kiff info` says `packed tree` for
+such a patch, and `PatchInfo.treePacked` is the same. To write patches those apps can read, set
+`kiff-version: 0.2.0`, or run `kiff --use 0.2.0` on the command line.
 
 ### Updating from the manifest
 
@@ -590,7 +609,8 @@ checks its `sha256`, applies it, and checks the result against the file's own `s
 applying, it compares `Kiff.info(patch).targetSize` with the file's `size`: a few bytes of patch can
 declare gigabytes of target, and the declared size is what a restore writes and may allocate. When
 there is no such patch, because the installed version is too old, was dropped for size or the
-release has no manifest, it downloads the full file from `url` instead.
+release has no manifest, it downloads the full file from `url` instead. It does the same when
+applying refuses the patch, as Kiff 0.1 and 0.2 refuse one whose tree is packed.
 
 
 ## How a patch is built
@@ -607,7 +627,7 @@ A patch is a header, a tree of regions, and one stream of content:
 version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
-tree    region tree, each region checksummed
+tree    region tree, each region checksummed, packed where that is smaller
 content literals, packed with a built-in LZ77 + Huffman codec
 ```
 
@@ -946,7 +966,13 @@ A release's version is its tag. Nothing in the source names a version: any build
 3. It then uploads the library, built with the same `-Pversion`, to the Central Portal as a
    deployment. A run started by hand uploads only when told to, since Central takes each version
    once.
-4. Review the draft and publish it. Then open
+4. Last, it moves the major tag `vX` to the release's commit, so that `linroid/kiff@vX` runs it,
+   with [major-tag.sh](.github/scripts/major-tag.sh). It skips 0.x, prereleases and any release
+   below the highest `vX.*.*` tag, and fails rather than move `vX` to a release whose `FORMAT.md`
+   specifies another patch format than at the commit `vX` names: a new patch format needs a new
+   major version.
+5. Review the draft and publish it soon, since until then the action at `vX` finds nothing to
+   download and builds Kiff from source. Then open
    [Deployments](https://central.sonatype.com/publishing/deployments) on the Central Portal, wait
    for the deployment to show as validated, and publish it. The workflow does not wait for that
    validation, so a failed one shows only there.
