@@ -14,18 +14,18 @@ import com.linroid.kiff.text.MyersDiffAlgorithm
  * None of it is recorded in the patch. Each setting changes how the target is described, never how
  * a description is read, so a patch built with any of them applies with no options at all.
  */
-class KiffOptions(
+public class KiffOptions(
   /** The byte search inside every region. Any algorithm works with any structure. */
-  val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
+  public val algorithm: DeltaAlgorithm = RollingHashAlgorithm,
   /** Chooses how each leaf region of a container is described; see [RegionPlanner]. */
-  val planner: RegionPlanner = TextAwareRegionPlanner,
+  public val planner: RegionPlanner = TextAwareRegionPlanner,
   /**
    * The formats Kiff takes apart: the file as a whole, and any region found inside it.
    *
    * Add a format here to have it recognised at either level. An empty registry describes every
    * file as plain bytes.
    */
-  val containers: ContainerRegistry = NestedContainers,
+  public val containers: ContainerRegistry = NestedContainers,
   /** The line diff behind regions described as text. */
-  val lineAlgorithm: LineDiffAlgorithm = MyersDiffAlgorithm()
+  public val lineAlgorithm: LineDiffAlgorithm = MyersDiffAlgorithm()
 )

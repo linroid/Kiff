@@ -1,0 +1,652 @@
+public final class com/linroid/kiff/Kiff {
+	public static final field INSTANCE Lcom/linroid/kiff/Kiff;
+	public final fun applyPatch (Lcom/linroid/kiff/io/SeekableSource;[B)[B
+	public final fun applyPatch (Lcom/linroid/kiff/io/SeekableSource;[BLcom/linroid/kiff/io/RestoreTarget;)V
+	public final fun applyPatch (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/linroid/kiff/PatchInfo;
+	public final fun applyPatch ([B[B)[B
+	public final fun createPatch (Lcom/linroid/kiff/io/SeekableSource;Lcom/linroid/kiff/io/SeekableSource;Lcom/linroid/kiff/KiffOptions;)[B
+	public final fun createPatch (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/linroid/kiff/KiffOptions;)Lcom/linroid/kiff/PatchInfo;
+	public final fun createPatch ([B[BLcom/linroid/kiff/KiffOptions;)[B
+	public static synthetic fun createPatch$default (Lcom/linroid/kiff/Kiff;Lcom/linroid/kiff/io/SeekableSource;Lcom/linroid/kiff/io/SeekableSource;Lcom/linroid/kiff/KiffOptions;ILjava/lang/Object;)[B
+	public static synthetic fun createPatch$default (Lcom/linroid/kiff/Kiff;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/linroid/kiff/KiffOptions;ILjava/lang/Object;)Lcom/linroid/kiff/PatchInfo;
+	public static synthetic fun createPatch$default (Lcom/linroid/kiff/Kiff;[B[BLcom/linroid/kiff/KiffOptions;ILjava/lang/Object;)[B
+	public final fun getReadableFormats ()Ljava/util/Set;
+	public final fun info (Ljava/lang/String;)Lcom/linroid/kiff/PatchInfo;
+	public final fun info ([B)Lcom/linroid/kiff/PatchInfo;
+}
+
+public abstract class com/linroid/kiff/KiffException : java/lang/Exception {
+}
+
+public final class com/linroid/kiff/KiffException$InvalidPatch : com/linroid/kiff/KiffException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/linroid/kiff/KiffException$SourceMismatch : com/linroid/kiff/KiffException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/linroid/kiff/KiffException$UnsupportedInput : com/linroid/kiff/KiffException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/linroid/kiff/KiffException$VerificationFailed : com/linroid/kiff/KiffException {
+	public fun <init> (Ljava/lang/String;)V
+}
+
+public final class com/linroid/kiff/KiffOptions {
+	public fun <init> ()V
+	public fun <init> (Lcom/linroid/kiff/delta/DeltaAlgorithm;Lcom/linroid/kiff/region/RegionPlanner;Lcom/linroid/kiff/container/ContainerRegistry;Lcom/linroid/kiff/text/LineDiffAlgorithm;)V
+	public synthetic fun <init> (Lcom/linroid/kiff/delta/DeltaAlgorithm;Lcom/linroid/kiff/region/RegionPlanner;Lcom/linroid/kiff/container/ContainerRegistry;Lcom/linroid/kiff/text/LineDiffAlgorithm;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAlgorithm ()Lcom/linroid/kiff/delta/DeltaAlgorithm;
+	public final fun getContainers ()Lcom/linroid/kiff/container/ContainerRegistry;
+	public final fun getLineAlgorithm ()Lcom/linroid/kiff/text/LineDiffAlgorithm;
+	public final fun getPlanner ()Lcom/linroid/kiff/region/RegionPlanner;
+}
+
+public final class com/linroid/kiff/KiffReports {
+	public static final field INSTANCE Lcom/linroid/kiff/KiffReports;
+	public final fun apk ([B[B)Lcom/linroid/kiff/apk/ApkDiffReport;
+	public final fun apkEntryKind (Ljava/lang/String;)Lcom/linroid/kiff/apk/ApkEntryKind;
+	public final fun explain ([B[BLcom/linroid/kiff/KiffOptions;)Lcom/linroid/kiff/region/RegionReport;
+	public static synthetic fun explain$default (Lcom/linroid/kiff/KiffReports;[B[BLcom/linroid/kiff/KiffOptions;ILjava/lang/Object;)Lcom/linroid/kiff/region/RegionReport;
+	public final fun explainApk ([B[BLcom/linroid/kiff/KiffOptions;)Lcom/linroid/kiff/apk/ApkPatchReport;
+	public static synthetic fun explainApk$default (Lcom/linroid/kiff/KiffReports;[B[BLcom/linroid/kiff/KiffOptions;ILjava/lang/Object;)Lcom/linroid/kiff/apk/ApkPatchReport;
+	public final fun isApk ([B)Z
+	public final fun zip ([B[B)Lcom/linroid/kiff/zip/ZipDiffReport;
+}
+
+public final class com/linroid/kiff/NestedContainersKt {
+	public static final fun getNestedContainers ()Lcom/linroid/kiff/container/ContainerRegistry;
+}
+
+public final class com/linroid/kiff/PatchInfo {
+	public synthetic fun <init> (Lcom/linroid/kiff/PatcherId;IJIJIJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/linroid/kiff/PatcherId;
+	public final fun component2 ()I
+	public final fun component3 ()J
+	public final fun component4-pVg5ArA ()I
+	public final fun component5 ()J
+	public final fun component6-pVg5ArA ()I
+	public final fun component7 ()J
+	public final fun copy-4bOT6nU (Lcom/linroid/kiff/PatcherId;IJIJIJ)Lcom/linroid/kiff/PatchInfo;
+	public static synthetic fun copy-4bOT6nU$default (Lcom/linroid/kiff/PatchInfo;Lcom/linroid/kiff/PatcherId;IJIJIJILjava/lang/Object;)Lcom/linroid/kiff/PatchInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getFormatVersion ()I
+	public final fun getPatchSize ()J
+	public final fun getPatcher ()Lcom/linroid/kiff/PatcherId;
+	public final fun getRatio ()D
+	public final fun getSourceCrc32-pVg5ArA ()I
+	public final fun getSourceSize ()J
+	public final fun getTargetCrc32-pVg5ArA ()I
+	public final fun getTargetSize ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/PatcherId : java/lang/Enum {
+	public static final field APK Lcom/linroid/kiff/PatcherId;
+	public static final field BINARY Lcom/linroid/kiff/PatcherId;
+	public static final field ZIP Lcom/linroid/kiff/PatcherId;
+	public final fun getCode ()I
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/PatcherId;
+	public static fun values ()[Lcom/linroid/kiff/PatcherId;
+}
+
+public final class com/linroid/kiff/apk/ApkDiffReport {
+	public fun <init> (Lcom/linroid/kiff/zip/ZipDiffReport;Ljava/util/List;II)V
+	public final fun component1 ()Lcom/linroid/kiff/zip/ZipDiffReport;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun copy (Lcom/linroid/kiff/zip/ZipDiffReport;Ljava/util/List;II)Lcom/linroid/kiff/apk/ApkDiffReport;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/apk/ApkDiffReport;Lcom/linroid/kiff/zip/ZipDiffReport;Ljava/util/List;IIILjava/lang/Object;)Lcom/linroid/kiff/apk/ApkDiffReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntries ()Lcom/linroid/kiff/zip/ZipDiffReport;
+	public final fun getKinds ()Ljava/util/List;
+	public final fun getSigned ()Z
+	public final fun getSourceSigningBlockSize ()I
+	public final fun getTargetSigningBlockSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/apk/ApkEntryKind : java/lang/Enum {
+	public static final field ASSET Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field DEX Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field MANIFEST Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field METADATA Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field NATIVE_LIBRARY Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field OTHER Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field RESOURCE Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field RESOURCE_TABLE Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static final field SIGNATURE Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/apk/ApkEntryKind;
+	public static fun values ()[Lcom/linroid/kiff/apk/ApkEntryKind;
+}
+
+public final class com/linroid/kiff/apk/ApkKindCost {
+	public fun <init> (Lcom/linroid/kiff/apk/ApkEntryKind;IJJJ)V
+	public final fun component1 ()Lcom/linroid/kiff/apk/ApkEntryKind;
+	public final fun component2 ()I
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun component5 ()J
+	public final fun copy (Lcom/linroid/kiff/apk/ApkEntryKind;IJJJ)Lcom/linroid/kiff/apk/ApkKindCost;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/apk/ApkKindCost;Lcom/linroid/kiff/apk/ApkEntryKind;IJJJILjava/lang/Object;)Lcom/linroid/kiff/apk/ApkKindCost;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEntryCount ()I
+	public final fun getInstructionBytes ()J
+	public final fun getKind ()Lcom/linroid/kiff/apk/ApkEntryKind;
+	public final fun getLiteralBytes ()J
+	public final fun getPatchBytes ()J
+	public final fun getRatio ()D
+	public final fun getTargetBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/apk/ApkKindSummary {
+	public fun <init> (Lcom/linroid/kiff/apk/ApkEntryKind;IIIIJJ)V
+	public final fun component1 ()Lcom/linroid/kiff/apk/ApkEntryKind;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()J
+	public final fun component7 ()J
+	public final fun copy (Lcom/linroid/kiff/apk/ApkEntryKind;IIIIJJ)Lcom/linroid/kiff/apk/ApkKindSummary;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/apk/ApkKindSummary;Lcom/linroid/kiff/apk/ApkEntryKind;IIIIJJILjava/lang/Object;)Lcom/linroid/kiff/apk/ApkKindSummary;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAddedCount ()I
+	public final fun getChangedCount ()I
+	public final fun getEntryCount ()I
+	public final fun getGrowth ()J
+	public final fun getKind ()Lcom/linroid/kiff/apk/ApkEntryKind;
+	public final fun getRemovedCount ()I
+	public final fun getSourceBytes ()J
+	public final fun getTargetBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/apk/ApkPatchReport {
+	public fun <init> (Lcom/linroid/kiff/region/RegionReport;Ljava/util/List;JJ)V
+	public final fun component1 ()Lcom/linroid/kiff/region/RegionReport;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun copy (Lcom/linroid/kiff/region/RegionReport;Ljava/util/List;JJ)Lcom/linroid/kiff/apk/ApkPatchReport;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/apk/ApkPatchReport;Lcom/linroid/kiff/region/RegionReport;Ljava/util/List;JJILjava/lang/Object;)Lcom/linroid/kiff/apk/ApkPatchReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDirectoryBytes ()J
+	public final fun getGapBytes ()J
+	public final fun getKinds ()Ljava/util/List;
+	public final fun getPatchSize ()J
+	public final fun getRegions ()Lcom/linroid/kiff/region/RegionReport;
+	public final fun getTargetSize ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/container/ApkFormat : com/linroid/kiff/container/ContainerFormat {
+	public fun <init> ()V
+	public fun decompose ([BII)Ljava/util/List;
+	public fun detect ([BII)Z
+	public fun getName ()Ljava/lang/String;
+	public fun pairUnmatched (Lcom/linroid/kiff/container/Child;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+}
+
+public final class com/linroid/kiff/container/Child {
+	public fun <init> (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;IIIILcom/linroid/kiff/container/Storage;Ljava/lang/Object;Ljava/lang/String;Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;IIIILcom/linroid/kiff/container/Storage;Ljava/lang/Object;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/util/List;
+	public final fun component2 ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()I
+	public final fun component6 ()I
+	public final fun component7 ()Lcom/linroid/kiff/container/Storage;
+	public final fun component8 ()Ljava/lang/Object;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;IIIILcom/linroid/kiff/container/Storage;Ljava/lang/Object;Ljava/lang/String;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/container/Child;Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;IIIILcom/linroid/kiff/container/Storage;Ljava/lang/Object;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/linroid/kiff/container/Child;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getColumns ()Ljava/util/List;
+	public final fun getContentFrom ()I
+	public final fun getContentKey ()Ljava/lang/Object;
+	public final fun getContentTo ()I
+	public final fun getFrom ()I
+	public final fun getGroup ()Ljava/lang/String;
+	public final fun getKind ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSize ()I
+	public final fun getStorage ()Lcom/linroid/kiff/container/Storage;
+	public final fun getTo ()I
+	public fun hashCode ()I
+	public final fun isBare ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/linroid/kiff/container/ContainerFormat {
+	public abstract fun decompose ([BII)Ljava/util/List;
+	public abstract fun detect ([BII)Z
+	public abstract fun getName ()Ljava/lang/String;
+	public fun pairUnmatched (Lcom/linroid/kiff/container/Child;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+}
+
+public final class com/linroid/kiff/container/ContainerFormat$DefaultImpls {
+	public static fun pairUnmatched (Lcom/linroid/kiff/container/ContainerFormat;Lcom/linroid/kiff/container/Child;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+}
+
+public final class com/linroid/kiff/container/ContainerFormatTiling {
+	public static final field INSTANCE Lcom/linroid/kiff/container/ContainerFormatTiling;
+	public final fun check (Lcom/linroid/kiff/container/ContainerFormat;[BII)Ljava/util/List;
+	public static synthetic fun check$default (Lcom/linroid/kiff/container/ContainerFormatTiling;Lcom/linroid/kiff/container/ContainerFormat;[BIIILjava/lang/Object;)Ljava/util/List;
+	public final fun describe (Lcom/linroid/kiff/container/ContainerFormat;[BII)Ljava/lang/String;
+	public static synthetic fun describe$default (Lcom/linroid/kiff/container/ContainerFormatTiling;Lcom/linroid/kiff/container/ContainerFormat;[BIIILjava/lang/Object;)Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/container/ContainerRegistry {
+	public static final field Companion Lcom/linroid/kiff/container/ContainerRegistry$Companion;
+	public fun <init> (Ljava/util/List;)V
+	public fun <init> ([Lcom/linroid/kiff/container/ContainerFormat;)V
+	public final fun plus (Lcom/linroid/kiff/container/ContainerFormat;)Lcom/linroid/kiff/container/ContainerRegistry;
+}
+
+public final class com/linroid/kiff/container/ContainerRegistry$Companion {
+	public final fun getEmpty ()Lcom/linroid/kiff/container/ContainerRegistry;
+}
+
+public final class com/linroid/kiff/container/DexFormat : com/linroid/kiff/container/ContainerFormat {
+	public fun <init> ()V
+	public fun decompose ([BII)Ljava/util/List;
+	public fun detect ([BII)Z
+	public fun getName ()Ljava/lang/String;
+	public fun pairUnmatched (Lcom/linroid/kiff/container/Child;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+}
+
+public final class com/linroid/kiff/container/Storage : java/lang/Enum {
+	public static final field DEFLATED Lcom/linroid/kiff/container/Storage;
+	public static final field STORED Lcom/linroid/kiff/container/Storage;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/container/Storage;
+	public static fun values ()[Lcom/linroid/kiff/container/Storage;
+}
+
+public final class com/linroid/kiff/container/ZipFormat : com/linroid/kiff/container/ContainerFormat {
+	public fun decompose ([BII)Ljava/util/List;
+	public fun detect ([BII)Z
+	public fun getName ()Ljava/lang/String;
+	public fun pairUnmatched (Lcom/linroid/kiff/container/Child;Ljava/util/List;)Lcom/linroid/kiff/container/Child;
+}
+
+public abstract interface class com/linroid/kiff/delta/DeltaAlgorithm {
+	public abstract fun getName ()Ljava/lang/String;
+	public abstract fun scanner (Lcom/linroid/kiff/io/SeekableSource;JJ)Lcom/linroid/kiff/delta/DeltaScanner;
+	public static synthetic fun scanner$default (Lcom/linroid/kiff/delta/DeltaAlgorithm;Lcom/linroid/kiff/io/SeekableSource;JJILjava/lang/Object;)Lcom/linroid/kiff/delta/DeltaScanner;
+}
+
+public final class com/linroid/kiff/delta/DeltaAlgorithm$DefaultImpls {
+	public static synthetic fun scanner$default (Lcom/linroid/kiff/delta/DeltaAlgorithm;Lcom/linroid/kiff/io/SeekableSource;JJILjava/lang/Object;)Lcom/linroid/kiff/delta/DeltaScanner;
+}
+
+public abstract interface class com/linroid/kiff/delta/DeltaScanner : java/lang/AutoCloseable {
+	public fun close ()V
+	public abstract fun scan (Lcom/linroid/kiff/io/SeekableSource;JJLcom/linroid/kiff/delta/DeltaSink;J)V
+	public static synthetic fun scan$default (Lcom/linroid/kiff/delta/DeltaScanner;Lcom/linroid/kiff/io/SeekableSource;JJLcom/linroid/kiff/delta/DeltaSink;JILjava/lang/Object;)V
+}
+
+public final class com/linroid/kiff/delta/DeltaScanner$DefaultImpls {
+	public static fun close (Lcom/linroid/kiff/delta/DeltaScanner;)V
+	public static synthetic fun scan$default (Lcom/linroid/kiff/delta/DeltaScanner;Lcom/linroid/kiff/io/SeekableSource;JJLcom/linroid/kiff/delta/DeltaSink;JILjava/lang/Object;)V
+}
+
+public abstract interface class com/linroid/kiff/delta/DeltaSink {
+	public abstract fun add ([BII)V
+	public static synthetic fun add$default (Lcom/linroid/kiff/delta/DeltaSink;[BIIILjava/lang/Object;)V
+	public abstract fun copy (JJ)V
+	public abstract fun diff (J[BII)V
+	public static synthetic fun diff$default (Lcom/linroid/kiff/delta/DeltaSink;J[BIIILjava/lang/Object;)V
+	public abstract fun run (BJ)V
+}
+
+public final class com/linroid/kiff/delta/DeltaSink$DefaultImpls {
+	public static synthetic fun add$default (Lcom/linroid/kiff/delta/DeltaSink;[BIIILjava/lang/Object;)V
+	public static synthetic fun diff$default (Lcom/linroid/kiff/delta/DeltaSink;J[BIIILjava/lang/Object;)V
+}
+
+public final class com/linroid/kiff/delta/RollingHashAlgorithm : com/linroid/kiff/delta/DeltaAlgorithm {
+	public static final field INSTANCE Lcom/linroid/kiff/delta/RollingHashAlgorithm;
+	public fun getName ()Ljava/lang/String;
+	public fun scanner (Lcom/linroid/kiff/io/SeekableSource;JJ)Lcom/linroid/kiff/delta/DeltaScanner;
+}
+
+public final class com/linroid/kiff/format/RegionEncoding : java/lang/Enum {
+	public static final field COLUMNS Lcom/linroid/kiff/format/RegionEncoding;
+	public static final field COMPOSITE Lcom/linroid/kiff/format/RegionEncoding;
+	public static final field DELTA Lcom/linroid/kiff/format/RegionEncoding;
+	public static final field RAW Lcom/linroid/kiff/format/RegionEncoding;
+	public static final field TEXT Lcom/linroid/kiff/format/RegionEncoding;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/format/RegionEncoding;
+	public static fun values ()[Lcom/linroid/kiff/format/RegionEncoding;
+}
+
+public final class com/linroid/kiff/io/ByteArraySource : com/linroid/kiff/io/SeekableSource {
+	public fun <init> ([B)V
+	public fun close ()V
+	public fun getSize ()J
+	public fun read (J[BII)I
+}
+
+public final class com/linroid/kiff/io/ByteArraySourceKt {
+	public static final fun asSource ([B)Lcom/linroid/kiff/io/SeekableSource;
+}
+
+public final class com/linroid/kiff/io/FileSourceKt {
+	public static final fun fileSource (Ljava/lang/String;)Lcom/linroid/kiff/io/SeekableSource;
+}
+
+public final class com/linroid/kiff/io/KiffFiles {
+	public static final field INSTANCE Lcom/linroid/kiff/io/KiffFiles;
+	public final fun exists (Ljava/lang/String;)Z
+	public final fun readBytes (Ljava/lang/String;)[B
+	public final fun writeBytes (Ljava/lang/String;[B)V
+	public final fun writeStreaming (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+}
+
+public abstract interface class com/linroid/kiff/io/RestoreTarget {
+	public abstract fun write ([BII)V
+}
+
+public abstract interface class com/linroid/kiff/io/SeekableSource : java/lang/AutoCloseable {
+	public fun close ()V
+	public abstract fun getSize ()J
+	public abstract fun read (J[BII)I
+	public static synthetic fun read$default (Lcom/linroid/kiff/io/SeekableSource;J[BIIILjava/lang/Object;)I
+}
+
+public final class com/linroid/kiff/io/SeekableSource$DefaultImpls {
+	public static fun close (Lcom/linroid/kiff/io/SeekableSource;)V
+	public static synthetic fun read$default (Lcom/linroid/kiff/io/SeekableSource;J[BIIILjava/lang/Object;)I
+}
+
+public final class com/linroid/kiff/io/SeekableSourceKt {
+	public static final fun readFully (Lcom/linroid/kiff/io/SeekableSource;J[BII)V
+	public static synthetic fun readFully$default (Lcom/linroid/kiff/io/SeekableSource;J[BIIILjava/lang/Object;)V
+}
+
+public final class com/linroid/kiff/region/RegionAlgorithm : java/lang/Enum {
+	public static final field BINARY Lcom/linroid/kiff/region/RegionAlgorithm;
+	public static final field RAW Lcom/linroid/kiff/region/RegionAlgorithm;
+	public static final field TEXT Lcom/linroid/kiff/region/RegionAlgorithm;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/region/RegionAlgorithm;
+	public static fun values ()[Lcom/linroid/kiff/region/RegionAlgorithm;
+}
+
+public final class com/linroid/kiff/region/RegionCost {
+	public fun <init> (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;Lcom/linroid/kiff/format/RegionEncoding;JJJLjava/util/List;)V
+	public synthetic fun <init> (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;Lcom/linroid/kiff/format/RegionEncoding;JJJLjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun component3 ()Lcom/linroid/kiff/format/RegionEncoding;
+	public final fun component4 ()J
+	public final fun component5 ()J
+	public final fun component6 ()J
+	public final fun component7 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;Lcom/linroid/kiff/format/RegionEncoding;JJJLjava/util/List;)Lcom/linroid/kiff/region/RegionCost;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/region/RegionCost;Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;Lcom/linroid/kiff/format/RegionEncoding;JJJLjava/util/List;ILjava/lang/Object;)Lcom/linroid/kiff/region/RegionCost;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun flatten ()Ljava/util/List;
+	public final fun getCarriedNothing ()Z
+	public final fun getChildren ()Ljava/util/List;
+	public final fun getEncoding ()Lcom/linroid/kiff/format/RegionEncoding;
+	public final fun getInstructionBytes ()J
+	public final fun getKind ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun getLiteralBytes ()J
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPatchBytes ()J
+	public final fun getRatio ()D
+	public final fun getTargetBytes ()J
+	public final fun getWasStored ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/region/RegionInfo {
+	public fun <init> (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;JJZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun component3 ()J
+	public final fun component4 ()J
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;JJZ)Lcom/linroid/kiff/region/RegionInfo;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/region/RegionInfo;Ljava/lang/String;Lcom/linroid/kiff/region/RegionKind;JJZILjava/lang/Object;)Lcom/linroid/kiff/region/RegionInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getKind ()Lcom/linroid/kiff/region/RegionKind;
+	public final fun getLooksLikeText ()Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSourceBytes ()J
+	public final fun getTargetBytes ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/region/RegionKind : java/lang/Enum {
+	public static final field CONTENT Lcom/linroid/kiff/region/RegionKind;
+	public static final field GAP Lcom/linroid/kiff/region/RegionKind;
+	public static final field INDEX Lcom/linroid/kiff/region/RegionKind;
+	public static final field WHOLE Lcom/linroid/kiff/region/RegionKind;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/region/RegionKind;
+	public static fun values ()[Lcom/linroid/kiff/region/RegionKind;
+}
+
+public final class com/linroid/kiff/region/RegionPlanKt {
+	public static final fun getBinaryRegionPlanner ()Lcom/linroid/kiff/region/RegionPlanner;
+	public static final fun getTextAwareRegionPlanner ()Lcom/linroid/kiff/region/RegionPlanner;
+}
+
+public abstract interface class com/linroid/kiff/region/RegionPlanner {
+	public abstract fun plan (Lcom/linroid/kiff/region/RegionInfo;)Lcom/linroid/kiff/region/RegionAlgorithm;
+}
+
+public final class com/linroid/kiff/region/RegionReport {
+	public fun <init> (Ljava/util/List;JJ)V
+	public final fun bytes (Lcom/linroid/kiff/region/RegionKind;)J
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()J
+	public final fun component3 ()J
+	public final fun copy (Ljava/util/List;JJ)Lcom/linroid/kiff/region/RegionReport;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/region/RegionReport;Ljava/util/List;JJILjava/lang/Object;)Lcom/linroid/kiff/region/RegionReport;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllRegions ()Ljava/util/List;
+	public final fun getAttributedBytes ()J
+	public final fun getCostly ()Ljava/util/List;
+	public final fun getInstructionBytes ()J
+	public final fun getLeaves ()Ljava/util/List;
+	public final fun getLiteralBytes ()J
+	public final fun getPatchSize ()J
+	public final fun getReferenced ()Ljava/util/List;
+	public final fun getRegions ()Ljava/util/List;
+	public final fun getTargetSize ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class com/linroid/kiff/text/Edit {
+}
+
+public final class com/linroid/kiff/text/Edit$Delete : com/linroid/kiff/text/Edit {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/linroid/kiff/text/Edit$Delete;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/Edit$Delete;IIILjava/lang/Object;)Lcom/linroid/kiff/text/Edit$Delete;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCount ()I
+	public final fun getPosition ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/Edit$Equal : com/linroid/kiff/text/Edit {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/linroid/kiff/text/Edit$Equal;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/Edit$Equal;IIILjava/lang/Object;)Lcom/linroid/kiff/text/Edit$Equal;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCount ()I
+	public final fun getPosition ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/Edit$Insert : com/linroid/kiff/text/Edit {
+	public fun <init> (ILjava/util/List;)V
+	public final fun component1 ()I
+	public final fun component2 ()Ljava/util/List;
+	public final fun copy (ILjava/util/List;)Lcom/linroid/kiff/text/Edit$Insert;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/Edit$Insert;ILjava/util/List;ILjava/lang/Object;)Lcom/linroid/kiff/text/Edit$Insert;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLines ()Ljava/util/List;
+	public final fun getPosition ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class com/linroid/kiff/text/LineDiffAlgorithm {
+	public abstract fun diff (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+	public fun diffWithin (Ljava/util/List;Ljava/util/List;I)Ljava/util/List;
+	public abstract fun getName ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/LineDiffAlgorithm$DefaultImpls {
+	public static fun diffWithin (Lcom/linroid/kiff/text/LineDiffAlgorithm;Ljava/util/List;Ljava/util/List;I)Ljava/util/List;
+}
+
+public final class com/linroid/kiff/text/MyersDiffAlgorithm : com/linroid/kiff/text/LineDiffAlgorithm {
+	public fun <init> ()V
+	public fun diff (Ljava/util/List;Ljava/util/List;)Ljava/util/List;
+	public fun diffWithin (Ljava/util/List;Ljava/util/List;I)Ljava/util/List;
+	public fun getName ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/TextContent {
+	public static final field Companion Lcom/linroid/kiff/text/TextContent$Companion;
+	public fun <init> (Ljava/util/List;Z)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/util/List;Z)Lcom/linroid/kiff/text/TextContent;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/TextContent;Ljava/util/List;ZILjava/lang/Object;)Lcom/linroid/kiff/text/TextContent;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEndsWithNewline ()Z
+	public final fun getLines ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun toBytes ()[B
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/TextContent$Companion {
+	public final fun of (Ljava/lang/String;)Lcom/linroid/kiff/text/TextContent;
+	public final fun of ([B)Lcom/linroid/kiff/text/TextContent;
+}
+
+public final class com/linroid/kiff/text/UnifiedDiff {
+	public static final field INSTANCE Lcom/linroid/kiff/text/UnifiedDiff;
+	public final fun apply (Lcom/linroid/kiff/text/TextContent;Lcom/linroid/kiff/text/UnifiedDiff$Patch;)Lcom/linroid/kiff/text/TextContent;
+	public final fun format (Lcom/linroid/kiff/text/TextContent;Lcom/linroid/kiff/text/TextContent;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;I)Ljava/lang/String;
+	public static synthetic fun format$default (Lcom/linroid/kiff/text/UnifiedDiff;Lcom/linroid/kiff/text/TextContent;Lcom/linroid/kiff/text/TextContent;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun formatBytes ([B[BLjava/lang/String;Ljava/lang/String;I)[B
+	public static synthetic fun formatBytes$default (Lcom/linroid/kiff/text/UnifiedDiff;[B[BLjava/lang/String;Ljava/lang/String;IILjava/lang/Object;)[B
+	public final fun parse (Ljava/lang/String;)Lcom/linroid/kiff/text/UnifiedDiff$Patch;
+}
+
+public final class com/linroid/kiff/text/UnifiedDiff$Hunk {
+	public fun <init> (IIIILjava/util/List;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Ljava/util/List;
+	public final fun copy (IIIILjava/util/List;)Lcom/linroid/kiff/text/UnifiedDiff$Hunk;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/UnifiedDiff$Hunk;IIIILjava/util/List;ILjava/lang/Object;)Lcom/linroid/kiff/text/UnifiedDiff$Hunk;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLines ()Ljava/util/List;
+	public final fun getSourceCount ()I
+	public final fun getSourceStart ()I
+	public final fun getTargetCount ()I
+	public final fun getTargetStart ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/text/UnifiedDiff$Patch {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/util/List;)Lcom/linroid/kiff/text/UnifiedDiff$Patch;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/text/UnifiedDiff$Patch;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILjava/lang/Object;)Lcom/linroid/kiff/text/UnifiedDiff$Patch;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getHunks ()Ljava/util/List;
+	public final fun getSourceName ()Ljava/lang/String;
+	public final fun getTargetName ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/zip/ZipDiffReport {
+	public fun <init> (Ljava/util/List;II)V
+	public final fun bytes (Lcom/linroid/kiff/zip/ZipEntryStatus;)J
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()I
+	public final fun component3 ()I
+	public final fun copy (Ljava/util/List;II)Lcom/linroid/kiff/zip/ZipDiffReport;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/zip/ZipDiffReport;Ljava/util/List;IIILjava/lang/Object;)Lcom/linroid/kiff/zip/ZipDiffReport;
+	public final fun count (Lcom/linroid/kiff/zip/ZipEntryStatus;)I
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getChanged ()Ljava/util/List;
+	public final fun getChanges ()Ljava/util/List;
+	public final fun getSourceSize ()I
+	public final fun getTargetSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/zip/ZipEntryChange {
+	public fun <init> (Ljava/lang/String;Lcom/linroid/kiff/zip/ZipEntryStatus;IIZ)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;Lcom/linroid/kiff/zip/ZipEntryStatus;IIZ)Lcom/linroid/kiff/zip/ZipEntryChange;
+	public static synthetic fun copy$default (Lcom/linroid/kiff/zip/ZipEntryChange;Ljava/lang/String;Lcom/linroid/kiff/zip/ZipEntryStatus;IIZILjava/lang/Object;)Lcom/linroid/kiff/zip/ZipEntryChange;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getName ()Ljava/lang/String;
+	public final fun getSourceSize ()I
+	public final fun getStatus ()Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public final fun getStored ()Z
+	public final fun getTargetSize ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/linroid/kiff/zip/ZipEntryStatus : java/lang/Enum {
+	public static final field ADDED Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static final field METADATA_CHANGED Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static final field MODIFIED Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static final field REMOVED Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static final field UNCHANGED Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/linroid/kiff/zip/ZipEntryStatus;
+	public static fun values ()[Lcom/linroid/kiff/zip/ZipEntryStatus;
+}
+

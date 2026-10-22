@@ -15,7 +15,7 @@ import okio.use
  * its end once and held in memory instead. Available wherever the target has a file system; the
  * browser JS target does not, and throws [KiffException.UnsupportedInput].
  */
-fun fileSource(path: String): SeekableSource = try {
+public fun fileSource(path: String): SeekableSource = try {
   val file = path.toPath()
   // Followed through any symlink, which describes itself rather than what it points at.
   val metadata = systemFileSystem.metadataOrNull(systemFileSystem.canonicalize(file))

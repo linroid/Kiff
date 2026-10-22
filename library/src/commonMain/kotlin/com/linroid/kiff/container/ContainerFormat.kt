@@ -15,11 +15,15 @@ import com.linroid.kiff.zip.ZipReader
  * That works because a patch records the structure it used rather than asking the decoder to work
  * it out. Decomposition is therefore an encode-side heuristic and nothing more, free to improve,
  * free to be wrong, free to be skipped when it does not pay.
+ *
+ * It is a supported extension point, not an internal seam: a format Kiff does not ship, such as an
+ * ISO image or a DMG, is added from outside Kiff with this interface, [Child], [ContainerRegistry]
+ * and [ContainerFormatTiling], all public API under the same compatibility promise as the rest.
  */
-interface ContainerFormat {
+public interface ContainerFormat {
 
   /** Short identifier, for diagnostics; it is never recorded in a patch. */
-  val name: String
+  public val name: String
 
   /**
    * Whether `bytes[from, to)` is this format.
@@ -27,7 +31,7 @@ interface ContainerFormat {
    * Cheap checks only - a magic number, a trailer - because this is asked of every region that
    * might be a container, including ones that plainly are not.
    */
-  fun detect(bytes: ByteArray, from: Int, to: Int): Boolean
+  public fun detect(bytes: ByteArray, from: Int, to: Int): Boolean
 
   /**
    * The parts of `bytes[from, to)`, in order.
@@ -44,7 +48,7 @@ interface ContainerFormat {
    * ordinary leaf. Returning a single child spanning the whole range is not useful and is treated
    * the same way.
    */
-  fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child>
+  public fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child>
 
   /**
    * Last-resort pairing for a target child that matched no source child by name or by content.
@@ -53,11 +57,15 @@ interface ContainerFormat {
    * where a format contributes what only it knows - that `classes4.dex` belongs next to
    * `classes3.dex` when a build renumbers them.
    */
-  fun pairUnmatched(target: Child, source: List<Child>): Child? = null
+  public fun pairUnmatched(target: Child, source: List<Child>): Child? = null
 }
 
-/** How a child's payload is stored inside its container. */
-enum class Storage {
+/**
+ * How a child's payload is stored inside its container.
+ *
+ * A minor release may add an entry, so a `when` over these keeps an `else` branch.
+ */
+public enum class Storage {
   /** Payload bytes are the real bytes: they can be compared, and recursed into. */
   STORED,
 
@@ -80,7 +88,7 @@ enum class Storage {
  * worth probing as a container of its own, and only the payload should get to choose an encoding
  * on its own merits; the framing around it is compared as the bytes it is.
  */
-data class Child(
+public data class Child(
   val name: String,
   val kind: RegionKind,
   val from: Int,
@@ -135,11 +143,11 @@ data class Child(
  * Order is the only precedence there is, so put the specific before the general - an APK is a zip,
  * and whichever is asked first is the one that gets to decompose it.
  */
-class ContainerRegistry(private val formats: List<ContainerFormat>) {
+public class ContainerRegistry(private val formats: List<ContainerFormat>) {
 
-  constructor(vararg formats: ContainerFormat) : this(formats.toList())
+  public constructor(vararg formats: ContainerFormat) : this(formats.toList())
 
-  fun formatFor(bytes: ByteArray, from: Int, to: Int): ContainerFormat? =
+  internal fun formatFor(bytes: ByteArray, from: Int, to: Int): ContainerFormat? =
     formats.firstOrNull { it.detect(bytes, from, to) }
 
   /**
@@ -149,17 +157,18 @@ class ContainerRegistry(private val formats: List<ContainerFormat>) {
    * directory reads, whether or not a preamble comes before its first entry.
    */
   internal fun formatOfFile(bytes: ByteArray): ContainerFormat? = formats.firstOrNull { format ->
-    if (format is ZipFormat) {
+    if (format is ZipFormat || format is ApkFormat) {
       ZipReader.parseOrNull(bytes) != null
     } else {
       format.detect(bytes, 0, bytes.size)
     }
   }
 
-  operator fun plus(format: ContainerFormat) = ContainerRegistry(formats + format)
+  public operator fun plus(format: ContainerFormat): ContainerRegistry =
+    ContainerRegistry(formats + format)
 
-  companion object {
+  public companion object {
     /** No formats: every input is one opaque leaf. */
-    val Empty = ContainerRegistry(emptyList())
+    public val Empty: ContainerRegistry = ContainerRegistry(emptyList())
   }
 }

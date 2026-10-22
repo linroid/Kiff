@@ -13,10 +13,10 @@ import com.linroid.kiff.KiffException
  * Positions are [Long], so a source may be larger than 2 GB; one backed by a [ByteArray] cannot be.
  * Implementations are not required to be thread-safe.
  */
-interface SeekableSource : AutoCloseable {
+public interface SeekableSource : AutoCloseable {
 
   /** Total number of readable bytes. */
-  val size: Long
+  public val size: Long
 
   /**
    * Reads at most [length] bytes starting at [position] into [into] at [offset].
@@ -29,7 +29,12 @@ interface SeekableSource : AutoCloseable {
    * @return the number of bytes read, which may be fewer than requested; 0 only when [length] is 0,
    *   and -1 once [position] reaches [size].
    */
-  fun read(position: Long, into: ByteArray, offset: Int = 0, length: Int = into.size - offset): Int
+  public fun read(
+    position: Long,
+    into: ByteArray,
+    offset: Int = 0,
+    length: Int = into.size - offset
+  ): Int
 
   override fun close() {}
 }
@@ -38,7 +43,7 @@ interface SeekableSource : AutoCloseable {
  * Reads exactly [length] bytes at [position], failing if the source ends first - which a read of
  * nothing, 0 or -1, before then is taken to mean.
  */
-fun SeekableSource.readFully(
+public fun SeekableSource.readFully(
   position: Long,
   into: ByteArray,
   offset: Int = 0,

@@ -14,15 +14,15 @@ import com.linroid.kiff.KiffException
  * A carriage return stays part of the line it ends, so CRLF files round trip without a special
  * case.
  */
-data class TextContent(val lines: List<String>, val endsWithNewline: Boolean) {
+public data class TextContent(val lines: List<String>, val endsWithNewline: Boolean) {
 
-  fun toBytes(): ByteArray {
+  public fun toBytes(): ByteArray {
     if (lines.isEmpty()) return ByteArray(0)
     val joined = lines.joinToString("\n")
     return (if (endsWithNewline) "$joined\n" else joined).encodeToByteArray()
   }
 
-  companion object {
+  public companion object {
     /**
      * Reads [bytes] as UTF-8 text.
      *
@@ -33,7 +33,7 @@ data class TextContent(val lines: List<String>, val endsWithNewline: Boolean) {
      *
      * @throws KiffException.UnsupportedInput if [bytes] are not valid UTF-8.
      */
-    fun of(bytes: ByteArray): TextContent {
+    public fun of(bytes: ByteArray): TextContent {
       val text = try {
         bytes.decodeToString(throwOnInvalidSequence = true)
       } catch (e: CharacterCodingException) {
@@ -44,7 +44,7 @@ data class TextContent(val lines: List<String>, val endsWithNewline: Boolean) {
       return of(text)
     }
 
-    fun of(text: String): TextContent {
+    public fun of(text: String): TextContent {
       if (text.isEmpty()) return TextContent(emptyList(), endsWithNewline = false)
       val endsWithNewline = text.endsWith("\n")
       val body = if (endsWithNewline) text.dropLast(1) else text

@@ -26,7 +26,7 @@ import okio.use
  * room for both files. A run killed partway can leave a `.kiff-*.tmp` file beside the destination,
  * which is safe to delete.
  */
-object KiffFiles {
+public object KiffFiles {
 
   /**
    * The whole of the file at [path].
@@ -34,7 +34,7 @@ object KiffFiles {
    * @throws KiffException.UnsupportedInput if the file is larger than an array can hold, which is
    *   found from its size before any of it is read.
    */
-  fun readBytes(path: String): ByteArray {
+  public fun readBytes(path: String): ByteArray {
     val file = path.toPath()
     val size = systemFileSystem.metadataOrNull(file)?.size
     if (size != null && size > LARGEST_ARRAY) throw tooLarge(path, size)
@@ -61,7 +61,7 @@ object KiffFiles {
   /** The largest array every platform Kiff runs on can allocate. */
   private const val LARGEST_ARRAY = Int.MAX_VALUE - 8
 
-  fun writeBytes(path: String, bytes: ByteArray) {
+  public fun writeBytes(path: String, bytes: ByteArray) {
     replace(path) { write(bytes) }
   }
 
@@ -72,7 +72,7 @@ object KiffFiles {
    * the machines that apply patches are the ones with the least room to spare. The file appears at
    * [path] only once [block] returns; if it throws, [path] is left as it was.
    */
-  fun writeStreaming(path: String, block: (RestoreTarget) -> Unit) {
+  public fun writeStreaming(path: String, block: (RestoreTarget) -> Unit) {
     replace(path) {
       val sink = this
       block(object : RestoreTarget {
@@ -83,7 +83,7 @@ object KiffFiles {
     }
   }
 
-  fun exists(path: String): Boolean = systemFileSystem.exists(path.toPath())
+  public fun exists(path: String): Boolean = systemFileSystem.exists(path.toPath())
 
   /** Whether [first] and [second] name one existing file, through any symlinks. */
   internal fun sameFile(first: String, second: String): Boolean {
@@ -93,7 +93,7 @@ object KiffFiles {
     return systemFileSystem.canonicalize(a) == systemFileSystem.canonicalize(b)
   }
 
-  fun size(path: String): Long? = systemFileSystem.metadataOrNull(path.toPath())?.size
+  internal fun size(path: String): Long? = systemFileSystem.metadataOrNull(path.toPath())?.size
 
   /**
    * Writes [path] by way of a sibling temporary file, moved over [path] once [contents] returns.

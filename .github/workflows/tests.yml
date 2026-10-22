@@ -34,6 +34,26 @@ jobs:
             exit 1
           fi
 
+  # The library's public API against the record in library/api, which a change to the API has to
+  # update in the same PR. Only a Mac compiles every target, so only here is the whole record checked.
+  public-api:
+    name: Public API
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Check the API against library/api
+        run: ./gradlew :library:checkKotlinAbi
+
   jvm-tests:
     name: JVM Tests
     runs-on: ubuntu-latest

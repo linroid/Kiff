@@ -23,7 +23,7 @@ internal sealed class Structure(val id: PatcherId, val name: String) {
    * nearly all of the saving is, and weighing it would mean a second search of the whole file -
    * which, for an archive, is the largest input Kiff is ever given.
    */
-  class Archive(val format: ZipFormat) : Structure(
+  class Archive(val format: ContainerFormat) : Structure(
     if (format is ApkFormat) PatcherId.APK else PatcherId.ZIP,
     format.name
   )
@@ -43,13 +43,14 @@ internal sealed class Structure(val id: PatcherId, val name: String) {
      * Plain [ZipFormat] is how an APK is found too. An APK is a zip in every way that decides
      * whether it can be read, and what an APK adds - grouping its dex files - is knowledge about
      * the file being patched, so it is only applied when that file carries an
-     * `AndroidManifest.xml`. A subclass of [ZipFormat] is used as it is.
+     * `AndroidManifest.xml`. An [ApkFormat] in the registry is used as it is.
      */
-    fun detect(target: ByteArray, registry: ContainerRegistry): Structure {
-      val format = registry.formatOfFile(target) ?: return Bytes
-      if (format !is ZipFormat) return Weighed(format)
-      val apk = format::class == ZipFormat::class && looksLikeApk(target)
-      return Archive(if (apk) ApkFormat() else format)
-    }
+    fun detect(target: ByteArray, registry: ContainerRegistry): Structure =
+      when (val format = registry.formatOfFile(target)) {
+        null -> Bytes
+        is ApkFormat -> Archive(format)
+        is ZipFormat -> Archive(if (looksLikeApk(target)) ApkFormat() else format)
+        else -> Weighed(format)
+      }
   }
 }

@@ -12,10 +12,10 @@ package com.linroid.kiff.container
  * ones: empty containers, containers with trailing bytes, containers that are almost but not quite
  * the format.
  */
-object ContainerFormatTiling {
+public object ContainerFormatTiling {
 
   /** Complaints about [format]'s decomposition; empty means it tiles correctly. */
-  fun check(
+  public fun check(
     format: ContainerFormat,
     bytes: ByteArray,
     from: Int = 0,
@@ -53,7 +53,7 @@ object ContainerFormatTiling {
   }
 
   /** [check], as a single assertion message, or null when the format tiles correctly. */
-  fun describe(
+  public fun describe(
     format: ContainerFormat,
     bytes: ByteArray,
     from: Int = 0,

@@ -9,14 +9,14 @@ import com.linroid.kiff.KiffException
  * `patch(1)`, code review, and anything else that has ever parsed a diff. It is a text format for
  * text files and has nothing to do with the patch container, which describes any bytes at all.
  */
-object UnifiedDiff {
+public object UnifiedDiff {
 
   private const val DEFAULT_CONTEXT = 3
   private const val NO_NEWLINE = "\\ No newline at end of file"
   private val HUNK_HEADER = Regex("""^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@""")
 
   /** One run of changes, with the unchanged lines around it that let it be located. */
-  data class Hunk(
+  public data class Hunk(
     val sourceStart: Int,
     val sourceCount: Int,
     val targetStart: Int,
@@ -25,13 +25,13 @@ object UnifiedDiff {
     val lines: List<String>
   )
 
-  data class Patch(
+  public data class Patch(
     val sourceName: String,
     val targetName: String,
     val hunks: List<Hunk>
   )
 
-  fun format(
+  public fun format(
     source: TextContent,
     target: TextContent,
     edits: List<Edit>,
@@ -61,7 +61,7 @@ object UnifiedDiff {
    * such bytes still differ. The result is what GNU diff prints for the same files. Names are
    * written as UTF-8.
    */
-  fun formatBytes(
+  public fun formatBytes(
     source: ByteArray,
     target: ByteArray,
     sourceName: String = "a",
@@ -89,7 +89,7 @@ object UnifiedDiff {
    * past its counts are not part of it. Anything before the `---`/`+++` pair, such as git's
    * `diff --git` and `index` lines, is skipped.
    */
-  fun parse(text: String): Patch {
+  public fun parse(text: String): Patch {
     val lines = text.split("\n")
     var at = 0
     var sourceName = "a"
@@ -117,7 +117,7 @@ object UnifiedDiff {
   }
 
   /** Rebuilds the target, refusing a hunk whose context does not match what it claims. */
-  fun apply(source: TextContent, patch: Patch): TextContent {
+  public fun apply(source: TextContent, patch: Patch): TextContent {
     if (patch.hunks.isEmpty()) return source
     val out = mutableListOf<String>()
     var cursor = 0

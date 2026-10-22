@@ -1,9 +1,9 @@
 package com.linroid.kiff.text
 
-interface LineDiffAlgorithm {
-  val name: String
+public interface LineDiffAlgorithm {
+  public val name: String
 
-  fun diff(source: List<String>, target: List<String>): List<Edit>
+  public fun diff(source: List<String>, target: List<String>): List<Edit>
 
   /**
    * [diff], or null when turning [source] into [target] takes more than [maxEdits] deleted and
@@ -15,7 +15,7 @@ interface LineDiffAlgorithm {
    * give up once it knows the answer is too long should; this default finds the whole script and
    * checks it afterwards, which bounds nothing but is never wrong.
    */
-  fun diffWithin(source: List<String>, target: List<String>, maxEdits: Int): List<Edit>? =
+  public fun diffWithin(source: List<String>, target: List<String>, maxEdits: Int): List<Edit>? =
     diff(source, target).takeIf { edits ->
       edits.sumOf { edit ->
         when (edit) {

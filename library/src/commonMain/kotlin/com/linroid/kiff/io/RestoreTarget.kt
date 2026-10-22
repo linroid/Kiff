@@ -19,7 +19,7 @@ import com.linroid.kiff.format.Crc32
  * [Kiff.applyPatch][com.linroid.kiff.Kiff.applyPatch] does this for a file, writing to a temporary
  * file it moves into place only once the restore verified.
  */
-interface RestoreTarget {
+public interface RestoreTarget {
   /**
    * Appends `bytes[from, to)` to the end of the restored output.
    *
@@ -27,7 +27,7 @@ interface RestoreTarget {
    * target that needs the bytes afterwards copies them. Kiff has already checksummed them, so a
    * target may change or clear the array in place.
    */
-  fun write(bytes: ByteArray, from: Int, to: Int)
+  public fun write(bytes: ByteArray, from: Int, to: Int)
 }
 
 /**
@@ -36,7 +36,7 @@ interface RestoreTarget {
  * The array is allocated when the first byte arrives rather than up front, so a restore refused
  * before writing anything costs nothing, however large a size it declared.
  */
-class ByteArrayRestoreTarget(private val size: Int) : RestoreTarget {
+internal class ByteArrayRestoreTarget(private val size: Int) : RestoreTarget {
   private var bytes: ByteArray? = null
   private var at = 0
 

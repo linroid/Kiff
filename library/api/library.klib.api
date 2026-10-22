@@ -1,0 +1,761 @@
+// Klib ABI Dump
+// Targets: [iosArm64, iosSimulatorArm64, js, linuxArm64, linuxX64, macosArm64, macosX64, mingwX64]
+// Rendering settings:
+// - Signature version: 2
+// - Show manifest properties: true
+// - Show declarations: true
+
+// Library unique name: <com.linroid.kiff:library>
+final enum class com.linroid.kiff.apk/ApkEntryKind : kotlin/Enum<com.linroid.kiff.apk/ApkEntryKind> { // com.linroid.kiff.apk/ApkEntryKind|null[0]
+    enum entry ASSET // com.linroid.kiff.apk/ApkEntryKind.ASSET|null[0]
+    enum entry DEX // com.linroid.kiff.apk/ApkEntryKind.DEX|null[0]
+    enum entry MANIFEST // com.linroid.kiff.apk/ApkEntryKind.MANIFEST|null[0]
+    enum entry METADATA // com.linroid.kiff.apk/ApkEntryKind.METADATA|null[0]
+    enum entry NATIVE_LIBRARY // com.linroid.kiff.apk/ApkEntryKind.NATIVE_LIBRARY|null[0]
+    enum entry OTHER // com.linroid.kiff.apk/ApkEntryKind.OTHER|null[0]
+    enum entry RESOURCE // com.linroid.kiff.apk/ApkEntryKind.RESOURCE|null[0]
+    enum entry RESOURCE_TABLE // com.linroid.kiff.apk/ApkEntryKind.RESOURCE_TABLE|null[0]
+    enum entry SIGNATURE // com.linroid.kiff.apk/ApkEntryKind.SIGNATURE|null[0]
+
+    final val entries // com.linroid.kiff.apk/ApkEntryKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.apk/ApkEntryKind> // com.linroid.kiff.apk/ApkEntryKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff.apk/ApkEntryKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.apk/ApkEntryKind> // com.linroid.kiff.apk/ApkEntryKind.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff.container/Storage : kotlin/Enum<com.linroid.kiff.container/Storage> { // com.linroid.kiff.container/Storage|null[0]
+    enum entry DEFLATED // com.linroid.kiff.container/Storage.DEFLATED|null[0]
+    enum entry STORED // com.linroid.kiff.container/Storage.STORED|null[0]
+
+    final val entries // com.linroid.kiff.container/Storage.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.container/Storage> // com.linroid.kiff.container/Storage.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.container/Storage // com.linroid.kiff.container/Storage.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.container/Storage> // com.linroid.kiff.container/Storage.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff.format/RegionEncoding : kotlin/Enum<com.linroid.kiff.format/RegionEncoding> { // com.linroid.kiff.format/RegionEncoding|null[0]
+    enum entry COLUMNS // com.linroid.kiff.format/RegionEncoding.COLUMNS|null[0]
+    enum entry COMPOSITE // com.linroid.kiff.format/RegionEncoding.COMPOSITE|null[0]
+    enum entry DELTA // com.linroid.kiff.format/RegionEncoding.DELTA|null[0]
+    enum entry RAW // com.linroid.kiff.format/RegionEncoding.RAW|null[0]
+    enum entry TEXT // com.linroid.kiff.format/RegionEncoding.TEXT|null[0]
+
+    final val entries // com.linroid.kiff.format/RegionEncoding.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.format/RegionEncoding> // com.linroid.kiff.format/RegionEncoding.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.format/RegionEncoding // com.linroid.kiff.format/RegionEncoding.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.format/RegionEncoding> // com.linroid.kiff.format/RegionEncoding.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff.region/RegionAlgorithm : kotlin/Enum<com.linroid.kiff.region/RegionAlgorithm> { // com.linroid.kiff.region/RegionAlgorithm|null[0]
+    enum entry BINARY // com.linroid.kiff.region/RegionAlgorithm.BINARY|null[0]
+    enum entry RAW // com.linroid.kiff.region/RegionAlgorithm.RAW|null[0]
+    enum entry TEXT // com.linroid.kiff.region/RegionAlgorithm.TEXT|null[0]
+
+    final val entries // com.linroid.kiff.region/RegionAlgorithm.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.region/RegionAlgorithm> // com.linroid.kiff.region/RegionAlgorithm.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.region/RegionAlgorithm // com.linroid.kiff.region/RegionAlgorithm.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.region/RegionAlgorithm> // com.linroid.kiff.region/RegionAlgorithm.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff.region/RegionKind : kotlin/Enum<com.linroid.kiff.region/RegionKind> { // com.linroid.kiff.region/RegionKind|null[0]
+    enum entry CONTENT // com.linroid.kiff.region/RegionKind.CONTENT|null[0]
+    enum entry GAP // com.linroid.kiff.region/RegionKind.GAP|null[0]
+    enum entry INDEX // com.linroid.kiff.region/RegionKind.INDEX|null[0]
+    enum entry WHOLE // com.linroid.kiff.region/RegionKind.WHOLE|null[0]
+
+    final val entries // com.linroid.kiff.region/RegionKind.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.region/RegionKind> // com.linroid.kiff.region/RegionKind.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.region/RegionKind // com.linroid.kiff.region/RegionKind.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.region/RegionKind> // com.linroid.kiff.region/RegionKind.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff.zip/ZipEntryStatus : kotlin/Enum<com.linroid.kiff.zip/ZipEntryStatus> { // com.linroid.kiff.zip/ZipEntryStatus|null[0]
+    enum entry ADDED // com.linroid.kiff.zip/ZipEntryStatus.ADDED|null[0]
+    enum entry METADATA_CHANGED // com.linroid.kiff.zip/ZipEntryStatus.METADATA_CHANGED|null[0]
+    enum entry MODIFIED // com.linroid.kiff.zip/ZipEntryStatus.MODIFIED|null[0]
+    enum entry REMOVED // com.linroid.kiff.zip/ZipEntryStatus.REMOVED|null[0]
+    enum entry UNCHANGED // com.linroid.kiff.zip/ZipEntryStatus.UNCHANGED|null[0]
+
+    final val entries // com.linroid.kiff.zip/ZipEntryStatus.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff.zip/ZipEntryStatus> // com.linroid.kiff.zip/ZipEntryStatus.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff.zip/ZipEntryStatus // com.linroid.kiff.zip/ZipEntryStatus.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff.zip/ZipEntryStatus> // com.linroid.kiff.zip/ZipEntryStatus.values|values#static(){}[0]
+}
+
+final enum class com.linroid.kiff/PatcherId : kotlin/Enum<com.linroid.kiff/PatcherId> { // com.linroid.kiff/PatcherId|null[0]
+    enum entry APK // com.linroid.kiff/PatcherId.APK|null[0]
+    enum entry BINARY // com.linroid.kiff/PatcherId.BINARY|null[0]
+    enum entry ZIP // com.linroid.kiff/PatcherId.ZIP|null[0]
+
+    final val code // com.linroid.kiff/PatcherId.code|{}code[0]
+        final fun <get-code>(): kotlin/Int // com.linroid.kiff/PatcherId.code.<get-code>|<get-code>(){}[0]
+    final val entries // com.linroid.kiff/PatcherId.entries|#static{}entries[0]
+        final fun <get-entries>(): kotlin.enums/EnumEntries<com.linroid.kiff/PatcherId> // com.linroid.kiff/PatcherId.entries.<get-entries>|<get-entries>#static(){}[0]
+
+    final fun valueOf(kotlin/String): com.linroid.kiff/PatcherId // com.linroid.kiff/PatcherId.valueOf|valueOf#static(kotlin.String){}[0]
+    final fun values(): kotlin/Array<com.linroid.kiff/PatcherId> // com.linroid.kiff/PatcherId.values|values#static(){}[0]
+}
+
+abstract fun interface com.linroid.kiff.region/RegionPlanner { // com.linroid.kiff.region/RegionPlanner|null[0]
+    abstract fun plan(com.linroid.kiff.region/RegionInfo): com.linroid.kiff.region/RegionAlgorithm // com.linroid.kiff.region/RegionPlanner.plan|plan(com.linroid.kiff.region.RegionInfo){}[0]
+}
+
+abstract interface com.linroid.kiff.container/ContainerFormat { // com.linroid.kiff.container/ContainerFormat|null[0]
+    abstract val name // com.linroid.kiff.container/ContainerFormat.name|{}name[0]
+        abstract fun <get-name>(): kotlin/String // com.linroid.kiff.container/ContainerFormat.name.<get-name>|<get-name>(){}[0]
+
+    abstract fun decompose(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin.collections/List<com.linroid.kiff.container/Child> // com.linroid.kiff.container/ContainerFormat.decompose|decompose(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    abstract fun detect(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Boolean // com.linroid.kiff.container/ContainerFormat.detect|detect(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    open fun pairUnmatched(com.linroid.kiff.container/Child, kotlin.collections/List<com.linroid.kiff.container/Child>): com.linroid.kiff.container/Child? // com.linroid.kiff.container/ContainerFormat.pairUnmatched|pairUnmatched(com.linroid.kiff.container.Child;kotlin.collections.List<com.linroid.kiff.container.Child>){}[0]
+}
+
+abstract interface com.linroid.kiff.delta/DeltaAlgorithm { // com.linroid.kiff.delta/DeltaAlgorithm|null[0]
+    abstract val name // com.linroid.kiff.delta/DeltaAlgorithm.name|{}name[0]
+        abstract fun <get-name>(): kotlin/String // com.linroid.kiff.delta/DeltaAlgorithm.name.<get-name>|<get-name>(){}[0]
+
+    abstract fun scanner(com.linroid.kiff.io/SeekableSource, kotlin/Long = ..., kotlin/Long = ...): com.linroid.kiff.delta/DeltaScanner // com.linroid.kiff.delta/DeltaAlgorithm.scanner|scanner(com.linroid.kiff.io.SeekableSource;kotlin.Long;kotlin.Long){}[0]
+}
+
+abstract interface com.linroid.kiff.delta/DeltaScanner : kotlin/AutoCloseable { // com.linroid.kiff.delta/DeltaScanner|null[0]
+    abstract fun scan(com.linroid.kiff.io/SeekableSource, kotlin/Long, kotlin/Long, com.linroid.kiff.delta/DeltaSink, kotlin/Long = ...) // com.linroid.kiff.delta/DeltaScanner.scan|scan(com.linroid.kiff.io.SeekableSource;kotlin.Long;kotlin.Long;com.linroid.kiff.delta.DeltaSink;kotlin.Long){}[0]
+    open fun close() // com.linroid.kiff.delta/DeltaScanner.close|close(){}[0]
+}
+
+abstract interface com.linroid.kiff.delta/DeltaSink { // com.linroid.kiff.delta/DeltaSink|null[0]
+    abstract fun add(kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...) // com.linroid.kiff.delta/DeltaSink.add|add(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    abstract fun copy(kotlin/Long, kotlin/Long) // com.linroid.kiff.delta/DeltaSink.copy|copy(kotlin.Long;kotlin.Long){}[0]
+    abstract fun diff(kotlin/Long, kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...) // com.linroid.kiff.delta/DeltaSink.diff|diff(kotlin.Long;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    abstract fun run(kotlin/Byte, kotlin/Long) // com.linroid.kiff.delta/DeltaSink.run|run(kotlin.Byte;kotlin.Long){}[0]
+}
+
+abstract interface com.linroid.kiff.io/RestoreTarget { // com.linroid.kiff.io/RestoreTarget|null[0]
+    abstract fun write(kotlin/ByteArray, kotlin/Int, kotlin/Int) // com.linroid.kiff.io/RestoreTarget.write|write(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
+abstract interface com.linroid.kiff.io/SeekableSource : kotlin/AutoCloseable { // com.linroid.kiff.io/SeekableSource|null[0]
+    abstract val size // com.linroid.kiff.io/SeekableSource.size|{}size[0]
+        abstract fun <get-size>(): kotlin/Long // com.linroid.kiff.io/SeekableSource.size.<get-size>|<get-size>(){}[0]
+
+    abstract fun read(kotlin/Long, kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...): kotlin/Int // com.linroid.kiff.io/SeekableSource.read|read(kotlin.Long;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    open fun close() // com.linroid.kiff.io/SeekableSource.close|close(){}[0]
+}
+
+abstract interface com.linroid.kiff.text/LineDiffAlgorithm { // com.linroid.kiff.text/LineDiffAlgorithm|null[0]
+    abstract val name // com.linroid.kiff.text/LineDiffAlgorithm.name|{}name[0]
+        abstract fun <get-name>(): kotlin/String // com.linroid.kiff.text/LineDiffAlgorithm.name.<get-name>|<get-name>(){}[0]
+
+    abstract fun diff(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>): kotlin.collections/List<com.linroid.kiff.text/Edit> // com.linroid.kiff.text/LineDiffAlgorithm.diff|diff(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>){}[0]
+    open fun diffWithin(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>, kotlin/Int): kotlin.collections/List<com.linroid.kiff.text/Edit>? // com.linroid.kiff.text/LineDiffAlgorithm.diffWithin|diffWithin(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>;kotlin.Int){}[0]
+}
+
+abstract class com.linroid.kiff/KiffException : kotlin/Exception { // com.linroid.kiff/KiffException|null[0]
+    final class InvalidPatch : com.linroid.kiff/KiffException { // com.linroid.kiff/KiffException.InvalidPatch|null[0]
+        constructor <init>(kotlin/String) // com.linroid.kiff/KiffException.InvalidPatch.<init>|<init>(kotlin.String){}[0]
+    }
+
+    final class SourceMismatch : com.linroid.kiff/KiffException { // com.linroid.kiff/KiffException.SourceMismatch|null[0]
+        constructor <init>(kotlin/String) // com.linroid.kiff/KiffException.SourceMismatch.<init>|<init>(kotlin.String){}[0]
+    }
+
+    final class UnsupportedInput : com.linroid.kiff/KiffException { // com.linroid.kiff/KiffException.UnsupportedInput|null[0]
+        constructor <init>(kotlin/String) // com.linroid.kiff/KiffException.UnsupportedInput.<init>|<init>(kotlin.String){}[0]
+    }
+
+    final class VerificationFailed : com.linroid.kiff/KiffException { // com.linroid.kiff/KiffException.VerificationFailed|null[0]
+        constructor <init>(kotlin/String) // com.linroid.kiff/KiffException.VerificationFailed.<init>|<init>(kotlin.String){}[0]
+    }
+}
+
+final class com.linroid.kiff.apk/ApkDiffReport { // com.linroid.kiff.apk/ApkDiffReport|null[0]
+    constructor <init>(com.linroid.kiff.zip/ZipDiffReport, kotlin.collections/List<com.linroid.kiff.apk/ApkKindSummary>, kotlin/Int, kotlin/Int) // com.linroid.kiff.apk/ApkDiffReport.<init>|<init>(com.linroid.kiff.zip.ZipDiffReport;kotlin.collections.List<com.linroid.kiff.apk.ApkKindSummary>;kotlin.Int;kotlin.Int){}[0]
+
+    final val entries // com.linroid.kiff.apk/ApkDiffReport.entries|{}entries[0]
+        final fun <get-entries>(): com.linroid.kiff.zip/ZipDiffReport // com.linroid.kiff.apk/ApkDiffReport.entries.<get-entries>|<get-entries>(){}[0]
+    final val kinds // com.linroid.kiff.apk/ApkDiffReport.kinds|{}kinds[0]
+        final fun <get-kinds>(): kotlin.collections/List<com.linroid.kiff.apk/ApkKindSummary> // com.linroid.kiff.apk/ApkDiffReport.kinds.<get-kinds>|<get-kinds>(){}[0]
+    final val signed // com.linroid.kiff.apk/ApkDiffReport.signed|{}signed[0]
+        final fun <get-signed>(): kotlin/Boolean // com.linroid.kiff.apk/ApkDiffReport.signed.<get-signed>|<get-signed>(){}[0]
+    final val sourceSigningBlockSize // com.linroid.kiff.apk/ApkDiffReport.sourceSigningBlockSize|{}sourceSigningBlockSize[0]
+        final fun <get-sourceSigningBlockSize>(): kotlin/Int // com.linroid.kiff.apk/ApkDiffReport.sourceSigningBlockSize.<get-sourceSigningBlockSize>|<get-sourceSigningBlockSize>(){}[0]
+    final val targetSigningBlockSize // com.linroid.kiff.apk/ApkDiffReport.targetSigningBlockSize|{}targetSigningBlockSize[0]
+        final fun <get-targetSigningBlockSize>(): kotlin/Int // com.linroid.kiff.apk/ApkDiffReport.targetSigningBlockSize.<get-targetSigningBlockSize>|<get-targetSigningBlockSize>(){}[0]
+
+    final fun component1(): com.linroid.kiff.zip/ZipDiffReport // com.linroid.kiff.apk/ApkDiffReport.component1|component1(){}[0]
+    final fun component2(): kotlin.collections/List<com.linroid.kiff.apk/ApkKindSummary> // com.linroid.kiff.apk/ApkDiffReport.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.linroid.kiff.apk/ApkDiffReport.component3|component3(){}[0]
+    final fun component4(): kotlin/Int // com.linroid.kiff.apk/ApkDiffReport.component4|component4(){}[0]
+    final fun copy(com.linroid.kiff.zip/ZipDiffReport = ..., kotlin.collections/List<com.linroid.kiff.apk/ApkKindSummary> = ..., kotlin/Int = ..., kotlin/Int = ...): com.linroid.kiff.apk/ApkDiffReport // com.linroid.kiff.apk/ApkDiffReport.copy|copy(com.linroid.kiff.zip.ZipDiffReport;kotlin.collections.List<com.linroid.kiff.apk.ApkKindSummary>;kotlin.Int;kotlin.Int){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.apk/ApkDiffReport.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.apk/ApkDiffReport.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.apk/ApkDiffReport.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.apk/ApkKindCost { // com.linroid.kiff.apk/ApkKindCost|null[0]
+    constructor <init>(com.linroid.kiff.apk/ApkEntryKind, kotlin/Int, kotlin/Long, kotlin/Long, kotlin/Long) // com.linroid.kiff.apk/ApkKindCost.<init>|<init>(com.linroid.kiff.apk.ApkEntryKind;kotlin.Int;kotlin.Long;kotlin.Long;kotlin.Long){}[0]
+
+    final val entryCount // com.linroid.kiff.apk/ApkKindCost.entryCount|{}entryCount[0]
+        final fun <get-entryCount>(): kotlin/Int // com.linroid.kiff.apk/ApkKindCost.entryCount.<get-entryCount>|<get-entryCount>(){}[0]
+    final val instructionBytes // com.linroid.kiff.apk/ApkKindCost.instructionBytes|{}instructionBytes[0]
+        final fun <get-instructionBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.instructionBytes.<get-instructionBytes>|<get-instructionBytes>(){}[0]
+    final val kind // com.linroid.kiff.apk/ApkKindCost.kind|{}kind[0]
+        final fun <get-kind>(): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff.apk/ApkKindCost.kind.<get-kind>|<get-kind>(){}[0]
+    final val literalBytes // com.linroid.kiff.apk/ApkKindCost.literalBytes|{}literalBytes[0]
+        final fun <get-literalBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.literalBytes.<get-literalBytes>|<get-literalBytes>(){}[0]
+    final val patchBytes // com.linroid.kiff.apk/ApkKindCost.patchBytes|{}patchBytes[0]
+        final fun <get-patchBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.patchBytes.<get-patchBytes>|<get-patchBytes>(){}[0]
+    final val ratio // com.linroid.kiff.apk/ApkKindCost.ratio|{}ratio[0]
+        final fun <get-ratio>(): kotlin/Double // com.linroid.kiff.apk/ApkKindCost.ratio.<get-ratio>|<get-ratio>(){}[0]
+    final val targetBytes // com.linroid.kiff.apk/ApkKindCost.targetBytes|{}targetBytes[0]
+        final fun <get-targetBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.targetBytes.<get-targetBytes>|<get-targetBytes>(){}[0]
+
+    final fun component1(): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff.apk/ApkKindCost.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.linroid.kiff.apk/ApkKindCost.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.component3|component3(){}[0]
+    final fun component4(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.component4|component4(){}[0]
+    final fun component5(): kotlin/Long // com.linroid.kiff.apk/ApkKindCost.component5|component5(){}[0]
+    final fun copy(com.linroid.kiff.apk/ApkEntryKind = ..., kotlin/Int = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ...): com.linroid.kiff.apk/ApkKindCost // com.linroid.kiff.apk/ApkKindCost.copy|copy(com.linroid.kiff.apk.ApkEntryKind;kotlin.Int;kotlin.Long;kotlin.Long;kotlin.Long){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.apk/ApkKindCost.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.apk/ApkKindCost.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.apk/ApkKindCost.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.apk/ApkKindSummary { // com.linroid.kiff.apk/ApkKindSummary|null[0]
+    constructor <init>(com.linroid.kiff.apk/ApkEntryKind, kotlin/Int, kotlin/Int, kotlin/Int, kotlin/Int, kotlin/Long, kotlin/Long) // com.linroid.kiff.apk/ApkKindSummary.<init>|<init>(com.linroid.kiff.apk.ApkEntryKind;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Long;kotlin.Long){}[0]
+
+    final val addedCount // com.linroid.kiff.apk/ApkKindSummary.addedCount|{}addedCount[0]
+        final fun <get-addedCount>(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.addedCount.<get-addedCount>|<get-addedCount>(){}[0]
+    final val changedCount // com.linroid.kiff.apk/ApkKindSummary.changedCount|{}changedCount[0]
+        final fun <get-changedCount>(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.changedCount.<get-changedCount>|<get-changedCount>(){}[0]
+    final val entryCount // com.linroid.kiff.apk/ApkKindSummary.entryCount|{}entryCount[0]
+        final fun <get-entryCount>(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.entryCount.<get-entryCount>|<get-entryCount>(){}[0]
+    final val growth // com.linroid.kiff.apk/ApkKindSummary.growth|{}growth[0]
+        final fun <get-growth>(): kotlin/Long // com.linroid.kiff.apk/ApkKindSummary.growth.<get-growth>|<get-growth>(){}[0]
+    final val kind // com.linroid.kiff.apk/ApkKindSummary.kind|{}kind[0]
+        final fun <get-kind>(): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff.apk/ApkKindSummary.kind.<get-kind>|<get-kind>(){}[0]
+    final val removedCount // com.linroid.kiff.apk/ApkKindSummary.removedCount|{}removedCount[0]
+        final fun <get-removedCount>(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.removedCount.<get-removedCount>|<get-removedCount>(){}[0]
+    final val sourceBytes // com.linroid.kiff.apk/ApkKindSummary.sourceBytes|{}sourceBytes[0]
+        final fun <get-sourceBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindSummary.sourceBytes.<get-sourceBytes>|<get-sourceBytes>(){}[0]
+    final val targetBytes // com.linroid.kiff.apk/ApkKindSummary.targetBytes|{}targetBytes[0]
+        final fun <get-targetBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkKindSummary.targetBytes.<get-targetBytes>|<get-targetBytes>(){}[0]
+
+    final fun component1(): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff.apk/ApkKindSummary.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.component3|component3(){}[0]
+    final fun component4(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.component4|component4(){}[0]
+    final fun component5(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.component5|component5(){}[0]
+    final fun component6(): kotlin/Long // com.linroid.kiff.apk/ApkKindSummary.component6|component6(){}[0]
+    final fun component7(): kotlin/Long // com.linroid.kiff.apk/ApkKindSummary.component7|component7(){}[0]
+    final fun copy(com.linroid.kiff.apk/ApkEntryKind = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Long = ..., kotlin/Long = ...): com.linroid.kiff.apk/ApkKindSummary // com.linroid.kiff.apk/ApkKindSummary.copy|copy(com.linroid.kiff.apk.ApkEntryKind;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Long;kotlin.Long){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.apk/ApkKindSummary.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.apk/ApkKindSummary.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.apk/ApkKindSummary.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.apk/ApkPatchReport { // com.linroid.kiff.apk/ApkPatchReport|null[0]
+    constructor <init>(com.linroid.kiff.region/RegionReport, kotlin.collections/List<com.linroid.kiff.apk/ApkKindCost>, kotlin/Long, kotlin/Long) // com.linroid.kiff.apk/ApkPatchReport.<init>|<init>(com.linroid.kiff.region.RegionReport;kotlin.collections.List<com.linroid.kiff.apk.ApkKindCost>;kotlin.Long;kotlin.Long){}[0]
+
+    final val directoryBytes // com.linroid.kiff.apk/ApkPatchReport.directoryBytes|{}directoryBytes[0]
+        final fun <get-directoryBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.directoryBytes.<get-directoryBytes>|<get-directoryBytes>(){}[0]
+    final val gapBytes // com.linroid.kiff.apk/ApkPatchReport.gapBytes|{}gapBytes[0]
+        final fun <get-gapBytes>(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.gapBytes.<get-gapBytes>|<get-gapBytes>(){}[0]
+    final val kinds // com.linroid.kiff.apk/ApkPatchReport.kinds|{}kinds[0]
+        final fun <get-kinds>(): kotlin.collections/List<com.linroid.kiff.apk/ApkKindCost> // com.linroid.kiff.apk/ApkPatchReport.kinds.<get-kinds>|<get-kinds>(){}[0]
+    final val patchSize // com.linroid.kiff.apk/ApkPatchReport.patchSize|{}patchSize[0]
+        final fun <get-patchSize>(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.patchSize.<get-patchSize>|<get-patchSize>(){}[0]
+    final val regions // com.linroid.kiff.apk/ApkPatchReport.regions|{}regions[0]
+        final fun <get-regions>(): com.linroid.kiff.region/RegionReport // com.linroid.kiff.apk/ApkPatchReport.regions.<get-regions>|<get-regions>(){}[0]
+    final val targetSize // com.linroid.kiff.apk/ApkPatchReport.targetSize|{}targetSize[0]
+        final fun <get-targetSize>(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+
+    final fun component1(): com.linroid.kiff.region/RegionReport // com.linroid.kiff.apk/ApkPatchReport.component1|component1(){}[0]
+    final fun component2(): kotlin.collections/List<com.linroid.kiff.apk/ApkKindCost> // com.linroid.kiff.apk/ApkPatchReport.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.component3|component3(){}[0]
+    final fun component4(): kotlin/Long // com.linroid.kiff.apk/ApkPatchReport.component4|component4(){}[0]
+    final fun copy(com.linroid.kiff.region/RegionReport = ..., kotlin.collections/List<com.linroid.kiff.apk/ApkKindCost> = ..., kotlin/Long = ..., kotlin/Long = ...): com.linroid.kiff.apk/ApkPatchReport // com.linroid.kiff.apk/ApkPatchReport.copy|copy(com.linroid.kiff.region.RegionReport;kotlin.collections.List<com.linroid.kiff.apk.ApkKindCost>;kotlin.Long;kotlin.Long){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.apk/ApkPatchReport.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.apk/ApkPatchReport.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.apk/ApkPatchReport.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.container/ApkFormat : com.linroid.kiff.container/ContainerFormat { // com.linroid.kiff.container/ApkFormat|null[0]
+    constructor <init>() // com.linroid.kiff.container/ApkFormat.<init>|<init>(){}[0]
+
+    final val name // com.linroid.kiff.container/ApkFormat.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.container/ApkFormat.name.<get-name>|<get-name>(){}[0]
+
+    final fun decompose(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin.collections/List<com.linroid.kiff.container/Child> // com.linroid.kiff.container/ApkFormat.decompose|decompose(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    final fun detect(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Boolean // com.linroid.kiff.container/ApkFormat.detect|detect(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    final fun pairUnmatched(com.linroid.kiff.container/Child, kotlin.collections/List<com.linroid.kiff.container/Child>): com.linroid.kiff.container/Child? // com.linroid.kiff.container/ApkFormat.pairUnmatched|pairUnmatched(com.linroid.kiff.container.Child;kotlin.collections.List<com.linroid.kiff.container.Child>){}[0]
+}
+
+final class com.linroid.kiff.container/Child { // com.linroid.kiff.container/Child|null[0]
+    constructor <init>(kotlin/String, com.linroid.kiff.region/RegionKind, kotlin/Int, kotlin/Int, kotlin/Int = ..., kotlin/Int = ..., com.linroid.kiff.container/Storage = ..., kotlin/Any? = ..., kotlin/String? = ..., kotlin.collections/List<kotlin/Int>? = ...) // com.linroid.kiff.container/Child.<init>|<init>(kotlin.String;com.linroid.kiff.region.RegionKind;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;com.linroid.kiff.container.Storage;kotlin.Any?;kotlin.String?;kotlin.collections.List<kotlin.Int>?){}[0]
+
+    final val columns // com.linroid.kiff.container/Child.columns|{}columns[0]
+        final fun <get-columns>(): kotlin.collections/List<kotlin/Int>? // com.linroid.kiff.container/Child.columns.<get-columns>|<get-columns>(){}[0]
+    final val contentFrom // com.linroid.kiff.container/Child.contentFrom|{}contentFrom[0]
+        final fun <get-contentFrom>(): kotlin/Int // com.linroid.kiff.container/Child.contentFrom.<get-contentFrom>|<get-contentFrom>(){}[0]
+    final val contentKey // com.linroid.kiff.container/Child.contentKey|{}contentKey[0]
+        final fun <get-contentKey>(): kotlin/Any? // com.linroid.kiff.container/Child.contentKey.<get-contentKey>|<get-contentKey>(){}[0]
+    final val contentTo // com.linroid.kiff.container/Child.contentTo|{}contentTo[0]
+        final fun <get-contentTo>(): kotlin/Int // com.linroid.kiff.container/Child.contentTo.<get-contentTo>|<get-contentTo>(){}[0]
+    final val from // com.linroid.kiff.container/Child.from|{}from[0]
+        final fun <get-from>(): kotlin/Int // com.linroid.kiff.container/Child.from.<get-from>|<get-from>(){}[0]
+    final val group // com.linroid.kiff.container/Child.group|{}group[0]
+        final fun <get-group>(): kotlin/String? // com.linroid.kiff.container/Child.group.<get-group>|<get-group>(){}[0]
+    final val isBare // com.linroid.kiff.container/Child.isBare|{}isBare[0]
+        final fun <get-isBare>(): kotlin/Boolean // com.linroid.kiff.container/Child.isBare.<get-isBare>|<get-isBare>(){}[0]
+    final val kind // com.linroid.kiff.container/Child.kind|{}kind[0]
+        final fun <get-kind>(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.container/Child.kind.<get-kind>|<get-kind>(){}[0]
+    final val name // com.linroid.kiff.container/Child.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.container/Child.name.<get-name>|<get-name>(){}[0]
+    final val size // com.linroid.kiff.container/Child.size|{}size[0]
+        final fun <get-size>(): kotlin/Int // com.linroid.kiff.container/Child.size.<get-size>|<get-size>(){}[0]
+    final val storage // com.linroid.kiff.container/Child.storage|{}storage[0]
+        final fun <get-storage>(): com.linroid.kiff.container/Storage // com.linroid.kiff.container/Child.storage.<get-storage>|<get-storage>(){}[0]
+    final val to // com.linroid.kiff.container/Child.to|{}to[0]
+        final fun <get-to>(): kotlin/Int // com.linroid.kiff.container/Child.to.<get-to>|<get-to>(){}[0]
+
+    final fun component1(): kotlin/String // com.linroid.kiff.container/Child.component1|component1(){}[0]
+    final fun component10(): kotlin.collections/List<kotlin/Int>? // com.linroid.kiff.container/Child.component10|component10(){}[0]
+    final fun component2(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.container/Child.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.linroid.kiff.container/Child.component3|component3(){}[0]
+    final fun component4(): kotlin/Int // com.linroid.kiff.container/Child.component4|component4(){}[0]
+    final fun component5(): kotlin/Int // com.linroid.kiff.container/Child.component5|component5(){}[0]
+    final fun component6(): kotlin/Int // com.linroid.kiff.container/Child.component6|component6(){}[0]
+    final fun component7(): com.linroid.kiff.container/Storage // com.linroid.kiff.container/Child.component7|component7(){}[0]
+    final fun component8(): kotlin/Any? // com.linroid.kiff.container/Child.component8|component8(){}[0]
+    final fun component9(): kotlin/String? // com.linroid.kiff.container/Child.component9|component9(){}[0]
+    final fun copy(kotlin/String = ..., com.linroid.kiff.region/RegionKind = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., com.linroid.kiff.container/Storage = ..., kotlin/Any? = ..., kotlin/String? = ..., kotlin.collections/List<kotlin/Int>? = ...): com.linroid.kiff.container/Child // com.linroid.kiff.container/Child.copy|copy(kotlin.String;com.linroid.kiff.region.RegionKind;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;com.linroid.kiff.container.Storage;kotlin.Any?;kotlin.String?;kotlin.collections.List<kotlin.Int>?){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.container/Child.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.container/Child.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.container/Child.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.container/ContainerRegistry { // com.linroid.kiff.container/ContainerRegistry|null[0]
+    constructor <init>(kotlin.collections/List<com.linroid.kiff.container/ContainerFormat>) // com.linroid.kiff.container/ContainerRegistry.<init>|<init>(kotlin.collections.List<com.linroid.kiff.container.ContainerFormat>){}[0]
+    constructor <init>(kotlin/Array<out com.linroid.kiff.container/ContainerFormat>...) // com.linroid.kiff.container/ContainerRegistry.<init>|<init>(kotlin.Array<out|com.linroid.kiff.container.ContainerFormat>...){}[0]
+
+    final fun plus(com.linroid.kiff.container/ContainerFormat): com.linroid.kiff.container/ContainerRegistry // com.linroid.kiff.container/ContainerRegistry.plus|plus(com.linroid.kiff.container.ContainerFormat){}[0]
+
+    final object Companion { // com.linroid.kiff.container/ContainerRegistry.Companion|null[0]
+        final val Empty // com.linroid.kiff.container/ContainerRegistry.Companion.Empty|{}Empty[0]
+            final fun <get-Empty>(): com.linroid.kiff.container/ContainerRegistry // com.linroid.kiff.container/ContainerRegistry.Companion.Empty.<get-Empty>|<get-Empty>(){}[0]
+    }
+}
+
+final class com.linroid.kiff.container/DexFormat : com.linroid.kiff.container/ContainerFormat { // com.linroid.kiff.container/DexFormat|null[0]
+    constructor <init>() // com.linroid.kiff.container/DexFormat.<init>|<init>(){}[0]
+
+    final val name // com.linroid.kiff.container/DexFormat.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.container/DexFormat.name.<get-name>|<get-name>(){}[0]
+
+    final fun decompose(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin.collections/List<com.linroid.kiff.container/Child> // com.linroid.kiff.container/DexFormat.decompose|decompose(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    final fun detect(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Boolean // com.linroid.kiff.container/DexFormat.detect|detect(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
+final class com.linroid.kiff.container/ZipFormat : com.linroid.kiff.container/ContainerFormat { // com.linroid.kiff.container/ZipFormat|null[0]
+    constructor <init>() // com.linroid.kiff.container/ZipFormat.<init>|<init>(){}[0]
+
+    final val name // com.linroid.kiff.container/ZipFormat.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.container/ZipFormat.name.<get-name>|<get-name>(){}[0]
+
+    final fun decompose(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin.collections/List<com.linroid.kiff.container/Child> // com.linroid.kiff.container/ZipFormat.decompose|decompose(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    final fun detect(kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Boolean // com.linroid.kiff.container/ZipFormat.detect|detect(kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
+final class com.linroid.kiff.io/ByteArraySource : com.linroid.kiff.io/SeekableSource { // com.linroid.kiff.io/ByteArraySource|null[0]
+    constructor <init>(kotlin/ByteArray) // com.linroid.kiff.io/ByteArraySource.<init>|<init>(kotlin.ByteArray){}[0]
+
+    final val size // com.linroid.kiff.io/ByteArraySource.size|{}size[0]
+        final fun <get-size>(): kotlin/Long // com.linroid.kiff.io/ByteArraySource.size.<get-size>|<get-size>(){}[0]
+
+    final fun read(kotlin/Long, kotlin/ByteArray, kotlin/Int, kotlin/Int): kotlin/Int // com.linroid.kiff.io/ByteArraySource.read|read(kotlin.Long;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
+final class com.linroid.kiff.region/RegionCost { // com.linroid.kiff.region/RegionCost|null[0]
+    constructor <init>(kotlin/String, com.linroid.kiff.region/RegionKind, com.linroid.kiff.format/RegionEncoding, kotlin/Long, kotlin/Long, kotlin/Long, kotlin.collections/List<com.linroid.kiff.region/RegionCost> = ...) // com.linroid.kiff.region/RegionCost.<init>|<init>(kotlin.String;com.linroid.kiff.region.RegionKind;com.linroid.kiff.format.RegionEncoding;kotlin.Long;kotlin.Long;kotlin.Long;kotlin.collections.List<com.linroid.kiff.region.RegionCost>){}[0]
+
+    final val carriedNothing // com.linroid.kiff.region/RegionCost.carriedNothing|{}carriedNothing[0]
+        final fun <get-carriedNothing>(): kotlin/Boolean // com.linroid.kiff.region/RegionCost.carriedNothing.<get-carriedNothing>|<get-carriedNothing>(){}[0]
+    final val children // com.linroid.kiff.region/RegionCost.children|{}children[0]
+        final fun <get-children>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionCost.children.<get-children>|<get-children>(){}[0]
+    final val encoding // com.linroid.kiff.region/RegionCost.encoding|{}encoding[0]
+        final fun <get-encoding>(): com.linroid.kiff.format/RegionEncoding // com.linroid.kiff.region/RegionCost.encoding.<get-encoding>|<get-encoding>(){}[0]
+    final val instructionBytes // com.linroid.kiff.region/RegionCost.instructionBytes|{}instructionBytes[0]
+        final fun <get-instructionBytes>(): kotlin/Long // com.linroid.kiff.region/RegionCost.instructionBytes.<get-instructionBytes>|<get-instructionBytes>(){}[0]
+    final val kind // com.linroid.kiff.region/RegionCost.kind|{}kind[0]
+        final fun <get-kind>(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.region/RegionCost.kind.<get-kind>|<get-kind>(){}[0]
+    final val literalBytes // com.linroid.kiff.region/RegionCost.literalBytes|{}literalBytes[0]
+        final fun <get-literalBytes>(): kotlin/Long // com.linroid.kiff.region/RegionCost.literalBytes.<get-literalBytes>|<get-literalBytes>(){}[0]
+    final val name // com.linroid.kiff.region/RegionCost.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.region/RegionCost.name.<get-name>|<get-name>(){}[0]
+    final val patchBytes // com.linroid.kiff.region/RegionCost.patchBytes|{}patchBytes[0]
+        final fun <get-patchBytes>(): kotlin/Long // com.linroid.kiff.region/RegionCost.patchBytes.<get-patchBytes>|<get-patchBytes>(){}[0]
+    final val ratio // com.linroid.kiff.region/RegionCost.ratio|{}ratio[0]
+        final fun <get-ratio>(): kotlin/Double // com.linroid.kiff.region/RegionCost.ratio.<get-ratio>|<get-ratio>(){}[0]
+    final val targetBytes // com.linroid.kiff.region/RegionCost.targetBytes|{}targetBytes[0]
+        final fun <get-targetBytes>(): kotlin/Long // com.linroid.kiff.region/RegionCost.targetBytes.<get-targetBytes>|<get-targetBytes>(){}[0]
+    final val wasStored // com.linroid.kiff.region/RegionCost.wasStored|{}wasStored[0]
+        final fun <get-wasStored>(): kotlin/Boolean // com.linroid.kiff.region/RegionCost.wasStored.<get-wasStored>|<get-wasStored>(){}[0]
+
+    final fun component1(): kotlin/String // com.linroid.kiff.region/RegionCost.component1|component1(){}[0]
+    final fun component2(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.region/RegionCost.component2|component2(){}[0]
+    final fun component3(): com.linroid.kiff.format/RegionEncoding // com.linroid.kiff.region/RegionCost.component3|component3(){}[0]
+    final fun component4(): kotlin/Long // com.linroid.kiff.region/RegionCost.component4|component4(){}[0]
+    final fun component5(): kotlin/Long // com.linroid.kiff.region/RegionCost.component5|component5(){}[0]
+    final fun component6(): kotlin/Long // com.linroid.kiff.region/RegionCost.component6|component6(){}[0]
+    final fun component7(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionCost.component7|component7(){}[0]
+    final fun copy(kotlin/String = ..., com.linroid.kiff.region/RegionKind = ..., com.linroid.kiff.format/RegionEncoding = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin.collections/List<com.linroid.kiff.region/RegionCost> = ...): com.linroid.kiff.region/RegionCost // com.linroid.kiff.region/RegionCost.copy|copy(kotlin.String;com.linroid.kiff.region.RegionKind;com.linroid.kiff.format.RegionEncoding;kotlin.Long;kotlin.Long;kotlin.Long;kotlin.collections.List<com.linroid.kiff.region.RegionCost>){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.region/RegionCost.equals|equals(kotlin.Any?){}[0]
+    final fun flatten(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionCost.flatten|flatten(){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.region/RegionCost.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.region/RegionCost.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.region/RegionInfo { // com.linroid.kiff.region/RegionInfo|null[0]
+    constructor <init>(kotlin/String, com.linroid.kiff.region/RegionKind, kotlin/Long, kotlin/Long, kotlin/Boolean) // com.linroid.kiff.region/RegionInfo.<init>|<init>(kotlin.String;com.linroid.kiff.region.RegionKind;kotlin.Long;kotlin.Long;kotlin.Boolean){}[0]
+
+    final val kind // com.linroid.kiff.region/RegionInfo.kind|{}kind[0]
+        final fun <get-kind>(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.region/RegionInfo.kind.<get-kind>|<get-kind>(){}[0]
+    final val looksLikeText // com.linroid.kiff.region/RegionInfo.looksLikeText|{}looksLikeText[0]
+        final fun <get-looksLikeText>(): kotlin/Boolean // com.linroid.kiff.region/RegionInfo.looksLikeText.<get-looksLikeText>|<get-looksLikeText>(){}[0]
+    final val name // com.linroid.kiff.region/RegionInfo.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.region/RegionInfo.name.<get-name>|<get-name>(){}[0]
+    final val sourceBytes // com.linroid.kiff.region/RegionInfo.sourceBytes|{}sourceBytes[0]
+        final fun <get-sourceBytes>(): kotlin/Long // com.linroid.kiff.region/RegionInfo.sourceBytes.<get-sourceBytes>|<get-sourceBytes>(){}[0]
+    final val targetBytes // com.linroid.kiff.region/RegionInfo.targetBytes|{}targetBytes[0]
+        final fun <get-targetBytes>(): kotlin/Long // com.linroid.kiff.region/RegionInfo.targetBytes.<get-targetBytes>|<get-targetBytes>(){}[0]
+
+    final fun component1(): kotlin/String // com.linroid.kiff.region/RegionInfo.component1|component1(){}[0]
+    final fun component2(): com.linroid.kiff.region/RegionKind // com.linroid.kiff.region/RegionInfo.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.linroid.kiff.region/RegionInfo.component3|component3(){}[0]
+    final fun component4(): kotlin/Long // com.linroid.kiff.region/RegionInfo.component4|component4(){}[0]
+    final fun component5(): kotlin/Boolean // com.linroid.kiff.region/RegionInfo.component5|component5(){}[0]
+    final fun copy(kotlin/String = ..., com.linroid.kiff.region/RegionKind = ..., kotlin/Long = ..., kotlin/Long = ..., kotlin/Boolean = ...): com.linroid.kiff.region/RegionInfo // com.linroid.kiff.region/RegionInfo.copy|copy(kotlin.String;com.linroid.kiff.region.RegionKind;kotlin.Long;kotlin.Long;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.region/RegionInfo.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.region/RegionInfo.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.region/RegionInfo.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.region/RegionReport { // com.linroid.kiff.region/RegionReport|null[0]
+    constructor <init>(kotlin.collections/List<com.linroid.kiff.region/RegionCost>, kotlin/Long, kotlin/Long) // com.linroid.kiff.region/RegionReport.<init>|<init>(kotlin.collections.List<com.linroid.kiff.region.RegionCost>;kotlin.Long;kotlin.Long){}[0]
+
+    final val allRegions // com.linroid.kiff.region/RegionReport.allRegions|{}allRegions[0]
+        final fun <get-allRegions>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.allRegions.<get-allRegions>|<get-allRegions>(){}[0]
+    final val attributedBytes // com.linroid.kiff.region/RegionReport.attributedBytes|{}attributedBytes[0]
+        final fun <get-attributedBytes>(): kotlin/Long // com.linroid.kiff.region/RegionReport.attributedBytes.<get-attributedBytes>|<get-attributedBytes>(){}[0]
+    final val costly // com.linroid.kiff.region/RegionReport.costly|{}costly[0]
+        final fun <get-costly>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.costly.<get-costly>|<get-costly>(){}[0]
+    final val instructionBytes // com.linroid.kiff.region/RegionReport.instructionBytes|{}instructionBytes[0]
+        final fun <get-instructionBytes>(): kotlin/Long // com.linroid.kiff.region/RegionReport.instructionBytes.<get-instructionBytes>|<get-instructionBytes>(){}[0]
+    final val leaves // com.linroid.kiff.region/RegionReport.leaves|{}leaves[0]
+        final fun <get-leaves>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.leaves.<get-leaves>|<get-leaves>(){}[0]
+    final val literalBytes // com.linroid.kiff.region/RegionReport.literalBytes|{}literalBytes[0]
+        final fun <get-literalBytes>(): kotlin/Long // com.linroid.kiff.region/RegionReport.literalBytes.<get-literalBytes>|<get-literalBytes>(){}[0]
+    final val patchSize // com.linroid.kiff.region/RegionReport.patchSize|{}patchSize[0]
+        final fun <get-patchSize>(): kotlin/Long // com.linroid.kiff.region/RegionReport.patchSize.<get-patchSize>|<get-patchSize>(){}[0]
+    final val referenced // com.linroid.kiff.region/RegionReport.referenced|{}referenced[0]
+        final fun <get-referenced>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.referenced.<get-referenced>|<get-referenced>(){}[0]
+    final val regions // com.linroid.kiff.region/RegionReport.regions|{}regions[0]
+        final fun <get-regions>(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.regions.<get-regions>|<get-regions>(){}[0]
+    final val targetSize // com.linroid.kiff.region/RegionReport.targetSize|{}targetSize[0]
+        final fun <get-targetSize>(): kotlin/Long // com.linroid.kiff.region/RegionReport.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+
+    final fun bytes(com.linroid.kiff.region/RegionKind): kotlin/Long // com.linroid.kiff.region/RegionReport.bytes|bytes(com.linroid.kiff.region.RegionKind){}[0]
+    final fun component1(): kotlin.collections/List<com.linroid.kiff.region/RegionCost> // com.linroid.kiff.region/RegionReport.component1|component1(){}[0]
+    final fun component2(): kotlin/Long // com.linroid.kiff.region/RegionReport.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.linroid.kiff.region/RegionReport.component3|component3(){}[0]
+    final fun copy(kotlin.collections/List<com.linroid.kiff.region/RegionCost> = ..., kotlin/Long = ..., kotlin/Long = ...): com.linroid.kiff.region/RegionReport // com.linroid.kiff.region/RegionReport.copy|copy(kotlin.collections.List<com.linroid.kiff.region.RegionCost>;kotlin.Long;kotlin.Long){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.region/RegionReport.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.region/RegionReport.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.region/RegionReport.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.text/MyersDiffAlgorithm : com.linroid.kiff.text/LineDiffAlgorithm { // com.linroid.kiff.text/MyersDiffAlgorithm|null[0]
+    constructor <init>() // com.linroid.kiff.text/MyersDiffAlgorithm.<init>|<init>(){}[0]
+
+    final val name // com.linroid.kiff.text/MyersDiffAlgorithm.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.text/MyersDiffAlgorithm.name.<get-name>|<get-name>(){}[0]
+
+    final fun diff(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>): kotlin.collections/List<com.linroid.kiff.text/Edit> // com.linroid.kiff.text/MyersDiffAlgorithm.diff|diff(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>){}[0]
+    final fun diffWithin(kotlin.collections/List<kotlin/String>, kotlin.collections/List<kotlin/String>, kotlin/Int): kotlin.collections/List<com.linroid.kiff.text/Edit>? // com.linroid.kiff.text/MyersDiffAlgorithm.diffWithin|diffWithin(kotlin.collections.List<kotlin.String>;kotlin.collections.List<kotlin.String>;kotlin.Int){}[0]
+}
+
+final class com.linroid.kiff.text/TextContent { // com.linroid.kiff.text/TextContent|null[0]
+    constructor <init>(kotlin.collections/List<kotlin/String>, kotlin/Boolean) // com.linroid.kiff.text/TextContent.<init>|<init>(kotlin.collections.List<kotlin.String>;kotlin.Boolean){}[0]
+
+    final val endsWithNewline // com.linroid.kiff.text/TextContent.endsWithNewline|{}endsWithNewline[0]
+        final fun <get-endsWithNewline>(): kotlin/Boolean // com.linroid.kiff.text/TextContent.endsWithNewline.<get-endsWithNewline>|<get-endsWithNewline>(){}[0]
+    final val lines // com.linroid.kiff.text/TextContent.lines|{}lines[0]
+        final fun <get-lines>(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/TextContent.lines.<get-lines>|<get-lines>(){}[0]
+
+    final fun component1(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/TextContent.component1|component1(){}[0]
+    final fun component2(): kotlin/Boolean // com.linroid.kiff.text/TextContent.component2|component2(){}[0]
+    final fun copy(kotlin.collections/List<kotlin/String> = ..., kotlin/Boolean = ...): com.linroid.kiff.text/TextContent // com.linroid.kiff.text/TextContent.copy|copy(kotlin.collections.List<kotlin.String>;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/TextContent.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.text/TextContent.hashCode|hashCode(){}[0]
+    final fun toBytes(): kotlin/ByteArray // com.linroid.kiff.text/TextContent.toBytes|toBytes(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.text/TextContent.toString|toString(){}[0]
+
+    final object Companion { // com.linroid.kiff.text/TextContent.Companion|null[0]
+        final fun of(kotlin/ByteArray): com.linroid.kiff.text/TextContent // com.linroid.kiff.text/TextContent.Companion.of|of(kotlin.ByteArray){}[0]
+        final fun of(kotlin/String): com.linroid.kiff.text/TextContent // com.linroid.kiff.text/TextContent.Companion.of|of(kotlin.String){}[0]
+    }
+}
+
+final class com.linroid.kiff.zip/ZipDiffReport { // com.linroid.kiff.zip/ZipDiffReport|null[0]
+    constructor <init>(kotlin.collections/List<com.linroid.kiff.zip/ZipEntryChange>, kotlin/Int, kotlin/Int) // com.linroid.kiff.zip/ZipDiffReport.<init>|<init>(kotlin.collections.List<com.linroid.kiff.zip.ZipEntryChange>;kotlin.Int;kotlin.Int){}[0]
+
+    final val changed // com.linroid.kiff.zip/ZipDiffReport.changed|{}changed[0]
+        final fun <get-changed>(): kotlin.collections/List<com.linroid.kiff.zip/ZipEntryChange> // com.linroid.kiff.zip/ZipDiffReport.changed.<get-changed>|<get-changed>(){}[0]
+    final val changes // com.linroid.kiff.zip/ZipDiffReport.changes|{}changes[0]
+        final fun <get-changes>(): kotlin.collections/List<com.linroid.kiff.zip/ZipEntryChange> // com.linroid.kiff.zip/ZipDiffReport.changes.<get-changes>|<get-changes>(){}[0]
+    final val sourceSize // com.linroid.kiff.zip/ZipDiffReport.sourceSize|{}sourceSize[0]
+        final fun <get-sourceSize>(): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.sourceSize.<get-sourceSize>|<get-sourceSize>(){}[0]
+    final val targetSize // com.linroid.kiff.zip/ZipDiffReport.targetSize|{}targetSize[0]
+        final fun <get-targetSize>(): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+
+    final fun bytes(com.linroid.kiff.zip/ZipEntryStatus): kotlin/Long // com.linroid.kiff.zip/ZipDiffReport.bytes|bytes(com.linroid.kiff.zip.ZipEntryStatus){}[0]
+    final fun component1(): kotlin.collections/List<com.linroid.kiff.zip/ZipEntryChange> // com.linroid.kiff.zip/ZipDiffReport.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.component3|component3(){}[0]
+    final fun copy(kotlin.collections/List<com.linroid.kiff.zip/ZipEntryChange> = ..., kotlin/Int = ..., kotlin/Int = ...): com.linroid.kiff.zip/ZipDiffReport // com.linroid.kiff.zip/ZipDiffReport.copy|copy(kotlin.collections.List<com.linroid.kiff.zip.ZipEntryChange>;kotlin.Int;kotlin.Int){}[0]
+    final fun count(com.linroid.kiff.zip/ZipEntryStatus): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.count|count(com.linroid.kiff.zip.ZipEntryStatus){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.zip/ZipDiffReport.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.zip/ZipDiffReport.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.zip/ZipDiffReport.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff.zip/ZipEntryChange { // com.linroid.kiff.zip/ZipEntryChange|null[0]
+    constructor <init>(kotlin/String, com.linroid.kiff.zip/ZipEntryStatus, kotlin/Int, kotlin/Int, kotlin/Boolean) // com.linroid.kiff.zip/ZipEntryChange.<init>|<init>(kotlin.String;com.linroid.kiff.zip.ZipEntryStatus;kotlin.Int;kotlin.Int;kotlin.Boolean){}[0]
+
+    final val name // com.linroid.kiff.zip/ZipEntryChange.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.zip/ZipEntryChange.name.<get-name>|<get-name>(){}[0]
+    final val sourceSize // com.linroid.kiff.zip/ZipEntryChange.sourceSize|{}sourceSize[0]
+        final fun <get-sourceSize>(): kotlin/Int // com.linroid.kiff.zip/ZipEntryChange.sourceSize.<get-sourceSize>|<get-sourceSize>(){}[0]
+    final val status // com.linroid.kiff.zip/ZipEntryChange.status|{}status[0]
+        final fun <get-status>(): com.linroid.kiff.zip/ZipEntryStatus // com.linroid.kiff.zip/ZipEntryChange.status.<get-status>|<get-status>(){}[0]
+    final val stored // com.linroid.kiff.zip/ZipEntryChange.stored|{}stored[0]
+        final fun <get-stored>(): kotlin/Boolean // com.linroid.kiff.zip/ZipEntryChange.stored.<get-stored>|<get-stored>(){}[0]
+    final val targetSize // com.linroid.kiff.zip/ZipEntryChange.targetSize|{}targetSize[0]
+        final fun <get-targetSize>(): kotlin/Int // com.linroid.kiff.zip/ZipEntryChange.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+
+    final fun component1(): kotlin/String // com.linroid.kiff.zip/ZipEntryChange.component1|component1(){}[0]
+    final fun component2(): com.linroid.kiff.zip/ZipEntryStatus // com.linroid.kiff.zip/ZipEntryChange.component2|component2(){}[0]
+    final fun component3(): kotlin/Int // com.linroid.kiff.zip/ZipEntryChange.component3|component3(){}[0]
+    final fun component4(): kotlin/Int // com.linroid.kiff.zip/ZipEntryChange.component4|component4(){}[0]
+    final fun component5(): kotlin/Boolean // com.linroid.kiff.zip/ZipEntryChange.component5|component5(){}[0]
+    final fun copy(kotlin/String = ..., com.linroid.kiff.zip/ZipEntryStatus = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Boolean = ...): com.linroid.kiff.zip/ZipEntryChange // com.linroid.kiff.zip/ZipEntryChange.copy|copy(kotlin.String;com.linroid.kiff.zip.ZipEntryStatus;kotlin.Int;kotlin.Int;kotlin.Boolean){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.zip/ZipEntryChange.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff.zip/ZipEntryChange.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff.zip/ZipEntryChange.toString|toString(){}[0]
+}
+
+final class com.linroid.kiff/KiffOptions { // com.linroid.kiff/KiffOptions|null[0]
+    constructor <init>(com.linroid.kiff.delta/DeltaAlgorithm = ..., com.linroid.kiff.region/RegionPlanner = ..., com.linroid.kiff.container/ContainerRegistry = ..., com.linroid.kiff.text/LineDiffAlgorithm = ...) // com.linroid.kiff/KiffOptions.<init>|<init>(com.linroid.kiff.delta.DeltaAlgorithm;com.linroid.kiff.region.RegionPlanner;com.linroid.kiff.container.ContainerRegistry;com.linroid.kiff.text.LineDiffAlgorithm){}[0]
+
+    final val algorithm // com.linroid.kiff/KiffOptions.algorithm|{}algorithm[0]
+        final fun <get-algorithm>(): com.linroid.kiff.delta/DeltaAlgorithm // com.linroid.kiff/KiffOptions.algorithm.<get-algorithm>|<get-algorithm>(){}[0]
+    final val containers // com.linroid.kiff/KiffOptions.containers|{}containers[0]
+        final fun <get-containers>(): com.linroid.kiff.container/ContainerRegistry // com.linroid.kiff/KiffOptions.containers.<get-containers>|<get-containers>(){}[0]
+    final val lineAlgorithm // com.linroid.kiff/KiffOptions.lineAlgorithm|{}lineAlgorithm[0]
+        final fun <get-lineAlgorithm>(): com.linroid.kiff.text/LineDiffAlgorithm // com.linroid.kiff/KiffOptions.lineAlgorithm.<get-lineAlgorithm>|<get-lineAlgorithm>(){}[0]
+    final val planner // com.linroid.kiff/KiffOptions.planner|{}planner[0]
+        final fun <get-planner>(): com.linroid.kiff.region/RegionPlanner // com.linroid.kiff/KiffOptions.planner.<get-planner>|<get-planner>(){}[0]
+}
+
+final class com.linroid.kiff/PatchInfo { // com.linroid.kiff/PatchInfo|null[0]
+    constructor <init>(com.linroid.kiff/PatcherId, kotlin/Int, kotlin/Long, kotlin/UInt, kotlin/Long, kotlin/UInt, kotlin/Long) // com.linroid.kiff/PatchInfo.<init>|<init>(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long){}[0]
+
+    final val formatVersion // com.linroid.kiff/PatchInfo.formatVersion|{}formatVersion[0]
+        final fun <get-formatVersion>(): kotlin/Int // com.linroid.kiff/PatchInfo.formatVersion.<get-formatVersion>|<get-formatVersion>(){}[0]
+    final val patchSize // com.linroid.kiff/PatchInfo.patchSize|{}patchSize[0]
+        final fun <get-patchSize>(): kotlin/Long // com.linroid.kiff/PatchInfo.patchSize.<get-patchSize>|<get-patchSize>(){}[0]
+    final val patcher // com.linroid.kiff/PatchInfo.patcher|{}patcher[0]
+        final fun <get-patcher>(): com.linroid.kiff/PatcherId // com.linroid.kiff/PatchInfo.patcher.<get-patcher>|<get-patcher>(){}[0]
+    final val ratio // com.linroid.kiff/PatchInfo.ratio|{}ratio[0]
+        final fun <get-ratio>(): kotlin/Double // com.linroid.kiff/PatchInfo.ratio.<get-ratio>|<get-ratio>(){}[0]
+    final val sourceCrc32 // com.linroid.kiff/PatchInfo.sourceCrc32|{}sourceCrc32[0]
+        final fun <get-sourceCrc32>(): kotlin/UInt // com.linroid.kiff/PatchInfo.sourceCrc32.<get-sourceCrc32>|<get-sourceCrc32>(){}[0]
+    final val sourceSize // com.linroid.kiff/PatchInfo.sourceSize|{}sourceSize[0]
+        final fun <get-sourceSize>(): kotlin/Long // com.linroid.kiff/PatchInfo.sourceSize.<get-sourceSize>|<get-sourceSize>(){}[0]
+    final val targetCrc32 // com.linroid.kiff/PatchInfo.targetCrc32|{}targetCrc32[0]
+        final fun <get-targetCrc32>(): kotlin/UInt // com.linroid.kiff/PatchInfo.targetCrc32.<get-targetCrc32>|<get-targetCrc32>(){}[0]
+    final val targetSize // com.linroid.kiff/PatchInfo.targetSize|{}targetSize[0]
+        final fun <get-targetSize>(): kotlin/Long // com.linroid.kiff/PatchInfo.targetSize.<get-targetSize>|<get-targetSize>(){}[0]
+
+    final fun component1(): com.linroid.kiff/PatcherId // com.linroid.kiff/PatchInfo.component1|component1(){}[0]
+    final fun component2(): kotlin/Int // com.linroid.kiff/PatchInfo.component2|component2(){}[0]
+    final fun component3(): kotlin/Long // com.linroid.kiff/PatchInfo.component3|component3(){}[0]
+    final fun component4(): kotlin/UInt // com.linroid.kiff/PatchInfo.component4|component4(){}[0]
+    final fun component5(): kotlin/Long // com.linroid.kiff/PatchInfo.component5|component5(){}[0]
+    final fun component6(): kotlin/UInt // com.linroid.kiff/PatchInfo.component6|component6(){}[0]
+    final fun component7(): kotlin/Long // com.linroid.kiff/PatchInfo.component7|component7(){}[0]
+    final fun copy(com.linroid.kiff/PatcherId = ..., kotlin/Int = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ..., kotlin/UInt = ..., kotlin/Long = ...): com.linroid.kiff/PatchInfo // com.linroid.kiff/PatchInfo.copy|copy(com.linroid.kiff.PatcherId;kotlin.Int;kotlin.Long;kotlin.UInt;kotlin.Long;kotlin.UInt;kotlin.Long){}[0]
+    final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff/PatchInfo.equals|equals(kotlin.Any?){}[0]
+    final fun hashCode(): kotlin/Int // com.linroid.kiff/PatchInfo.hashCode|hashCode(){}[0]
+    final fun toString(): kotlin/String // com.linroid.kiff/PatchInfo.toString|toString(){}[0]
+}
+
+sealed class com.linroid.kiff.text/Edit { // com.linroid.kiff.text/Edit|null[0]
+    final class Delete : com.linroid.kiff.text/Edit { // com.linroid.kiff.text/Edit.Delete|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // com.linroid.kiff.text/Edit.Delete.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val count // com.linroid.kiff.text/Edit.Delete.count|{}count[0]
+            final fun <get-count>(): kotlin/Int // com.linroid.kiff.text/Edit.Delete.count.<get-count>|<get-count>(){}[0]
+        final val position // com.linroid.kiff.text/Edit.Delete.position|{}position[0]
+            final fun <get-position>(): kotlin/Int // com.linroid.kiff.text/Edit.Delete.position.<get-position>|<get-position>(){}[0]
+
+        final fun component1(): kotlin/Int // com.linroid.kiff.text/Edit.Delete.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // com.linroid.kiff.text/Edit.Delete.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): com.linroid.kiff.text/Edit.Delete // com.linroid.kiff.text/Edit.Delete.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/Edit.Delete.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.linroid.kiff.text/Edit.Delete.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.linroid.kiff.text/Edit.Delete.toString|toString(){}[0]
+    }
+
+    final class Equal : com.linroid.kiff.text/Edit { // com.linroid.kiff.text/Edit.Equal|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int) // com.linroid.kiff.text/Edit.Equal.<init>|<init>(kotlin.Int;kotlin.Int){}[0]
+
+        final val count // com.linroid.kiff.text/Edit.Equal.count|{}count[0]
+            final fun <get-count>(): kotlin/Int // com.linroid.kiff.text/Edit.Equal.count.<get-count>|<get-count>(){}[0]
+        final val position // com.linroid.kiff.text/Edit.Equal.position|{}position[0]
+            final fun <get-position>(): kotlin/Int // com.linroid.kiff.text/Edit.Equal.position.<get-position>|<get-position>(){}[0]
+
+        final fun component1(): kotlin/Int // com.linroid.kiff.text/Edit.Equal.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // com.linroid.kiff.text/Edit.Equal.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ...): com.linroid.kiff.text/Edit.Equal // com.linroid.kiff.text/Edit.Equal.copy|copy(kotlin.Int;kotlin.Int){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/Edit.Equal.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.linroid.kiff.text/Edit.Equal.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.linroid.kiff.text/Edit.Equal.toString|toString(){}[0]
+    }
+
+    final class Insert : com.linroid.kiff.text/Edit { // com.linroid.kiff.text/Edit.Insert|null[0]
+        constructor <init>(kotlin/Int, kotlin.collections/List<kotlin/String>) // com.linroid.kiff.text/Edit.Insert.<init>|<init>(kotlin.Int;kotlin.collections.List<kotlin.String>){}[0]
+
+        final val lines // com.linroid.kiff.text/Edit.Insert.lines|{}lines[0]
+            final fun <get-lines>(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/Edit.Insert.lines.<get-lines>|<get-lines>(){}[0]
+        final val position // com.linroid.kiff.text/Edit.Insert.position|{}position[0]
+            final fun <get-position>(): kotlin/Int // com.linroid.kiff.text/Edit.Insert.position.<get-position>|<get-position>(){}[0]
+
+        final fun component1(): kotlin/Int // com.linroid.kiff.text/Edit.Insert.component1|component1(){}[0]
+        final fun component2(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/Edit.Insert.component2|component2(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin.collections/List<kotlin/String> = ...): com.linroid.kiff.text/Edit.Insert // com.linroid.kiff.text/Edit.Insert.copy|copy(kotlin.Int;kotlin.collections.List<kotlin.String>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/Edit.Insert.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.linroid.kiff.text/Edit.Insert.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.linroid.kiff.text/Edit.Insert.toString|toString(){}[0]
+    }
+}
+
+final object com.linroid.kiff.container/ContainerFormatTiling { // com.linroid.kiff.container/ContainerFormatTiling|null[0]
+    final fun check(com.linroid.kiff.container/ContainerFormat, kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...): kotlin.collections/List<kotlin/String> // com.linroid.kiff.container/ContainerFormatTiling.check|check(com.linroid.kiff.container.ContainerFormat;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+    final fun describe(com.linroid.kiff.container/ContainerFormat, kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...): kotlin/String? // com.linroid.kiff.container/ContainerFormatTiling.describe|describe(com.linroid.kiff.container.ContainerFormat;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+}
+
+final object com.linroid.kiff.delta/RollingHashAlgorithm : com.linroid.kiff.delta/DeltaAlgorithm { // com.linroid.kiff.delta/RollingHashAlgorithm|null[0]
+    final val name // com.linroid.kiff.delta/RollingHashAlgorithm.name|{}name[0]
+        final fun <get-name>(): kotlin/String // com.linroid.kiff.delta/RollingHashAlgorithm.name.<get-name>|<get-name>(){}[0]
+
+    final fun scanner(com.linroid.kiff.io/SeekableSource, kotlin/Long, kotlin/Long): com.linroid.kiff.delta/DeltaScanner // com.linroid.kiff.delta/RollingHashAlgorithm.scanner|scanner(com.linroid.kiff.io.SeekableSource;kotlin.Long;kotlin.Long){}[0]
+}
+
+final object com.linroid.kiff.io/KiffFiles { // com.linroid.kiff.io/KiffFiles|null[0]
+    final fun exists(kotlin/String): kotlin/Boolean // com.linroid.kiff.io/KiffFiles.exists|exists(kotlin.String){}[0]
+    final fun readBytes(kotlin/String): kotlin/ByteArray // com.linroid.kiff.io/KiffFiles.readBytes|readBytes(kotlin.String){}[0]
+    final fun writeBytes(kotlin/String, kotlin/ByteArray) // com.linroid.kiff.io/KiffFiles.writeBytes|writeBytes(kotlin.String;kotlin.ByteArray){}[0]
+    final fun writeStreaming(kotlin/String, kotlin/Function1<com.linroid.kiff.io/RestoreTarget, kotlin/Unit>) // com.linroid.kiff.io/KiffFiles.writeStreaming|writeStreaming(kotlin.String;kotlin.Function1<com.linroid.kiff.io.RestoreTarget,kotlin.Unit>){}[0]
+}
+
+final object com.linroid.kiff.text/UnifiedDiff { // com.linroid.kiff.text/UnifiedDiff|null[0]
+    final fun apply(com.linroid.kiff.text/TextContent, com.linroid.kiff.text/UnifiedDiff.Patch): com.linroid.kiff.text/TextContent // com.linroid.kiff.text/UnifiedDiff.apply|apply(com.linroid.kiff.text.TextContent;com.linroid.kiff.text.UnifiedDiff.Patch){}[0]
+    final fun format(com.linroid.kiff.text/TextContent, com.linroid.kiff.text/TextContent, kotlin.collections/List<com.linroid.kiff.text/Edit>, kotlin/String = ..., kotlin/String = ..., kotlin/Int = ...): kotlin/String // com.linroid.kiff.text/UnifiedDiff.format|format(com.linroid.kiff.text.TextContent;com.linroid.kiff.text.TextContent;kotlin.collections.List<com.linroid.kiff.text.Edit>;kotlin.String;kotlin.String;kotlin.Int){}[0]
+    final fun formatBytes(kotlin/ByteArray, kotlin/ByteArray, kotlin/String = ..., kotlin/String = ..., kotlin/Int = ...): kotlin/ByteArray // com.linroid.kiff.text/UnifiedDiff.formatBytes|formatBytes(kotlin.ByteArray;kotlin.ByteArray;kotlin.String;kotlin.String;kotlin.Int){}[0]
+    final fun parse(kotlin/String): com.linroid.kiff.text/UnifiedDiff.Patch // com.linroid.kiff.text/UnifiedDiff.parse|parse(kotlin.String){}[0]
+
+    final class Hunk { // com.linroid.kiff.text/UnifiedDiff.Hunk|null[0]
+        constructor <init>(kotlin/Int, kotlin/Int, kotlin/Int, kotlin/Int, kotlin.collections/List<kotlin/String>) // com.linroid.kiff.text/UnifiedDiff.Hunk.<init>|<init>(kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.collections.List<kotlin.String>){}[0]
+
+        final val lines // com.linroid.kiff.text/UnifiedDiff.Hunk.lines|{}lines[0]
+            final fun <get-lines>(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/UnifiedDiff.Hunk.lines.<get-lines>|<get-lines>(){}[0]
+        final val sourceCount // com.linroid.kiff.text/UnifiedDiff.Hunk.sourceCount|{}sourceCount[0]
+            final fun <get-sourceCount>(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.sourceCount.<get-sourceCount>|<get-sourceCount>(){}[0]
+        final val sourceStart // com.linroid.kiff.text/UnifiedDiff.Hunk.sourceStart|{}sourceStart[0]
+            final fun <get-sourceStart>(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.sourceStart.<get-sourceStart>|<get-sourceStart>(){}[0]
+        final val targetCount // com.linroid.kiff.text/UnifiedDiff.Hunk.targetCount|{}targetCount[0]
+            final fun <get-targetCount>(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.targetCount.<get-targetCount>|<get-targetCount>(){}[0]
+        final val targetStart // com.linroid.kiff.text/UnifiedDiff.Hunk.targetStart|{}targetStart[0]
+            final fun <get-targetStart>(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.targetStart.<get-targetStart>|<get-targetStart>(){}[0]
+
+        final fun component1(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.component1|component1(){}[0]
+        final fun component2(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.component2|component2(){}[0]
+        final fun component3(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.component3|component3(){}[0]
+        final fun component4(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.component4|component4(){}[0]
+        final fun component5(): kotlin.collections/List<kotlin/String> // com.linroid.kiff.text/UnifiedDiff.Hunk.component5|component5(){}[0]
+        final fun copy(kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin/Int = ..., kotlin.collections/List<kotlin/String> = ...): com.linroid.kiff.text/UnifiedDiff.Hunk // com.linroid.kiff.text/UnifiedDiff.Hunk.copy|copy(kotlin.Int;kotlin.Int;kotlin.Int;kotlin.Int;kotlin.collections.List<kotlin.String>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/UnifiedDiff.Hunk.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Hunk.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Hunk.toString|toString(){}[0]
+    }
+
+    final class Patch { // com.linroid.kiff.text/UnifiedDiff.Patch|null[0]
+        constructor <init>(kotlin/String, kotlin/String, kotlin.collections/List<com.linroid.kiff.text/UnifiedDiff.Hunk>) // com.linroid.kiff.text/UnifiedDiff.Patch.<init>|<init>(kotlin.String;kotlin.String;kotlin.collections.List<com.linroid.kiff.text.UnifiedDiff.Hunk>){}[0]
+
+        final val hunks // com.linroid.kiff.text/UnifiedDiff.Patch.hunks|{}hunks[0]
+            final fun <get-hunks>(): kotlin.collections/List<com.linroid.kiff.text/UnifiedDiff.Hunk> // com.linroid.kiff.text/UnifiedDiff.Patch.hunks.<get-hunks>|<get-hunks>(){}[0]
+        final val sourceName // com.linroid.kiff.text/UnifiedDiff.Patch.sourceName|{}sourceName[0]
+            final fun <get-sourceName>(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Patch.sourceName.<get-sourceName>|<get-sourceName>(){}[0]
+        final val targetName // com.linroid.kiff.text/UnifiedDiff.Patch.targetName|{}targetName[0]
+            final fun <get-targetName>(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Patch.targetName.<get-targetName>|<get-targetName>(){}[0]
+
+        final fun component1(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Patch.component1|component1(){}[0]
+        final fun component2(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Patch.component2|component2(){}[0]
+        final fun component3(): kotlin.collections/List<com.linroid.kiff.text/UnifiedDiff.Hunk> // com.linroid.kiff.text/UnifiedDiff.Patch.component3|component3(){}[0]
+        final fun copy(kotlin/String = ..., kotlin/String = ..., kotlin.collections/List<com.linroid.kiff.text/UnifiedDiff.Hunk> = ...): com.linroid.kiff.text/UnifiedDiff.Patch // com.linroid.kiff.text/UnifiedDiff.Patch.copy|copy(kotlin.String;kotlin.String;kotlin.collections.List<com.linroid.kiff.text.UnifiedDiff.Hunk>){}[0]
+        final fun equals(kotlin/Any?): kotlin/Boolean // com.linroid.kiff.text/UnifiedDiff.Patch.equals|equals(kotlin.Any?){}[0]
+        final fun hashCode(): kotlin/Int // com.linroid.kiff.text/UnifiedDiff.Patch.hashCode|hashCode(){}[0]
+        final fun toString(): kotlin/String // com.linroid.kiff.text/UnifiedDiff.Patch.toString|toString(){}[0]
+    }
+}
+
+final object com.linroid.kiff/Kiff { // com.linroid.kiff/Kiff|null[0]
+    final val readableFormats // com.linroid.kiff/Kiff.readableFormats|{}readableFormats[0]
+        final fun <get-readableFormats>(): kotlin.collections/Set<kotlin/Int> // com.linroid.kiff/Kiff.readableFormats.<get-readableFormats>|<get-readableFormats>(){}[0]
+
+    final fun applyPatch(com.linroid.kiff.io/SeekableSource, kotlin/ByteArray): kotlin/ByteArray // com.linroid.kiff/Kiff.applyPatch|applyPatch(com.linroid.kiff.io.SeekableSource;kotlin.ByteArray){}[0]
+    final fun applyPatch(com.linroid.kiff.io/SeekableSource, kotlin/ByteArray, com.linroid.kiff.io/RestoreTarget) // com.linroid.kiff/Kiff.applyPatch|applyPatch(com.linroid.kiff.io.SeekableSource;kotlin.ByteArray;com.linroid.kiff.io.RestoreTarget){}[0]
+    final fun applyPatch(kotlin/ByteArray, kotlin/ByteArray): kotlin/ByteArray // com.linroid.kiff/Kiff.applyPatch|applyPatch(kotlin.ByteArray;kotlin.ByteArray){}[0]
+    final fun applyPatch(kotlin/String, kotlin/String, kotlin/String): com.linroid.kiff/PatchInfo // com.linroid.kiff/Kiff.applyPatch|applyPatch(kotlin.String;kotlin.String;kotlin.String){}[0]
+    final fun createPatch(com.linroid.kiff.io/SeekableSource, com.linroid.kiff.io/SeekableSource, com.linroid.kiff/KiffOptions = ...): kotlin/ByteArray // com.linroid.kiff/Kiff.createPatch|createPatch(com.linroid.kiff.io.SeekableSource;com.linroid.kiff.io.SeekableSource;com.linroid.kiff.KiffOptions){}[0]
+    final fun createPatch(kotlin/ByteArray, kotlin/ByteArray, com.linroid.kiff/KiffOptions = ...): kotlin/ByteArray // com.linroid.kiff/Kiff.createPatch|createPatch(kotlin.ByteArray;kotlin.ByteArray;com.linroid.kiff.KiffOptions){}[0]
+    final fun createPatch(kotlin/String, kotlin/String, kotlin/String, com.linroid.kiff/KiffOptions = ...): com.linroid.kiff/PatchInfo // com.linroid.kiff/Kiff.createPatch|createPatch(kotlin.String;kotlin.String;kotlin.String;com.linroid.kiff.KiffOptions){}[0]
+    final fun info(kotlin/ByteArray): com.linroid.kiff/PatchInfo // com.linroid.kiff/Kiff.info|info(kotlin.ByteArray){}[0]
+    final fun info(kotlin/String): com.linroid.kiff/PatchInfo // com.linroid.kiff/Kiff.info|info(kotlin.String){}[0]
+}
+
+final object com.linroid.kiff/KiffReports { // com.linroid.kiff/KiffReports|null[0]
+    final fun apk(kotlin/ByteArray, kotlin/ByteArray): com.linroid.kiff.apk/ApkDiffReport // com.linroid.kiff/KiffReports.apk|apk(kotlin.ByteArray;kotlin.ByteArray){}[0]
+    final fun apkEntryKind(kotlin/String): com.linroid.kiff.apk/ApkEntryKind // com.linroid.kiff/KiffReports.apkEntryKind|apkEntryKind(kotlin.String){}[0]
+    final fun explain(kotlin/ByteArray, kotlin/ByteArray, com.linroid.kiff/KiffOptions = ...): com.linroid.kiff.region/RegionReport // com.linroid.kiff/KiffReports.explain|explain(kotlin.ByteArray;kotlin.ByteArray;com.linroid.kiff.KiffOptions){}[0]
+    final fun explainApk(kotlin/ByteArray, kotlin/ByteArray, com.linroid.kiff/KiffOptions = ...): com.linroid.kiff.apk/ApkPatchReport // com.linroid.kiff/KiffReports.explainApk|explainApk(kotlin.ByteArray;kotlin.ByteArray;com.linroid.kiff.KiffOptions){}[0]
+    final fun isApk(kotlin/ByteArray): kotlin/Boolean // com.linroid.kiff/KiffReports.isApk|isApk(kotlin.ByteArray){}[0]
+    final fun zip(kotlin/ByteArray, kotlin/ByteArray): com.linroid.kiff.zip/ZipDiffReport // com.linroid.kiff/KiffReports.zip|zip(kotlin.ByteArray;kotlin.ByteArray){}[0]
+}
+
+final val com.linroid.kiff.region/BinaryRegionPlanner // com.linroid.kiff.region/BinaryRegionPlanner|{}BinaryRegionPlanner[0]
+    final fun <get-BinaryRegionPlanner>(): com.linroid.kiff.region/RegionPlanner // com.linroid.kiff.region/BinaryRegionPlanner.<get-BinaryRegionPlanner>|<get-BinaryRegionPlanner>(){}[0]
+final val com.linroid.kiff.region/TextAwareRegionPlanner // com.linroid.kiff.region/TextAwareRegionPlanner|{}TextAwareRegionPlanner[0]
+    final fun <get-TextAwareRegionPlanner>(): com.linroid.kiff.region/RegionPlanner // com.linroid.kiff.region/TextAwareRegionPlanner.<get-TextAwareRegionPlanner>|<get-TextAwareRegionPlanner>(){}[0]
+final val com.linroid.kiff/NestedContainers // com.linroid.kiff/NestedContainers|{}NestedContainers[0]
+    final fun <get-NestedContainers>(): com.linroid.kiff.container/ContainerRegistry // com.linroid.kiff/NestedContainers.<get-NestedContainers>|<get-NestedContainers>(){}[0]
+
+final fun (com.linroid.kiff.io/SeekableSource).com.linroid.kiff.io/readFully(kotlin/Long, kotlin/ByteArray, kotlin/Int = ..., kotlin/Int = ...) // com.linroid.kiff.io/readFully|readFully@com.linroid.kiff.io.SeekableSource(kotlin.Long;kotlin.ByteArray;kotlin.Int;kotlin.Int){}[0]
+final fun (kotlin/ByteArray).com.linroid.kiff.io/asSource(): com.linroid.kiff.io/SeekableSource // com.linroid.kiff.io/asSource|asSource@kotlin.ByteArray(){}[0]
+final fun com.linroid.kiff.io/fileSource(kotlin/String): com.linroid.kiff.io/SeekableSource // com.linroid.kiff.io/fileSource|fileSource(kotlin.String){}[0]

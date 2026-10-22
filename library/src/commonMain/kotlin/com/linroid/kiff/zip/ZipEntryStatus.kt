@@ -1,6 +1,11 @@
 package com.linroid.kiff.zip
 
-enum class ZipEntryStatus {
+/**
+ * How an entry differs between two archives.
+ *
+ * A minor release may tell more cases apart, so a `when` over these keeps an `else` branch.
+ */
+public enum class ZipEntryStatus {
   /** Byte-identical local record, header included. */
   UNCHANGED,
 

@@ -51,6 +51,31 @@ Gradle picks the artifact each target needs, such as `kiff-jvm` or `kiff-iosarm6
 metadata `kiff` publishes. Maven reads no such metadata, so a Maven project depends on
 `com.linroid.kiff:kiff-jvm` instead.
 
+An Android app gets `kiff-jvm`. Creating and applying patches, `fileSource` and reading files work
+at any API level, but writing a file needs API 26: `Kiff.createPatch` and `Kiff.applyPatch` with
+paths, and `KiffFiles.writeBytes` and `writeStreaming`, sync what they write and keep its
+permissions through `java.nio.file`. An app whose `minSdk` is lower enables core library
+desugaring with the `nio` desugared library, which needs AGP 7.4 or newer:
+
+```kotlin
+android {
+  compileOptions {
+    isCoreLibraryDesugaringEnabled = true
+  }
+}
+
+dependencies {
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:<desugar version>")
+}
+```
+
+Or it restores into a `RestoreTarget` of its own, which takes no file API from Kiff at all.
+
+The artifact is Java 17 bytecode, which D8 turns into dex down to API 21, built with the Kotlin
+version the badge above shows. That version is the tighter limit: an app compiles against it with
+Kotlin at most one minor version older, and a minified build needs an R8 that reads its metadata,
+which [Google's table](https://developer.android.com/build/kotlin-support) lists.
+
 A patch rebuilds one file from another:
 
 ```kotlin
@@ -596,7 +621,9 @@ and changes neither the node set nor the reader.
 
 ## Teaching Kiff a new container
 
-A container is taken apart by a `ContainerFormat`, and that is the whole extension point:
+A container is taken apart by a `ContainerFormat`, and that is the whole extension point. It is
+public API, kept compatible like the rest, so a format Kiff does not ship, such as an ISO image or
+a DMG, can be added from outside Kiff:
 
 ```kotlin
 class TarFormat : ContainerFormat {

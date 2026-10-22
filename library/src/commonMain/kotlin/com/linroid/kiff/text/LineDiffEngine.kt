@@ -1,6 +1,6 @@
 package com.linroid.kiff.text
 
-class LineDiffEngine(private val algorithm: LineDiffAlgorithm) {
+internal class LineDiffEngine(private val algorithm: LineDiffAlgorithm) {
 
   fun generatePatch(source: List<String>, target: List<String>): LinePatch {
     val edits = algorithm.diff(source, target)

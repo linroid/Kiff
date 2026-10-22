@@ -1,7 +1,7 @@
 package com.linroid.kiff
 
 /** What a patch's header says, and how large the patch is. */
-data class PatchInfo(
+public data class PatchInfo(
   /**
    * What the writer took the target to be: plain bytes, a zip or an APK.
    *

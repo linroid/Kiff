@@ -13,7 +13,7 @@ import com.linroid.kiff.io.SeekableSource
  * materializes once before encoding and every scanner after that reuses the same array, so
  * a file is read one time rather than per region.
  */
-object RollingHashAlgorithm : DeltaAlgorithm {
+public object RollingHashAlgorithm : DeltaAlgorithm {
 
   override val name: String = "rolling-hash"
 

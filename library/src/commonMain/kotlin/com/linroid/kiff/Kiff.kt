@@ -24,7 +24,7 @@ import okio.IOException
  * copy instruction names an arbitrary source offset, and applying one reads it back. The
  * [ByteArray] overloads are conveniences over [com.linroid.kiff.io.ByteArraySource].
  */
-object Kiff {
+public object Kiff {
 
   /**
    * The [PatchInfo.formatVersion]s this build can read; every patch it writes is one of them.
@@ -32,7 +32,7 @@ object Kiff {
    * An updater offered patches in several formats - a manifest names each one's - can pass over
    * those it would refuse before downloading them, rather than after.
    */
-  val readableFormats: Set<Int> = PatchFormat.SUPPORTED
+  public val readableFormats: Set<Int> = PatchFormat.SUPPORTED
 
   /**
    * Returns a patch that rebuilds [target] from [source].
@@ -40,13 +40,13 @@ object Kiff {
    * Both inputs are read into memory once - the search indexes arrays, so inputs over 2 GB are
    * refused - and their checksums are taken from the same bytes.
    */
-  fun createPatch(
+  public fun createPatch(
     source: SeekableSource,
     target: SeekableSource,
     options: KiffOptions = KiffOptions()
   ): ByteArray = PatchBuilder.build(source, target, options)
 
-  fun createPatch(
+  public fun createPatch(
     source: ByteArray,
     target: ByteArray,
     options: KiffOptions = KiffOptions()
@@ -59,7 +59,7 @@ object Kiff {
    * refused - and its checksum is taken from the same bytes. [patchPath] may not name either
    * input.
    */
-  fun createPatch(
+  public fun createPatch(
     sourcePath: String,
     targetPath: String,
     patchPath: String,
@@ -79,7 +79,7 @@ object Kiff {
    * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail the recorded checksum.
    */
-  fun applyPatch(source: SeekableSource, patch: ByteArray): ByteArray =
+  public fun applyPatch(source: SeekableSource, patch: ByteArray): ByteArray =
     PatchRestorer.apply(source, patch)
 
   /**
@@ -96,15 +96,15 @@ object Kiff {
    * @throws KiffException.SourceMismatch if [source] is not the file the patch was built against.
    * @throws KiffException.VerificationFailed if the rebuilt bytes fail a recorded checksum.
    */
-  fun applyPatch(source: SeekableSource, patch: ByteArray, target: RestoreTarget) {
+  public fun applyPatch(source: SeekableSource, patch: ByteArray, target: RestoreTarget) {
     PatchRestorer.apply(source, patch, target)
   }
 
-  fun applyPatch(source: ByteArray, patch: ByteArray): ByteArray =
+  public fun applyPatch(source: ByteArray, patch: ByteArray): ByteArray =
     applyPatch(source.asSource(), patch)
 
   /** Reads the header of [patch] without applying it. */
-  fun info(patch: ByteArray): PatchInfo =
+  public fun info(patch: ByteArray): PatchInfo =
     infoOf(PatchFormat.readHeader(ByteReader(patch)), patch.size.toLong())
 
   /**
@@ -113,7 +113,7 @@ object Kiff {
    * A header is a few dozen bytes however large the patch, so this costs the same for any file -
    * including one that turns out not to be a patch at all.
    */
-  fun info(patchPath: String): PatchInfo {
+  public fun info(patchPath: String): PatchInfo {
     val prefix = KiffFiles.readPrefix(patchPath, PatchFormat.LONGEST_HEADER)
     val header = PatchFormat.readHeader(ByteReader(prefix))
     return infoOf(header, KiffFiles.size(patchPath) ?: prefix.size.toLong())
@@ -136,7 +136,7 @@ object Kiff {
    * That also makes it safe to name the source itself, to update a file in place; the file keeps
    * its permissions, and a symlink is followed to the file it names.
    */
-  fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
+  public fun applyPatch(sourcePath: String, patchPath: String, outputPath: String): PatchInfo {
     val patch = KiffFiles.readBytes(patchPath)
     val patchInfo = info(patch)
     // Neither file is held: the source is addressed on disk and the restore goes straight to the
