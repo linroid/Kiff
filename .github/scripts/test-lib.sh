@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests how action/lib.sh finds the release the action was loaded from, against made-up paths and
-# git ls-remote --tags output, and the platform it runs on, so no network or runner is needed.
+# git ls-remote --tags output, the platform it runs on, and which archive entries it refuses, so no
+# network or runner is needed.
 set -euo pipefail
 
 # shellcheck source=action/lib.sh
@@ -82,6 +83,22 @@ expect 'Windows on x64' windows-x64 "$(platform Windows X64)"
 expect 'Windows on arm64, which has no executable' '' "$(platform Windows ARM64)"
 expect 'A 32-bit runner' '' "$(platform Linux X86)"
 expect 'No runner' '' "$(platform '' '')"
+
+root=kiff-1.2.3-linux-x64
+outside() {
+  printf '%s\n' "$@" | entry_outside "$root"
+}
+
+expect 'An archive of its directory alone' '' \
+  "$(outside "$root/" "$root/kiff" "$root/LICENSE" "$root/README.md" "$root")"
+expect 'A name with two dots in it' '' "$(outside "$root/a..b")"
+expect 'An entry that climbs out' "$root/../../x" "$(outside "$root/kiff" "$root/../../x")"
+expect 'An entry that climbs out with backslashes' "$root/..\..\x" "$(outside "$root/..\..\x")"
+expect 'An entry beside the directory' x "$(outside "$root/" x)"
+expect 'An absolute entry' /etc/x "$(outside /etc/x)"
+expect 'A directory that only starts with its name' "$root-x/kiff" "$(outside "$root-x/kiff")"
+expect 'An entry under ./' "./$root/kiff" "$(outside "./$root/kiff")"
+expect 'Nothing at all' '' "$(entry_outside "$root" < /dev/null)"
 
 if ((failures > 0)); then
   exit 1

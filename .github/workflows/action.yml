@@ -260,7 +260,8 @@ jobs:
       # A mirror on localhost serves release-shaped builds of this checkout, through
       # KIFF_DOWNLOAD_URL as kiff --use reads it, so the test needs no published release. 0.0.1-test
       # has only its JVM zip, as 0.1.0 does, and 0.0.2-test is that zip under a checksum it does
-      # not have. 0.0.3-test has this runner's executable alone.
+      # not have. 0.0.3-test has the archive of this runner's executable alone, as a release has,
+      # and 0.0.4-test the executable bare, as 0.2.0 has.
       - name: Serve test releases of the CLI
         run: |
           case "$RUNNER_OS-$RUNNER_ARCH" in
@@ -269,16 +270,17 @@ jobs:
             *) echo "::error::No executable is built for $RUNNER_OS on $RUNNER_ARCH."; exit 1 ;;
           esac
           echo "PLATFORM=$platform" >> "$GITHUB_ENV"
-          ./gradlew -Pversion=0.0.1-test :cli:distZip
-          ./gradlew -Pversion=0.0.3-test ":cli:linkReleaseExecutable$target"
+          kiff=cli/build/bin/$bin/releaseExecutable/kiff.kexe
           mirror=$RUNNER_TEMP/mirror
-          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test" "$mirror/v0.0.3-test"
+          mkdir -p "$mirror/v0.0.1-test" "$mirror/v0.0.2-test" "$mirror/v0.0.4-test"
+          ./gradlew -Pversion=0.0.1-test :cli:distZip
           cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.1-test/"
           cp cli/build/distributions/kiff-0.0.1-test.zip "$mirror/v0.0.2-test/kiff-0.0.2-test.zip"
-          cp "cli/build/bin/$bin/releaseExecutable/kiff.kexe" \
-            "$mirror/v0.0.3-test/kiff-0.0.3-test-$platform"
-          for file in "$mirror/v0.0.1-test/kiff-0.0.1-test.zip" \
-            "$mirror/v0.0.3-test/kiff-0.0.3-test-$platform"; do
+          ./gradlew -Pversion=0.0.3-test ":cli:linkReleaseExecutable$target"
+          .github/scripts/pack-cli.py "$kiff" "$platform" 0.0.3-test "$mirror/v0.0.3-test"
+          ./gradlew -Pversion=0.0.4-test ":cli:linkReleaseExecutable$target"
+          cp "$kiff" "$mirror/v0.0.4-test/kiff-0.0.4-test-$platform"
+          for file in "$mirror"/v*/kiff-*; do
             (
               cd "$(dirname "$file")"
               if command -v sha256sum > /dev/null; then
@@ -340,7 +342,7 @@ jobs:
           kiff-version: 0.0.3-test
           upload: false
 
-      - name: Check the executable made the patches
+      - name: Check the executable from the archive made the patches
         env:
           MANIFEST: ${{ steps.native.outputs.manifest }}
         run: |
@@ -350,13 +352,44 @@ jobs:
             exit 1
           fi
           name="kiff-0.0.3-test-$PLATFORM"
-          if ! grep -q "\"GET /v0.0.3-test/$name HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
-            echo "::error::The action should have downloaded $name."
+          served="\"GET /v0.0.3-test/$name.tar.gz HTTP/1.1\" 200"
+          if ! grep -q "$served" "$RUNNER_TEMP/mirror.log"; then
+            echo "::error::The action should have downloaded $name.tar.gz."
             cat "$RUNNER_TEMP/mirror.log"
             exit 1
           fi
-          .github/scripts/restore-patches.sh "$RUNNER_TEMP/kiff-cli-0.0.3-test/$name" "$MANIFEST" \
-            "$FIXTURES"
+          .github/scripts/restore-patches.sh "$RUNNER_TEMP/kiff-cli-0.0.3-test/$name/kiff" \
+            "$MANIFEST" "$FIXTURES"
+
+      - name: Patch v1.2.1 with a release of the CLI from before archives
+        id: bare
+        uses: ./
+        env:
+          KIFF_DOWNLOAD_URL: http://127.0.0.1:8765
+        with:
+          repository: ${{ env.FIXTURES }}
+          tag: v1.2.1
+          assets: tool-*.bin
+          kiff-version: 0.0.4-test
+          upload: false
+
+      - name: Check the bare executable made the patches
+        env:
+          MANIFEST: ${{ steps.bare.outputs.manifest }}
+        run: |
+          generator=$(jq -r .generator "$MANIFEST")
+          if [[ $generator != 'kiff 0.0.4-test' ]]; then
+            echo "::error::kiff-version 0.0.4-test should have made the patches, not $generator."
+            exit 1
+          fi
+          name="kiff-0.0.4-test-$PLATFORM"
+          for request in "$name.tar.gz.sha256 HTTP/1.1\" 404" "$name HTTP/1.1\" 200"; do
+            if ! grep -q "\"GET /v0.0.4-test/$request" "$RUNNER_TEMP/mirror.log"; then
+              echo "::error::The action should have looked for the archive, then taken $name."
+              cat "$RUNNER_TEMP/mirror.log"
+              exit 1
+            fi
+          done
 
       - name: Refuse a release of the CLI that does not match its checksum
         id: tampered
