@@ -54,7 +54,37 @@ internal class DeltaWriter(
     targetSize += length
   }
 
+  /**
+   * Writes the region as DIFF, except for stretches of at least [DeltaOp.MIN_EQUAL_IN_DIFF] bytes
+   * that equal the source exactly, which become COPY instructions.
+   *
+   * A scanner keeps a DIFF going for as long as the source agrees, and between two builds that
+   * barely differ it agrees for megabytes at a time. Kept in the DIFF, every one of those bytes is
+   * a zero the content stream carries and the reader unpacks and holds; a COPY says the same in a
+   * few bytes of instruction stream.
+   */
   override fun diff(sourceOffset: Long, target: ByteArray, from: Int, to: Int) {
+    if (to <= from) return
+    val shift = sourceOffset.toIntIndex("Source offset") - from
+    var start = from
+    var position = from
+    while (position < to) {
+      if (target[position] != source[position + shift]) {
+        position++
+        continue
+      }
+      val equalFrom = position
+      while (position < to && target[position] == source[position + shift]) position++
+      if (position - equalFrom >= DeltaOp.MIN_EQUAL_IN_DIFF) {
+        writeDiff(sourceOffset + (start - from), target, start, equalFrom)
+        copy(sourceOffset + (equalFrom - from), (position - equalFrom).toLong())
+        start = position
+      }
+    }
+    writeDiff(sourceOffset + (start - from), target, start, to)
+  }
+
+  private fun writeDiff(sourceOffset: Long, target: ByteArray, from: Int, to: Int) {
     val length = (to - from).toLong()
     if (length <= 0) return
     flushAdd()

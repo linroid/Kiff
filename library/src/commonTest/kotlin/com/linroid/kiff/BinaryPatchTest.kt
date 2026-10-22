@@ -104,6 +104,19 @@ class BinaryPatchTest {
   }
 
   @Test
+  fun whatDidNotChangeBetweenSparseEditsIsCopiedNotDifferenced() {
+    // The source agrees all the way from the first edit to the end, so the scanner describes all
+    // of that as one difference. Only the edits should reach the content stream: the rest is the
+    // source as it is, and as zero differences the reader would unpack and hold every one.
+    val source = structuredBytes(256 * 1024, seed = 36)
+    val target = source.copyOf()
+    for (at in 8_192 until target.size step 16_384) target[at] = (target[at] + 5).toByte()
+    assertRestores(patcher, source, target)
+    val content = patcher.explain(source, target).literalBytes
+    assertTrue(content <= 16, "expected the 16 edits as content, got $content bytes")
+  }
+
+  @Test
   fun editsTooDenseToMatchAreStillEncodedAsDifferences() {
     // Every 24th byte differs, so exact matches are short and useless: the patch is only small if
     // the region is described as a byte-wise difference from the aligned source.

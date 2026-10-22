@@ -152,12 +152,12 @@ class DexFormatTest {
     }
     val source = TestZipBuilder().entry(
       "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 500)).section(0x2001, structuredBytes(3_000, 1))
+      TestDexBuilder().section(0x0001, table(1_000, 500)).section(0x2001, structuredBytes(3_000, 1))
         .build()
     ).build()
     val target = TestZipBuilder().entry(
       "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 564)).section(0x2001, structuredBytes(3_000, 1))
+      TestDexBuilder().section(0x0001, table(1_000, 564)).section(0x2001, structuredBytes(3_000, 1))
         .build()
     ).build()
 
