@@ -1,9 +1,16 @@
 package com.linroid.kiff.zip
 
+import com.linroid.kiff.io.SeekableSource
+import com.linroid.kiff.io.asSource
+import com.linroid.kiff.io.readBytes
+
 /**
  * Minimal zip structure reader: enough to locate every byte range of an archive, not to decompress
  * it. Returns `null` for anything it cannot describe exactly - a non-zip file, zip64, an archive
  * with overlapping records - so callers can fall back to a plain byte-level diff.
+ *
+ * It reads where the structure is and nowhere else: the end of central directory, the directory,
+ * and the fixed part of each local header. An entry's data is located, never read.
  *
  * Every offset and length it reads comes from the archive, which may be anything at all, so no
  * bound here is checked as an Int sum: an offset near Int.MAX_VALUE would wrap it negative and past
@@ -24,11 +31,23 @@ internal object ZipReader {
   private const val ZIP64_MARKER_16 = 0xFFFF
   private const val ZIP64_MARKER_32 = 0xFFFFFFFFL
 
-  fun parseOrNull(bytes: ByteArray): ZipLayout? {
-    val eocd = findEocd(bytes) ?: return null
-    val entryCount = u16(bytes, eocd + 10)
-    val directorySize = u32(bytes, eocd + 12)
-    val directoryOffset = u32(bytes, eocd + 16)
+  fun parseOrNull(bytes: ByteArray): ZipLayout? = parseOrNull(bytes.asSource())
+
+  /**
+   * Reads the archive at `[from, to)` of [input] in its own coordinates: every offset in the layout
+   * counts from [from], as the archive records them.
+   */
+  fun parseOrNull(input: SeekableSource, from: Long = 0, to: Long = input.size): ZipLayout? {
+    // Without zip64 an archive records 32-bit offsets, and the layout holds them as Int.
+    if (to - from > Int.MAX_VALUE) return null
+    val size = (to - from).toInt()
+    if (size < EOCD_SIZE) return null
+    val tailStart = maxOf(0, size - EOCD_SIZE - MAX_COMMENT_SIZE)
+    val tail = input.readBytes(from + tailStart, size - tailStart)
+    val eocd = findEocd(tail, tailStart, size) ?: return null
+    val entryCount = u16(tail, eocd - tailStart + 10)
+    val directorySize = u32(tail, eocd - tailStart + 12)
+    val directoryOffset = u32(tail, eocd - tailStart + 16)
     if (entryCount == ZIP64_MARKER_16 ||
       directorySize == ZIP64_MARKER_32 ||
       directoryOffset == ZIP64_MARKER_32
@@ -38,18 +57,19 @@ internal object ZipReader {
     if (directoryOffset > Int.MAX_VALUE || directorySize > Int.MAX_VALUE) return null
     val directoryStart = directoryOffset.toInt()
     if (directoryStart + directorySize > eocd) return null
+    val directory = input.readBytes(from + directoryStart, directorySize.toInt())
 
     val entries = ArrayList<ZipEntry>(entryCount)
-    var cursor = directoryStart
+    var cursor = 0
     repeat(entryCount) {
-      val entry = readCentralEntry(bytes, cursor, eocd) ?: return null
+      val entry = readCentralEntry(directory, cursor, Local(input, from, eocd)) ?: return null
       entries.add(entry.first)
       cursor = entry.second
     }
-    if (cursor != directoryStart + directorySize.toInt()) return null
+    if (cursor != directory.size) return null
 
     entries.sortBy { it.localHeaderOffset }
-    val regions = buildRegions(entries, directoryStart, bytes.size) ?: return null
+    val regions = buildRegions(entries, directoryStart, size) ?: return null
     return ZipLayout(entries, regions, directoryStart)
   }
 
@@ -83,21 +103,29 @@ internal object ZipReader {
     return regions
   }
 
-  /** Returns the entry and the offset of the next central directory header. */
-  private fun readCentralEntry(bytes: ByteArray, at: Int, limit: Int): Pair<ZipEntry, Int>? {
-    if (at < 0 || CENTRAL_HEADER_SIZE > limit - at) return null
-    if (u32(bytes, at) != CENTRAL_SIGNATURE.toLong()) return null
-    val flags = u16(bytes, at + 8)
-    val method = u16(bytes, at + 10)
-    val crc32 = u32(bytes, at + 16).toUInt()
-    val compressedSize = u32(bytes, at + 20)
-    val uncompressedSize = u32(bytes, at + 24)
-    val nameLength = u16(bytes, at + 28)
-    val extraLength = u16(bytes, at + 30)
-    val commentLength = u16(bytes, at + 32)
-    val localOffset = u32(bytes, at + 42)
+  /** Where local records are read from: the archive, up to its end of central directory. */
+  private class Local(val input: SeekableSource, val from: Long, val limit: Int)
+
+  /**
+   * Returns the entry whose central header is at [at] in [directory], and the offset of the next
+   * header there.
+   */
+  private fun readCentralEntry(directory: ByteArray, at: Int, local: Local): Pair<ZipEntry, Int>? {
+    // A header running past the directory is refused here rather than read from what follows it:
+    // the directory would then not end where the archive says, which refuses it all the same.
+    if (CENTRAL_HEADER_SIZE > directory.size - at) return null
+    if (u32(directory, at) != CENTRAL_SIGNATURE.toLong()) return null
+    val flags = u16(directory, at + 8)
+    val method = u16(directory, at + 10)
+    val crc32 = u32(directory, at + 16).toUInt()
+    val compressedSize = u32(directory, at + 20)
+    val uncompressedSize = u32(directory, at + 24)
+    val nameLength = u16(directory, at + 28)
+    val extraLength = u16(directory, at + 30)
+    val commentLength = u16(directory, at + 32)
+    val localOffset = u32(directory, at + 42)
     val next = at.toLong() + CENTRAL_HEADER_SIZE + nameLength + extraLength + commentLength
-    if (next > limit) return null
+    if (next > directory.size) return null
     if (compressedSize == ZIP64_MARKER_32 ||
       uncompressedSize == ZIP64_MARKER_32 ||
       localOffset == ZIP64_MARKER_32
@@ -111,12 +139,17 @@ internal object ZipReader {
       return null
     }
 
-    val name = bytes.decodeToString(at + CENTRAL_HEADER_SIZE, at + CENTRAL_HEADER_SIZE + nameLength)
+    val name = directory.decodeToString(
+      at + CENTRAL_HEADER_SIZE,
+      at + CENTRAL_HEADER_SIZE + nameLength
+    )
+    val limit = local.limit
     val localHeaderOffset = localOffset.toInt()
     if (localHeaderOffset > limit - LOCAL_HEADER_SIZE) return null
-    if (u32(bytes, localHeaderOffset) != LOCAL_SIGNATURE.toLong()) return null
-    val localNameLength = u16(bytes, localHeaderOffset + 26)
-    val localExtraLength = u16(bytes, localHeaderOffset + 28)
+    val header = local.input.readBytes(local.from + localHeaderOffset, LOCAL_HEADER_SIZE)
+    if (u32(header, 0) != LOCAL_SIGNATURE.toLong()) return null
+    val localNameLength = u16(header, 26)
+    val localExtraLength = u16(header, 28)
     val dataOffset =
       localHeaderOffset.toLong() + LOCAL_HEADER_SIZE + localNameLength + localExtraLength
     val dataEnd = dataOffset + compressedSize
@@ -125,7 +158,7 @@ internal object ZipReader {
     var recordEnd = dataEnd.toInt()
     if (flags and FLAG_DATA_DESCRIPTOR != 0) {
       val descriptorSize = when {
-        16 <= limit - recordEnd && u32(bytes, recordEnd) == DESCRIPTOR_SIGNATURE.toLong() -> 16
+        16 <= limit - recordEnd && hasDescriptorSignature(local, recordEnd) -> 16
         12 <= limit - recordEnd -> 12
         else -> return null
       }
@@ -146,13 +179,18 @@ internal object ZipReader {
     return entry to next.toInt()
   }
 
-  private fun findEocd(bytes: ByteArray): Int? {
-    if (bytes.size < EOCD_SIZE) return null
-    val lowest = maxOf(0, bytes.size - EOCD_SIZE - MAX_COMMENT_SIZE)
-    for (at in bytes.size - EOCD_SIZE downTo lowest) {
-      if (u32(bytes, at) != EOCD_SIGNATURE.toLong()) continue
-      val commentLength = u16(bytes, at + 20)
-      if (at + EOCD_SIZE + commentLength == bytes.size) return at
+  private fun hasDescriptorSignature(local: Local, at: Int): Boolean =
+    u32(local.input.readBytes(local.from + at, 4), 0) == DESCRIPTOR_SIGNATURE.toLong()
+
+  /**
+   * The archive offset of the end-of-central-directory record, searched for in [tail]: the last
+   * bytes of an archive of [size] bytes, from [tailStart] on.
+   */
+  private fun findEocd(tail: ByteArray, tailStart: Int, size: Int): Int? {
+    for (at in size - EOCD_SIZE downTo tailStart) {
+      if (u32(tail, at - tailStart) != EOCD_SIGNATURE.toLong()) continue
+      val commentLength = u16(tail, at - tailStart + 20)
+      if (at + EOCD_SIZE + commentLength == size) return at
     }
     return null
   }

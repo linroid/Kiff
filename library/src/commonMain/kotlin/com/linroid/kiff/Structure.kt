@@ -5,6 +5,7 @@ import com.linroid.kiff.container.ApkFormat
 import com.linroid.kiff.container.ContainerFormat
 import com.linroid.kiff.container.ContainerRegistry
 import com.linroid.kiff.container.ZipFormat
+import com.linroid.kiff.io.SeekableSource
 
 /**
  * What a target is taken to be as a whole: it decides how the file is described, and which code
@@ -45,7 +46,7 @@ internal sealed class Structure(val id: PatcherId, val name: String) {
      * the file being patched, so it is only applied when that file carries an
      * `AndroidManifest.xml`. An [ApkFormat] in the registry is used as it is.
      */
-    fun detect(target: ByteArray, registry: ContainerRegistry): Structure =
+    fun detect(target: SeekableSource, registry: ContainerRegistry): Structure =
       when (val format = registry.formatOfFile(target)) {
         null -> Bytes
         is ApkFormat -> Archive(format)

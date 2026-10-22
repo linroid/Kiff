@@ -60,3 +60,16 @@ public fun SeekableSource.readFully(
     done += count
   }
 }
+
+/**
+ * Reads exactly [length] bytes at [position] into a new array, failing as [readFully] does if the
+ * source ends first.
+ *
+ * This is how a [com.linroid.kiff.container.ContainerFormat] reads a header or a directory: just
+ * those bytes, wherever they sit, so a format never has to hold the file it describes.
+ */
+public fun SeekableSource.readBytes(position: Long, length: Int): ByteArray {
+  val bytes = ByteArray(length)
+  readFully(position, bytes)
+  return bytes
+}

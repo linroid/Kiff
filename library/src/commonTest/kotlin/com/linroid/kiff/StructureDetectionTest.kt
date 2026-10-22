@@ -95,7 +95,8 @@ class StructureDetectionTest {
     val source = sections(seed = 10, edited = false)
     val target = sections(seed = 10, edited = true)
 
-    val structure = Structure.detect(target, options.containers)
+    val structure =
+      Structure.detect(com.linroid.kiff.io.ByteArraySource(target), options.containers)
     assertTrue(structure is Structure.Weighed && structure.format is TestSectionFormat)
 
     val report = KiffReports.explain(source, target, options)

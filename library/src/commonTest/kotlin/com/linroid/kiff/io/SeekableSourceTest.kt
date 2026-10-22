@@ -36,6 +36,14 @@ class SeekableSourceTest {
   }
 
   @Test
+  fun readBytesReadsExactlyWhatItIsAskedFor() {
+    val source = data.asSource()
+    assertContentEquals(data.copyOfRange(990, 1_000), source.readBytes(990, 10))
+    assertContentEquals(ByteArray(0), source.readBytes(1_000, 0))
+    assertFailsWith<KiffException.UnsupportedInput> { source.readBytes(995, 6) }
+  }
+
+  @Test
   fun emptySourceIsReadable() {
     val source = ByteArray(0).asSource()
     assertEquals(0L, source.size)
