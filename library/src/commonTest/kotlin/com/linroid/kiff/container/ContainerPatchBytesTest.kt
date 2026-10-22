@@ -5,6 +5,7 @@ import com.linroid.kiff.KiffOptions
 import com.linroid.kiff.NestedContainers
 import com.linroid.kiff.apk.TestApkBuilder
 import com.linroid.kiff.format.Crc32
+import com.linroid.kiff.format.withStoredTree
 import com.linroid.kiff.region.RegionAlgorithm
 import com.linroid.kiff.structuredBytes
 import com.linroid.kiff.zip.TestZipBuilder
@@ -58,7 +59,10 @@ class ContainerPatchBytesTest {
     val actual = cases.map { case ->
       val patch = Kiff.createPatch(case.source, case.target, case.options)
       assertContentEquals(case.target, Kiff.applyPatch(case.source, patch), case.name)
-      case.name to Pinned(patch.size, Crc32.compute(patch))
+      // Packing the tree came later, and only where it makes the patch smaller; with its tree
+      // stored again, a packed patch is the one written before.
+      val stored = if (Kiff.info(patch).treePacked) withStoredTree(patch) else patch
+      case.name to Pinned(stored.size, Crc32.compute(stored))
     }
     // Every case is listed before any is asserted, so one run says what all of them are now.
     val report = actual.joinToString("\n") { (name, it) ->
