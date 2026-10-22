@@ -621,7 +621,9 @@ and changes neither the node set nor the reader.
 
 ## Teaching Kiff a new container
 
-A container is taken apart by a `ContainerFormat`, and that is the whole extension point:
+A container is taken apart by a `ContainerFormat`, and that is the whole extension point. It is
+public API, kept compatible like the rest, so a format Kiff does not ship, such as an ISO image or
+a DMG, can be added from outside Kiff:
 
 ```kotlin
 class TarFormat : ContainerFormat {

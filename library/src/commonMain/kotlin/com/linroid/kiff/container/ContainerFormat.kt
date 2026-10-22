@@ -15,6 +15,10 @@ import com.linroid.kiff.zip.ZipReader
  * That works because a patch records the structure it used rather than asking the decoder to work
  * it out. Decomposition is therefore an encode-side heuristic and nothing more, free to improve,
  * free to be wrong, free to be skipped when it does not pay.
+ *
+ * It is a supported extension point, not an internal seam: a format Kiff does not ship, such as an
+ * ISO image or a DMG, is added from outside Kiff with this interface, [Child], [ContainerRegistry]
+ * and [ContainerFormatTiling], all public API under the same compatibility promise as the rest.
  */
 public interface ContainerFormat {
 
