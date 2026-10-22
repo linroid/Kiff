@@ -55,6 +55,9 @@ jobs:
       - name: Test how the action finds its own release
         run: .github/scripts/test-lib.sh
 
+      - name: Test how the action lists a repository's releases
+        run: .github/scripts/test-plan.sh
+
   action:
     name: Action (${{ matrix.os }})
     strategy:
@@ -416,7 +419,8 @@ jobs:
           fi
           for file in kiff-0.0.2-test.zip kiff-0.0.2-test.zip.sha256; do
             if ! grep -q "\"GET /v0.0.2-test/$file HTTP/1.1\" 200" "$RUNNER_TEMP/mirror.log"; then
-              echo "::error::The action should have downloaded $file before refusing it."
+              echo "::error::The action should have downloaded $file before refusing it, so the" \
+                "step above failed for another reason."
               cat "$RUNNER_TEMP/mirror.log"
               exit 1
             fi
