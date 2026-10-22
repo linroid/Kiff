@@ -296,7 +296,7 @@ internal class ContainerEncoder(
   }
 
   private fun packedCost(node: RegionNode, literals: ByteArray): Long =
-    node.structureBytes() + if (literals.isEmpty()) 0 else LzHuffman.compress(literals).size
+    node.structureBytes() + LzHuffman.estimate(literals)
 
   private fun addPart(
     into: MutableList<RegionNode>,
@@ -663,7 +663,7 @@ internal class ContainerEncoder(
     val costs: List<RegionCost> = emptyList()
   ) {
     fun packedCost(): Long =
-      node.structureBytes() + if (literals.isEmpty()) 0 else LzHuffman.compress(literals).size
+      node.structureBytes() + LzHuffman.estimate(literals)
   }
 
   private companion object {

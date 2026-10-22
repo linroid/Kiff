@@ -84,6 +84,26 @@ class LzHuffmanTest {
   }
 
   @Test
+  fun aLongerMatchOneByteOnIsWorthALiteral() {
+    // Each line of the second half is a marker byte and a phrase from the first half. The marker
+    // and the phrase's first three bytes were also seen together, so matching greedily takes those
+    // four bytes and then the rest of the phrase as a second match. Matching lazily writes the
+    // marker as a literal and the phrase as one match, which packs smaller.
+    val random = Random(7)
+    val marker = byteArrayOf('x'.code.toByte())
+    val phrases = List(500) { random.nextBytes(40) }
+    var data = ByteArray(0)
+    for (phrase in phrases) {
+      data += phrase + random.nextBytes(8) + marker + phrase.copyOf(3) + random.nextBytes(8)
+    }
+    for (phrase in phrases) data += marker + phrase + random.nextBytes(8)
+
+    val packed = roundTrip(data, "phrases behind a marker")
+    val greedily = LzHuffman.estimate(data)
+    assertTrue(packed < greedily, "$packed bytes, and $greedily matching greedily")
+  }
+
+  @Test
   fun aSingleRepeatedByteRoundTrips() {
     // One symbol in the whole alphabet: the degenerate Huffman tree, where a naive builder gives a
     // zero-length code and the decoder never terminates.
