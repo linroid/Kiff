@@ -57,6 +57,13 @@ internal object LzHuffman {
    */
   fun estimate(data: ByteArray): Int = pack(data, lazy = false).size
 
+  /**
+   * The whole bytes of a packed stream that go to the code lengths it opens with, however little
+   * it holds. A stream packed with other content shares them, so its own share of [estimate] is
+   * the rest.
+   */
+  val tableBytes: Int get() = TABLE_BITS / 8
+
   private fun pack(data: ByteArray, lazy: Boolean): ByteArray {
     if (data.isEmpty()) return ByteArray(0)
     val tokens = Tokens(data.size)
@@ -94,7 +101,7 @@ internal object LzHuffman {
    * allocating for it.
    */
   fun maxUnpackedSize(packedSize: Int): Long {
-    val header = (LITERAL_SYMBOLS + DISTANCE_SYMBOLS) * CODE_LENGTH_BITS + 1
+    val header = TABLE_BITS + 1
     val symbolBits = packedSize * 8L - header
     return if (symbolBits <= 0) 0 else symbolBits * MAX_MATCH / DENSEST_MATCH_BITS
   }
@@ -565,6 +572,9 @@ internal object LzHuffman {
 
   private val LITERAL_SYMBOLS = LITERALS + 1 + LENGTH_BASE.size
   private val DISTANCE_SYMBOLS = DISTANCE_BASE.size
+
+  /** A code length for every symbol of both alphabets, which every packed stream opens with. */
+  private val TABLE_BITS = (LITERAL_SYMBOLS + DISTANCE_SYMBOLS) * CODE_LENGTH_BITS
 
   private fun lengthIndexOf(length: Int): Int {
     var index = LENGTH_BASE.size - 1

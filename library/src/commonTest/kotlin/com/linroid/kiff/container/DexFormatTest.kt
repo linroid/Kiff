@@ -162,6 +162,27 @@ class DexFormatTest {
   }
 
   @Test
+  fun aDexTakenApartToAlmostNoContentIsKeptApart() {
+    // Every offset moves by the same 64, so as columns of differences the table is one changed
+    // value, and taking the dex apart leaves two bytes of content. A patch with that little stores
+    // it rather than pack it; weighed only as packed, the dex tied with being described whole, and
+    // was, in a patch two thirds larger.
+    fun dexWith(table: ByteArray) = TestZipBuilder().entry(
+      "classes.dex",
+      TestDexBuilder().section(0x0001, table).section(0x2001, structuredBytes(3_000, 1)).build()
+    ).build()
+    val source = dexWith(stringIdTable(400))
+    val target = dexWith(stringIdTable(400, firstOffset = 564))
+
+    val aware = assertRestores(asZip(), source, target)
+    val table = asZip().explain(source, target).allRegions.first { it.name == "string_ids" }
+    assertEquals(RegionEncoding.COLUMNS, table.encoding)
+    val whole = asZip(KiffOptions(containers = ContainerRegistry(ZipFormat())))
+    val unaware = assertRestores(whole, source, target)
+    assertTrue(aware < unaware, "taking the dex apart did not pay: $aware against $unaware")
+  }
+
+  @Test
   fun anOffsetNearIntMaxLeavesTheDexWhole() {
     // Checked as from + offset, an offset near Int.MAX_VALUE wraps negative for any dex that does
     // not start its range - every dex inside an archive - and so passed, and was read out of range.
