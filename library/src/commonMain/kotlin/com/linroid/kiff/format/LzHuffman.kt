@@ -19,12 +19,12 @@ import com.linroid.kiff.KiffException
  * ## What is left, measured on the content stream of a patch between two 72 MiB release APKs
  *
  * ```
- * this codec          3,629,686   37.2% of the raw stream
- * matching greedily   3,703,606   +2.0% against this
- * gzip -9             3,518,358   -3.1%
- * zstd -19            3,102,331  -14.5%
- * brotli -q 11        2,924,651  -19.4%
- * xz -9e              2,875,404  -20.8%
+ * this codec          3,629,093   37.6% of the raw stream
+ * matching greedily   3,702,995   +2.0% against this
+ * gzip -9             3,517,344   -3.1%
+ * zstd -19            3,101,886  -14.5%
+ * brotli -q 11        2,926,167  -19.4%
+ * xz -9e              2,874,328  -20.8%
  * ```
  *
  * Three things follow, and each of them cost an experiment to learn.
