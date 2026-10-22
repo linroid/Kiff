@@ -41,6 +41,18 @@ internal object PatchFormat {
   const val FLAG_REGION_CHECKSUMS = 1
 
   /**
+   * The region tree is packed with the content stream's codec, rather than written as it is.
+   *
+   * A tree is shape and instructions, and for most patches it is small beside the content. For
+   * text it is not: on a pair of R8 mapping files it was 3.4 MiB of a 4.8 MiB patch, every line
+   * script and delta stored as written, and gzip still took a fifth off the patch. A writer sets
+   * this only when it makes the patch smaller, so a patch that gains nothing stays readable by the
+   * releases that predate it - though a release APK's tree, some 6% of its patch, still packs by a
+   * quarter, and so is packed too.
+   */
+  const val FLAG_PACKED_TREE = 2
+
+  /**
    * The most bytes a header can take: the magic, three single bytes, and two sizes as varints of
    * at most ten bytes, each with its four-byte checksum.
    */
@@ -101,7 +113,7 @@ internal object PatchFormat {
     return size
   }
 
-  private const val UNKNOWN_FLAGS = FLAG_REGION_CHECKSUMS.inv()
+  private const val UNKNOWN_FLAGS = (FLAG_REGION_CHECKSUMS or FLAG_PACKED_TREE).inv()
 
   data class Header(
     val patcher: PatcherId,
@@ -111,5 +123,8 @@ internal object PatchFormat {
     val sourceCrc32: UInt,
     val targetSize: Long,
     val targetCrc32: UInt
-  )
+  ) {
+    val regionChecksums: Boolean get() = flags and FLAG_REGION_CHECKSUMS != 0
+    val treePacked: Boolean get() = flags and FLAG_PACKED_TREE != 0
+  }
 }

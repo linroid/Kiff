@@ -379,8 +379,9 @@ It has to be the first argument. Anywhere later, `--use` belongs to the command 
 as it is.
 
 A patch is applied on the user's device, by the Kiff inside the app they already have, and that
-Kiff refuses a format newer than it knows. So build patches with the oldest Kiff still embedded in a
-version of the app you update. A newer Kiff reads every patch an older one wrote, which
+Kiff refuses a format newer than it knows, or a packed tree if it is 0.1 or 0.2 (see
+[Versions](#versions)). So build patches with the oldest Kiff still embedded in a version of the
+app you update. A newer Kiff reads every patch an older one wrote, which
 `FormatVectorsTest` holds each build to with patches frozen in the released format, so a patch from
 the oldest one applies on every later app as well.
 
@@ -564,6 +565,14 @@ files cannot be downloaded, as that release's version. Pin the action to a relea
 commit, not a branch. With `kiff-version` set, the action itself can move ahead of your apps, since the
 format comes from the kiff it runs.
 
+Kiff after 0.2 packs a patch's region tree wherever that makes the patch smaller. That matters most
+for text: it took 10-19% off patches between 110 MiB R8 mapping files, against 1.0-1.5% off those
+between 72 MiB release APKs, which are packed all the same. The patch is still format 1, but Kiff
+0.1 and 0.2 refuse one whose tree is packed, as they refuse anything they do not know, so an app
+that embeds one of them falls back to downloading the full file. `kiff info` says `packed tree` for
+such a patch, and `PatchInfo.treePacked` is the same. To write patches those apps can read, set
+`kiff-version: 0.2.0`, or run `kiff --use 0.2.0` on the command line.
+
 ### Updating from the manifest
 
 Every release carries its own manifest, and GitHub serves the newest published one at a fixed
@@ -579,7 +588,8 @@ checks its `sha256`, applies it, and checks the result against the file's own `s
 applying, it compares `Kiff.info(patch).targetSize` with the file's `size`: a few bytes of patch can
 declare gigabytes of target, and the declared size is what a restore writes and may allocate. When
 there is no such patch, because the installed version is too old, was dropped for size or the
-release has no manifest, it downloads the full file from `url` instead.
+release has no manifest, it downloads the full file from `url` instead. It does the same when
+applying refuses the patch, as Kiff 0.1 and 0.2 refuse one whose tree is packed.
 
 
 ## How a patch is built
@@ -596,7 +606,7 @@ A patch is a header, a tree of regions, and one stream of content:
 version 1 byte     patcher 1 byte       flags 1 byte
 source  varint size + CRC-32
 target  varint size + CRC-32
-tree    region tree, each region checksummed
+tree    region tree, each region checksummed, packed where that is smaller
 content literals, packed with a built-in LZ77 + Huffman codec
 ```
 

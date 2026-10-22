@@ -83,9 +83,9 @@ public data class RegionCost(
  * Where a patch's bytes went, region by region.
  *
  * A region's cost is measured as the delta stream's growth while that region is encoded, so the
- * figures are taken *before* the literal stream is packed and add up to somewhat more than
- * [patchSize]. What they are for is the shape of the distribution - which parts of a file a patch
- * is actually spent on - not an exact accounting of the compressed bytes.
+ * figures are taken *before* the literal stream - or the tree, where it is - is packed, and add up
+ * to somewhat more than [patchSize]. What they are for is the shape of the distribution - which
+ * parts of a file a patch is actually spent on - not an exact accounting of the compressed bytes.
  */
 public data class RegionReport(
   val regions: List<RegionCost>,

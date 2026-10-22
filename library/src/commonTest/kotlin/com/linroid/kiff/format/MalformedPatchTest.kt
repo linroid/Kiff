@@ -74,6 +74,16 @@ class MalformedPatchTest {
   )
 
   /**
+   * Every case's patch, and the same patch with its tree packed, so a corruption can land in a
+   * packed tree too: inputs this small never pack theirs on their own.
+   */
+  private fun patches(): List<Triple<String, Pair<ByteArray, ByteArray>, ByteArray>> =
+    cases().flatMap { (label, patcher, pair) ->
+      val patch = patcher.createPatch(pair.first, pair.second)
+      listOf(Triple(label, pair, patch), Triple("$label, tree packed", pair, withPackedTree(patch)))
+    }
+
+  /**
    * Keeps what a streamed restore hands over, and counts past the target so an overrun still
    * shows. The streaming path cannot check anything after the fact, so what it wrote is the only
    * evidence of what it did.
@@ -105,7 +115,6 @@ class MalformedPatchTest {
 
   private fun check(
     label: String,
-    patcher: ForcedStructure,
     source: ByteArray,
     target: ByteArray,
     patch: ByteArray
@@ -128,13 +137,12 @@ class MalformedPatchTest {
 
   @Test
   fun everySingleByteCorruptionIsRefusedOrExact() {
-    for ((label, patcher, pair) in cases()) {
+    for ((label, pair, patch) in patches()) {
       val (source, target) = pair
-      val patch = patcher.createPatch(source, target)
       for (at in patch.indices) {
         for (delta in listOf(1, 0x7F, 0x80)) {
           val broken = patch.copyOf().also { it[at] = (it[at] + delta).toByte() }
-          check("$label byte $at +$delta", patcher, source, target, broken)
+          check("$label byte $at +$delta", source, target, broken)
         }
       }
     }
@@ -142,11 +150,10 @@ class MalformedPatchTest {
 
   @Test
   fun everyTruncationIsRefused() {
-    for ((label, patcher, pair) in cases()) {
+    for ((label, pair, patch) in patches()) {
       val (source, target) = pair
-      val patch = patcher.createPatch(source, target)
       for (length in 0 until patch.size) {
-        check("$label truncated to $length", patcher, source, target, patch.copyOfRange(0, length))
+        check("$label truncated to $length", source, target, patch.copyOfRange(0, length))
       }
     }
   }
@@ -155,9 +162,8 @@ class MalformedPatchTest {
   fun trailingRubbishIsRefused() {
     // Bytes after the content belong to nothing, so a patch that carries them was appended to or
     // mis-measured, and is refused as one.
-    for ((label, patcher, pair) in cases()) {
+    for ((label, pair, patch) in patches()) {
       val (source, target) = pair
-      val patch = patcher.createPatch(source, target)
       for (extra in listOf(1, 7, 64)) {
         val padded = patch + ByteArray(extra) { 0x5A }
         assertFailsWith<KiffException.InvalidPatch>("$label plus $extra bytes") {
@@ -174,16 +180,15 @@ class MalformedPatchTest {
   fun manyRandomCorruptionsAtOnceAreRefusedOrExact() {
     // Single flips are the easy case. Real corruption arrives in runs, and a patch mangled in
     // several places at once is where a reader that checks one thing at a time comes apart.
-    for ((label, patcher, pair) in cases()) {
+    for ((label, pair, patch) in patches()) {
       val (source, target) = pair
-      val patch = patcher.createPatch(source, target)
       for (seed in 1..300) {
         val random = Random(seed)
         val broken = patch.copyOf()
         repeat(random.nextInt(1, 8)) {
           broken[random.nextInt(broken.size)] = random.nextInt(256).toByte()
         }
-        check("$label mangled with seed $seed", patcher, source, target, broken)
+        check("$label mangled with seed $seed", source, target, broken)
       }
     }
   }

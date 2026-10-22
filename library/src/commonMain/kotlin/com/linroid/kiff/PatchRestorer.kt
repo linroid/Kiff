@@ -70,8 +70,9 @@ internal object PatchRestorer {
       patch = patch,
       from = payloadFrom,
       targetSize = header.targetSize,
-      checksums = header.flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0,
-      out = target
+      checksums = header.regionChecksums,
+      out = target,
+      treePacked = header.treePacked
     )
     if (targetCrc != header.targetCrc32) {
       throw KiffException.VerificationFailed(
