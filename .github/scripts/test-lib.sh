@@ -56,8 +56,37 @@ expect 'A short SHA' '' "$(release 2222222)"
 expect 'No ref' '' "$(release '')"
 expect 'No tags at all' '' "$(release_at v0.1.0 < /dev/null)"
 
+# What git ls-remote --tags says once the release workflow has moved v1 to v1.2.0, which is
+# annotated, at a commit that its prerelease, a prerelease of 1.10.0 and a re-release of 1.1.0 also
+# name. v1.0.0 is at a commit of its own, and v2 at one with no release.
+c4=4444444444444444444444444444444444444444
+c5=5555555555555555555555555555555555555555
+c6=6666666666666666666666666666666666666666
+t4=dddddddddddddddddddddddddddddddddddddddd
+majors="$c5	refs/tags/v1
+$c4	refs/tags/v1.0.0
+$c5	refs/tags/v1.1.0
+$c5	refs/tags/v1.10.0-rc.1
+$t4	refs/tags/v1.2.0
+$c5	refs/tags/v1.2.0^{}
+$c5	refs/tags/v1.2.0-rc.1
+$c6	refs/tags/v2"
+
+major() {
+  release_at "$1" <<< "$majors"
+}
+
+expect 'v1 at a release, its prerelease and others' 1.2.0 "$(major v1)"
+expect 'A SHA at the release v1 is at' 1.2.0 "$(major $c5)"
+expect 'A release at the commit v1 is at' 1.1.0 "$(major v1.1.0)"
+expect 'A prerelease at the commit v1 is at' 1.10.0-rc.1 "$(major v1.10.0-rc.1)"
+expect 'An older release' 1.0.0 "$(major v1.0.0)"
+expect 'v2, at a commit with no release' '' "$(major v2)"
+expect 'v1.2, which is no tag' '' "$(major v1.2)"
+
 actions=/home/runner/work/_actions
 expect 'A tag' v0.2.0 "$(action_ref v0.2.0 $actions/linroid/kiff/v0.2.0)"
+expect 'A major tag' v1 "$(action_ref v1 $actions/linroid/kiff/v1)"
 # A workflow written before the repository was renamed from linroid/Kiff still loads it so.
 expect 'The old spelling of the repository' v0.2.0 \
   "$(action_ref v0.2.0 $actions/linroid/Kiff/v0.2.0/)"

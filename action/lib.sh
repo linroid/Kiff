@@ -106,7 +106,8 @@ action_ref() {
 # The version of the Kiff release tagged at the commit that ref $1, a tag or a full commit SHA,
 # names, read from the output of git ls-remote --tags on stdin; nothing when there is none. An
 # annotated tag's commit is on its peeled line, TAG^{}. The ref itself wins when it is a release
-# tag, and otherwise a final release wins over a prerelease at the same commit.
+# tag. Otherwise, as for a major tag such as v1, which is no version itself, the highest final
+# release at that commit wins, and a prerelease only when there is no final one.
 release_at() {
   local ref=$1 sha=''
   if [[ $ref =~ ^[0-9a-fA-F]{40}$ ]]; then
@@ -125,6 +126,17 @@ release_at() {
     function commit(tag) {
       return (tag in peeled) ? peeled[tag] : direct[tag]
     }
+    # Whether release tag a wins over release tag b: a final release over a prerelease, and then
+    # the higher X.Y.Z. Two prereleases of one version keep their order.
+    function wins(a, b,    x, y, i) {
+      if ((a ~ /-/) != (b ~ /-/)) return b ~ /-/
+      split(substr(a, 2), x, /[.-]/)
+      split(substr(b, 2), y, /[.-]/)
+      for (i = 1; i <= 3; i++) {
+        if (x[i] + 0 != y[i] + 0) return x[i] + 0 > y[i] + 0
+      }
+      return 0
+    }
     END {
       target = sha != "" ? sha : ((ref in direct) ? commit(ref) : "")
       for (i = 1; target != "" && i <= count; i++) {
@@ -136,7 +148,7 @@ release_at() {
           best = name
           break
         }
-        if (best == "" || (best ~ /-/ && name !~ /-/)) best = name
+        if (best == "" || wins(name, best)) best = name
       }
       if (best != "") print substr(best, 2)
     }
