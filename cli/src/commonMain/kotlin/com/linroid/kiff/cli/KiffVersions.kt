@@ -47,12 +47,16 @@ private val RELEASED = Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?""")
  * The released Kiff builds that `kiff --use` hands a command to, each downloaded once and kept in
  * [home]`/versions/<version>`, whose `bin` holds the launcher.
  *
- * A release attaches an executable for each platform it is built for, `kiff-<version>-<platform>`,
- * and a zip of the JVM build, `kiff-<version>.zip`, which runs anywhere Java 17 does. The
- * executable for this machine is preferred, and the zip taken when the release has none, as 0.1.0
- * has not. Either is checked against the `.sha256` beside it before it is kept.
+ * A release attaches an archive for each platform it is built for, `kiff-<version>-<platform>` with
+ * `.tar.gz`, or `.zip` for Windows, holding the executable, `LICENSE` and `README.md` in a
+ * directory of that name, and a zip of the JVM build, `kiff-<version>.zip`, which runs anywhere
+ * Java 17 does. 0.2.0 attached each executable bare instead, as `kiff-<version>-<platform>`, and
+ * 0.1.0 has only the JVM zip. So the archive for this machine is tried first, then the bare
+ * executable, then the JVM zip. Whichever is taken is checked against the `.sha256` beside it
+ * before it is unpacked or kept, and the executable is installed as `bin/kiff` from either kind.
  *
- * Downloads go through [fetcher], by default [Curl].
+ * Downloads go through [fetcher], by default [Curl]. A `.tar.gz` is unpacked with the system's
+ * `tar`, and a zip in this process.
  */
 internal class KiffVersions(
   private val home: Path,
@@ -99,22 +103,36 @@ internal class KiffVersions(
     try {
       fileSystem.createDirectories(scratch)
       val download = Download(scratch, version)
-      val native = platform?.let { "kiff-$version-$it" + if (isWindows) ".exe" else "" }
-      val nativeSum = native?.let { download.checksum("$release/$it", it, missingOk = true) }
-      if (native != null && nativeSum != null) {
-        return installFrom(versions, dir) { unpacked ->
-          val url = "$release/$native"
-          val file = unpacked / "bin" / LAUNCHERS.first()
-          fileSystem.createDirectories(unpacked / "bin")
-          log("Downloading kiff $version from $url")
-          download.file(url, file, nativeSum)
-          makeExecutable(file)
+      if (platform != null) {
+        val name = "kiff-$version-$platform"
+        val windows = platform.startsWith("windows-")
+        val archive = name + if (windows) ".zip" else ".tar.gz"
+        download.checksum("$release/$archive", archive, missingOk = true)?.let { sha256 ->
+          return installFrom(versions, dir) { unpacked ->
+            val url = "$release/$archive"
+            val file = unpacked.parent!! / archive
+            log("Downloading kiff $version from $url")
+            download.file(url, file, sha256)
+            unpack(file, unpacked, name, if (windows) "kiff.exe" else "kiff", url)
+          }
+        }
+        // As 0.2.0 attached it.
+        val bare = name + if (windows) ".exe" else ""
+        download.checksum("$release/$bare", bare, missingOk = true)?.let { sha256 ->
+          return installFrom(versions, dir) { unpacked ->
+            val url = "$release/$bare"
+            val file = unpacked / "bin" / LAUNCHERS.first()
+            fileSystem.createDirectories(unpacked / "bin")
+            log("Downloading kiff $version from $url")
+            download.file(url, file, sha256)
+            makeExecutable(file)
+          }
         }
       }
       val zipName = "kiff-$version.zip"
       val url = "$release/$zipName"
       val zipSum = download.checksum(url, zipName, missingOk = false)!!
-      if (native != null && javaHome == null) {
+      if (platform != null && javaHome == null) {
         log("kiff $version has no build for $platform, so it runs on Java")
       }
       requireJava("kiff $version")
@@ -226,20 +244,83 @@ internal class KiffVersions(
   }
 
   /**
+   * Unpacks [archive], downloaded from [url], into [dir] as a version is kept: its [executable] as
+   * `bin/kiff`, where a bare executable goes too, and `LICENSE` and `README.md` beside `bin`. The
+   * archive holds them in its [root] directory, and anything outside that refuses it.
+   */
+  private fun unpack(archive: Path, dir: Path, root: String, executable: String, url: String) {
+    val files = if (archive.name.endsWith(".zip")) {
+      (dir.parent!! / "unzipped").also {
+        fileSystem.createDirectory(it)
+        unzip(archive, it, root, url)
+      }
+    } else {
+      untar(archive, dir.parent!! / "untarred", root, url) / root
+    }
+    // A link, which tar may unpack, is no executable either.
+    if (fileSystem.metadataOrNull(files / executable)?.isRegularFile != true) {
+      throw UnavailableVersionException("$url holds no $root/$executable")
+    }
+    val launcher = dir / "bin" / LAUNCHERS.first()
+    fileSystem.createDirectory(dir / "bin")
+    fileSystem.atomicMove(files / executable, launcher)
+    makeExecutable(launcher)
+    for (name in listOf("LICENSE", "README.md")) {
+      if (fileSystem.metadataOrNull(files / name)?.isRegularFile == true) {
+        fileSystem.atomicMove(files / name, dir / name)
+      }
+    }
+  }
+
+  /**
+   * Unpacks the `.tar.gz` [archive] into the new directory [dir] with the system's tar, which keeps
+   * each file's mode, and answers [dir]. It is refused first if any entry is outside [root], and
+   * tar itself does not write through a link it has unpacked.
+   */
+  private fun untar(archive: Path, dir: Path, root: String, url: String): Path {
+    val listing = archive.parent!! / ".entries"
+    tar(url, listing, "-tzf", archive.toString())
+    fileSystem.read(listing) { readUtf8() }.lines()
+      .filter { it.isNotEmpty() }
+      .forEach { checkEntry(it, root, url) }
+    fileSystem.createDirectory(dir)
+    tar(url, listing, "-xzf", archive.toString(), "-C", dir.toString())
+    return dir
+  }
+
+  /** Runs tar with [args] and its output in [output], refusing [url] when tar fails. */
+  private fun tar(url: String, output: Path, vararg args: String) {
+    val errors = output.parent!! / ".tar-errors"
+    val status = try {
+      runCommand(listOf("tar") + args, stdout = output, stderr = errors)
+    } catch (e: ProgramNotFoundException) {
+      throw UnavailableVersionException(
+        "Could not unpack $url: it is unpacked with ${e.program}, which is not installed. " +
+          "Install ${e.program}"
+      )
+    }
+    if (status != 0) {
+      val said = fileSystem.read(errors) { readUtf8() }.lines().lastOrNull { it.isNotBlank() }
+      throw UnavailableVersionException("Could not unpack $url: ${said ?: "tar exited $status"}")
+    }
+  }
+
+  /** Refuses [url] for its entry [name] unless the entry is its [root] directory or inside it. */
+  private fun checkEntry(name: String, root: String, url: String) {
+    val path = name.replace('\\', '/')
+    if (path.startsWith("/") || ".." in path.split('/') || !"$path/".startsWith("$root/")) {
+      throw UnavailableVersionException("$url holds $name, which is outside its $root directory")
+    }
+  }
+
+  /**
    * Unpacks [zip] into [dir], leaving out the [root] directory a distribution keeps its files in,
    * and refusing anything outside it.
    */
   private fun unzip(zip: Path, dir: Path, root: String, url: String) {
     // okio reads each entry as a path within the zip, so none could be written outside dir; one
     // that names a place outside root is still no distribution, and is refused rather than missed.
-    for (name in zipEntryNames(zip)) {
-      val path = name.replace('\\', '/')
-      if (path.startsWith("/") || ".." in path.split('/') || !"$path/".startsWith("$root/")) {
-        throw UnavailableVersionException(
-          "$url holds $name, which is outside its $root directory"
-        )
-      }
-    }
+    for (name in zipEntryNames(zip)) checkEntry(name, root, url)
     val archive = fileSystem.openZip(zip)
     val top = "/".toPath() / root
     for (entry in archive.listRecursively(top).toList()) {
