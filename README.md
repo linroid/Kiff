@@ -92,20 +92,25 @@ curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh | bash
 ```
 
 That installs the latest release's executable for your machine into `~/.kiff` and links `kiff`
-into `/usr/local/bin`. It is one file of about 3 to 4 MB, on Linux or macOS on x64 or arm64, and
-needs nothing else. Give bash `KIFF_VERSION` to pin a release, as in `| KIFF_VERSION=X.Y.Z bash`,
-and `KIFF_INSTALL` to put the link somewhere else, such as `$HOME/.local/bin`. A release without an
-executable for your machine, such as 0.1.0, which has none, is installed from its JVM zip instead,
-which runs on Java 17 or newer; the script says so, and does not install Java.
+into `/usr/local/bin`. It is one file, a download of about 1 to 1.5 MB, on Linux or macOS on x64 or
+arm64, and needs nothing else. Give bash `KIFF_VERSION` to pin a release, as in
+`| KIFF_VERSION=X.Y.Z bash`, and `KIFF_INSTALL` to put the link somewhere else, such as
+`$HOME/.local/bin`. A release without an executable for your machine, such as 0.1.0, which has none,
+is installed from its JVM zip instead, which runs on Java 17 or newer; the script says so, and does
+not install Java.
 
-Without the script, download the executable for your platform from the
-[latest release](https://github.com/linroid/kiff/releases/latest): `kiff-<version>-linux-x64`,
-`kiff-<version>-linux-arm64`, `kiff-<version>-macos-arm64`, `kiff-<version>-macos-x64` or
-`kiff-<version>-windows-x64.exe`. Check it against the `.sha256` beside it, rename it `kiff`, make
-it executable, and put it on your `PATH`. macOS refuses a file a browser downloaded until
+Without the script, download the archive for your platform from the
+[latest release](https://github.com/linroid/kiff/releases/latest):
+`kiff-<version>-linux-x64.tar.gz`, `kiff-<version>-linux-arm64.tar.gz`,
+`kiff-<version>-macos-arm64.tar.gz`, `kiff-<version>-macos-x64.tar.gz` or
+`kiff-<version>-windows-x64.zip`. Each holds a `kiff-<version>-<platform>` directory with `kiff`
+(`kiff.exe` for Windows), `LICENSE` and `README.md`. Check it against the `.sha256` beside it,
+unpack it with `tar -xzf`, or on Windows with `tar -xf` or Explorer, and put that `kiff` on your
+`PATH`. The `.tar.gz` keeps `kiff` executable. macOS refuses a file a browser downloaded until
 `xattr -d com.apple.quarantine kiff` clears the flag, which curl does not set. On any other
 platform, download `kiff-<version>.zip`, the JVM build, unzip it, and run `bin/kiff` with Java 17 or
-newer.
+newer. Kiff 0.2.0 attached each executable bare, as `kiff-0.2.0-<platform>`, with `.exe` for
+Windows.
 
 To uninstall, remove the `kiff` link and `~/.kiff`.
 
@@ -385,16 +390,21 @@ version of the app you update. A newer Kiff reads every patch an older one wrote
 the oldest one applies on every later app as well.
 
 The first run of a version downloads it from its GitHub release with `curl`, which has to be
-installed. It takes the executable built for this machine, `kiff-VERSION-PLATFORM` with `PLATFORM`
-one of `linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64` and `windows-x64.exe`, and otherwise
-`kiff-VERSION.zip`, the JVM build, as for 0.1.0, which has no other. Either is refused unless it
-matches the `.sha256` beside it, and is installed into `$KIFF_HOME/versions/VERSION`, with
-`KIFF_HOME` at `~/.kiff` unless set. It is put together beside that directory and renamed into
-place, so an interrupted or concurrent run never leaves half a version there, and every later run
-starts the installed copy without the network. `KIFF_DOWNLOAD_URL` replaces
-`https://github.com/linroid/kiff/releases/download` for a mirror, which serves the same files under
-`vVERSION/`. A draft release cannot be downloaded until it is published, and a `-SNAPSHOT` version
-is refused, since no snapshot has a release.
+installed. It takes the executable built for this machine, with `PLATFORM` one of `linux-x64`,
+`linux-arm64`, `macos-arm64`, `macos-x64` and `windows-x64`: from its archive,
+`kiff-VERSION-PLATFORM.tar.gz`, unpacked with the system's `tar`, or `kiff-VERSION-windows-x64.zip`;
+failing that, bare, as 0.2.0 attached it, `kiff-VERSION-PLATFORM` (`.exe` for Windows); and
+otherwise `kiff-VERSION.zip`, the JVM build, as for 0.1.0, which has no other. Whichever it takes
+is refused unless it matches the `.sha256` beside it, as is an archive with anything outside its
+`kiff-VERSION-PLATFORM` directory, and the executable is installed as
+`$KIFF_HOME/versions/VERSION/bin/kiff`, with `KIFF_HOME` at `~/.kiff` unless set. It is put
+together beside that directory and renamed into place, so an interrupted or concurrent run never
+leaves half a version there, and every later run starts the installed copy without the network.
+`KIFF_DOWNLOAD_URL` replaces `https://github.com/linroid/kiff/releases/download` for a mirror,
+which serves the same files under `vVERSION/`. A draft release cannot be downloaded until it is
+published, and a `-SNAPSHOT` version is refused, since no snapshot has a release. Kiff 0.2.0's own
+`--use` knows only bare executables, so it runs any later release from its JVM zip, which needs
+Java 17 or newer.
 
 Only the `kiff` you start needs this feature. Everything after the version goes to the other one
 unread, so that can be any release, even one older than `--use`, with whatever commands and flags
@@ -549,8 +559,9 @@ embedded in a build of the app you update:
 A newer Kiff reads every patch an older one wrote, which `FormatVectorsTest` holds each build to,
 so patches from the oldest one apply on every later app as well. Raise `kiff-version` once no app
 you still update embeds anything older. The action downloads exactly that release's executable for
-the runner, `kiff-VERSION-PLATFORM`, or its `kiff-VERSION.zip` when it has none, refuses either
-unless it matches the `.sha256` beside it, and runs it; a release it cannot download fails the run.
+the runner, from its archive `kiff-VERSION-PLATFORM.tar.gz` or bare as `kiff-VERSION-PLATFORM`, or
+its `kiff-VERSION.zip` when it has neither, refuses any of them unless it matches the `.sha256`
+beside it, and runs it; a release it cannot download fails the run.
 It takes a released version such as `0.1.0` and refuses a `-SNAPSHOT`. The job summary and the
 manifest's `generator` say which kiff made the patches. As for `kiff --use`, `KIFF_DOWNLOAD_URL`
 replaces `https://github.com/linroid/kiff/releases/download` with a mirror that serves the same
@@ -922,13 +933,16 @@ A release's version is its tag. Nothing in the source names a version: any build
 1. Tag the commit `vX.Y.Z` and push the tag. A prerelease adds a suffix, as in `vX.Y.Z-rc.1`.
 2. The [release workflow](.github/workflows/release.yml) builds the CLI with `-Pversion=X.Y.Z`
    through [CLI Binaries](.github/workflows/cli-binaries.yml): an executable each for Linux and
-   Windows on a Linux runner and for macOS on a Mac, stripped, and the JVM zip. Each executable runs
-   on a machine of its own platform, which checks that it says `kiff X.Y.Z`, restores a patch
-   exactly, and hands `kiff --use` over to a release of either kind. It then attaches
-   `kiff-X.Y.Z-linux-x64`, `kiff-X.Y.Z-linux-arm64`, `kiff-X.Y.Z-macos-arm64`,
-   `kiff-X.Y.Z-macos-x64`, `kiff-X.Y.Z-windows-x64.exe` and `kiff-X.Y.Z.zip`, each with a
-   `.sha256`, to a draft release for the tag. It refuses any other tag and a `-SNAPSHOT`, and can be
-   re-run by hand for an existing tag whose source builds the executables.
+   Windows on a Linux runner and for macOS on a Mac, stripped, and the JVM zip.
+   [pack-cli.py](.github/scripts/pack-cli.py) packs each executable with `LICENSE` and `README.md`
+   in a `kiff-X.Y.Z-<platform>` directory, dated the tagged commit, so the same executables give
+   the same bytes. Each archive is unpacked on a machine of its own platform, which checks that it
+   says `kiff X.Y.Z`, restores a patch exactly, and hands `kiff --use` over to a release of each
+   kind. It then attaches `kiff-X.Y.Z-linux-x64.tar.gz`, `kiff-X.Y.Z-linux-arm64.tar.gz`,
+   `kiff-X.Y.Z-macos-arm64.tar.gz`, `kiff-X.Y.Z-macos-x64.tar.gz`, `kiff-X.Y.Z-windows-x64.zip` and
+   `kiff-X.Y.Z.zip`, each with a `.sha256`, to a draft release for the tag, whose notes start with
+   what they are. It refuses any other tag and a `-SNAPSHOT`, and can be re-run by hand for an
+   existing tag whose source builds the executables.
 3. It then uploads the library, built with the same `-Pversion`, to the Central Portal as a
    deployment. A run started by hand uploads only when told to, since Central takes each version
    once.

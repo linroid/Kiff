@@ -44,10 +44,31 @@ download() {
   fi
 }
 
+# Unpacks the archive $1, downloaded from $3, into the directory $4, refusing it unless everything
+# in it is in its directory $2.
+unpack() {
+  local archive=$1 root=$2 url=$3 dir=$4 entries outside
+  if [[ $archive == *.zip ]]; then
+    entries=$(unzip -Z1 "$archive") || fail "$url is not a zip unzip can read."
+  else
+    entries=$(tar -tzf "$archive") || fail "$url is not an archive tar can read."
+  fi
+  outside=$(entry_outside "$root" <<< "$entries")
+  if [[ -n $outside ]]; then
+    fail "$url holds $outside, which is outside its $root directory."
+  fi
+  if [[ $archive == *.zip ]]; then
+    unzip -q -o "$archive" -d "$dir"
+  else
+    tar -xzf "$archive" -C "$dir"
+  fi
+}
+
 # Installs the executable of release $1 for this runner and sets kiff to it, or sets kiff to
-# nothing when the release has none.
+# nothing when the release has none. A release attaches it in an archive, and 0.2.0 attached it
+# bare.
 install_native() {
-  local version=$1 platform name dir
+  local version=$1 platform name exe='' archive dir url installed
   platform=$(runner_platform)
   if [[ -z $platform ]]; then
     echo "Kiff releases have no executable for ${RUNNER_OS:-}/${RUNNER_ARCH:-}."
@@ -55,23 +76,39 @@ install_native() {
     return 0
   fi
   name=kiff-$version-$platform
+  archive=$name.tar.gz
   if [[ $platform == windows-* ]]; then
-    name=$name.exe
+    exe=.exe
+    archive=$name.zip
   fi
   dir=${RUNNER_TEMP:?}/kiff-cli-$version
-  kiff=$dir/$name
-  if [[ -x $kiff ]]; then
-    # An earlier run of the action in this job already installed it.
-    return 0
-  fi
+  # An earlier run of the action in this job already installed it, from either.
+  for installed in "$dir/$name/kiff$exe" "$dir/$name$exe"; do
+    if [[ -f $installed && -x $installed ]]; then
+      kiff=$installed
+      return 0
+    fi
+  done
   mkdir -p "$dir"
-  if ! download "$releases/v$version/$name" "$kiff"; then
-    echo "Kiff $version has no executable for $platform at $missing."
-    kiff=''
-    return 0
+  url=$releases/v$version/$archive
+  if download "$url" "$dir/$archive"; then
+    unpack "$dir/$archive" "$name" "$url" "$dir"
+    kiff=$dir/$name/kiff$exe
+    if [[ ! -f $kiff || -L $kiff ]]; then
+      fail "$url holds no $name/kiff$exe."
+    fi
+  else
+    url=$releases/v$version/$name$exe
+    kiff=$dir/$name$exe
+    if ! download "$url" "$kiff"; then
+      echo "Kiff $version has no executable for $platform, in an archive or alone, at \
+$releases/v$version."
+      kiff=''
+      return 0
+    fi
   fi
   chmod +x "$kiff"
-  echo "Installed kiff $version from $releases/v$version/$name"
+  echo "Installed kiff $version from $url"
 }
 
 # Installs the JVM zip of release $1 and sets kiff to its launcher, or sets kiff to nothing and

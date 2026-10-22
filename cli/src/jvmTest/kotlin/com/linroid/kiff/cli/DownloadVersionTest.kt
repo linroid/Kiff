@@ -84,10 +84,36 @@ class DownloadVersionTest {
   }
 
   @Test
-  fun runsTheBuildForThisPlatformWhenTheReleaseHasOne() {
+  fun runsTheArchiveForThisPlatformWhenTheReleaseHasOne() {
     val platform = nativePlatform
     if (WINDOWS || platform == null) return
-    native("9.9.9", platform, LAUNCHER.replace("exit 3", "exit 5").encodeToByteArray())
+    archive("9.9.9", platform, LAUNCHER.replace("exit 3", "exit 5").encodeToByteArray())
+    release("9.9.9", distribution("9.9.9"))
+    val run = kiffProcess("--use", "9.9.9", "info", "x.kiff")
+
+    assertEquals(5, run.status, run.err)
+    assertEquals("[info]\n[x.kiff]\n", run.out)
+    val name = "kiff-9.9.9-$platform.tar.gz"
+    assertEquals(
+      listOf(
+        "/releases/v9.9.9/$name.sha256",
+        "/storage/$name.sha256",
+        "/releases/v9.9.9/$name",
+        "/storage/$name"
+      ),
+      requests.toList()
+    )
+    val installed = home.resolve("versions/9.9.9")
+    assertTrue(Files.isExecutable(installed.resolve("bin/kiff")))
+    assertEquals("the licence", Files.readString(installed.resolve("LICENSE")))
+    assertEquals("the readme", Files.readString(installed.resolve("README.md")))
+  }
+
+  @Test
+  fun runsTheBareExecutableOfAReleaseFromBeforeArchives() {
+    val platform = nativePlatform
+    if (WINDOWS || platform == null) return
+    bare("9.9.9", platform, LAUNCHER.replace("exit 3", "exit 5").encodeToByteArray())
     release("9.9.9", distribution("9.9.9"))
     val run = kiffProcess("--use", "9.9.9", "info", "x.kiff")
 
@@ -96,6 +122,7 @@ class DownloadVersionTest {
     val name = "kiff-9.9.9-$platform"
     assertEquals(
       listOf(
+        "/releases/v9.9.9/$name.tar.gz.sha256",
         "/releases/v9.9.9/$name.sha256",
         "/storage/$name.sha256",
         "/releases/v9.9.9/$name",
@@ -107,13 +134,45 @@ class DownloadVersionTest {
   }
 
   @Test
+  fun refusesAnArchiveThatDoesNotMatchItsChecksumOrHoldsAnythingOutsideItsDirectory() {
+    val name = "kiff-9.9.9-linux-x64"
+    val url = "$base/v9.9.9/$name.tar.gz"
+    val other = sha256("another archive".encodeToByteArray())
+    archive("9.9.9", "linux-x64", "kiff".encodeToByteArray(), sha256 = other)
+    val tampered = kiff("--use", "9.9.9", "create", "a", "b", "c", platform = "linux-x64")
+
+    assertEquals(1, tampered.status)
+    assertTrue("Error: $url has SHA-256 " in tampered.err, tampered.err)
+    assertTrue("but $url.sha256 says $other" in tampered.err, tampered.err)
+    assertEquals(emptyList(), installed())
+
+    val escaping = "$name/../../escaped"
+    archive(
+      "9.9.9", "linux-x64", "kiff".encodeToByteArray(),
+      TarEntry(escaping, "outside".encodeToByteArray())
+    )
+    val slipped = kiff("--use", "9.9.9", "create", "a", "b", "c", platform = "linux-x64")
+
+    assertEquals(1, slipped.status)
+    assertTrue(
+      "Error: $url holds $escaping, which is outside its $name directory\n" in slipped.err,
+      slipped.err
+    )
+    assertEquals(emptyList(), installed())
+    assertFalse(dir.toFile().walk().any { it.name == "escaped" })
+  }
+
+  @Test
   fun reusesAnInstalledVersionWithoutAskingTheServerAgain() {
     if (WINDOWS) return
     release("9.9.9", distribution("9.9.9"))
     assertEquals(3, kiffProcess("--use=9.9.9").status)
     val first = requests.toList()
     // A release without a build for this machine is found out before its zip is fetched.
-    val native = nativePlatform?.let { listOf("/releases/v9.9.9/kiff-9.9.9-$it.sha256") }
+    val native = nativePlatform?.let {
+      val name = "/releases/v9.9.9/kiff-9.9.9-$it"
+      listOf("$name.tar.gz.sha256", "$name.sha256")
+    }
     assertEquals(
       native.orEmpty() + listOf(
         "/releases/v9.9.9/kiff-9.9.9.zip.sha256",
@@ -185,10 +244,11 @@ class DownloadVersionTest {
     assertEquals(listOf("/releases/v$release/kiff-$release.zip.sha256"), requests.toList())
   }
 
-  /** Runs kiff in this JVM, taking its JVM build from [baseUrl] through curl. */
-  private fun kiff(vararg args: String, baseUrl: String = base): Run = capture(*args) { log ->
-    KiffVersions(home.toOkioPath(), baseUrl, log, platform = null, fetcher = Curl)
-  }
+  /** Runs kiff in this JVM, taking the build for [platform] from [baseUrl] through curl. */
+  private fun kiff(vararg args: String, baseUrl: String = base, platform: String? = null): Run =
+    capture(*args) { log ->
+      KiffVersions(home.toOkioPath(), baseUrl, log, platform, fetcher = Curl)
+    }
 
   private class Process(val status: Int, val out: String, val err: String)
 
@@ -212,7 +272,30 @@ class DownloadVersionTest {
     return Process(process.exitValue(), Files.readString(out), Files.readString(err))
   }
 
-  private fun native(version: String, platform: String, bytes: ByteArray) {
+  /** The archive a release attaches for [platform], holding [executable] as kiff, and [extra]. */
+  private fun archive(
+    version: String,
+    platform: String,
+    executable: ByteArray,
+    vararg extra: TarEntry,
+    sha256: String? = null
+  ) {
+    val name = "kiff-$version-$platform"
+    val bytes = tarGzBytes(
+      listOf(
+        TarEntry("$name/", null),
+        TarEntry("$name/kiff", executable, mode = 0b111_101_101),
+        TarEntry("$name/LICENSE", "the licence".encodeToByteArray()),
+        TarEntry("$name/README.md", "the readme".encodeToByteArray())
+      ) + extra
+    )
+    assets["$name.tar.gz"] = bytes
+    assets["$name.tar.gz.sha256"] =
+      "${sha256 ?: sha256(bytes)}  $name.tar.gz\n".encodeToByteArray()
+  }
+
+  /** The executable alone, as 0.2.0 attached it. */
+  private fun bare(version: String, platform: String, bytes: ByteArray) {
     val name = "kiff-$version-$platform"
     assets[name] = bytes
     assets["$name.sha256"] = "${sha256(bytes)}  $name\n".encodeToByteArray()

@@ -100,6 +100,65 @@ internal fun zipBytes(entries: Map<String, ByteArray>): ByteArray {
   return out.readByteArray()
 }
 
+/** One entry of a tar: a directory when [bytes] is null, else a file, or a link to [link]. */
+internal class TarEntry(
+  val name: String,
+  val bytes: ByteArray?,
+  val mode: Int = if (bytes == null) 0b111_101_101 else 0b110_100_100,
+  val link: String? = null
+)
+
+/** A gzipped ustar archive of [entries], which any tar reads, its blocks stored, not deflated. */
+internal fun tarGzBytes(entries: List<TarEntry>): ByteArray {
+  val tar = Buffer()
+  for (entry in entries) {
+    val data = entry.bytes ?: ByteArray(0)
+    val header = ByteArray(512)
+    fun put(at: Int, text: String) = text.encodeToByteArray().copyInto(header, at)
+    fun octal(at: Int, width: Int, value: Int) = put(at, value.toString(8).padStart(width - 1, '0'))
+    put(0, entry.name)
+    octal(100, 8, entry.mode)
+    octal(108, 8, 0)
+    octal(116, 8, 0)
+    octal(124, 12, if (entry.link == null) data.size else 0)
+    octal(136, 12, 0)
+    put(148, "        ")
+    header[156] = when {
+      entry.link != null -> '2'
+      entry.bytes == null -> '5'
+      else -> '0'
+    }.code.toByte()
+    entry.link?.let { put(157, it) }
+    put(257, "ustar\u000000")
+    // Six digits, a NUL and a space, summed while the field was all spaces.
+    octal(148, 7, header.sumOf { it.toInt() and 0xFF })
+    header[154] = 0
+    tar.write(header)
+    if (entry.link == null) {
+      tar.write(data)
+      tar.write(ByteArray((512 - data.size % 512) % 512))
+    }
+  }
+  tar.write(ByteArray(1024))
+  val bytes = tar.readByteArray()
+
+  val out = Buffer()
+  out.write(byteArrayOf(0x1F, 0x8B.toByte(), 8, 0, 0, 0, 0, 0, 0, 0xFF.toByte()))
+  var at = 0
+  do {
+    val size = minOf(0xFFFF, bytes.size - at)
+    val last = at + size == bytes.size
+    out.writeByte(if (last) 1 else 0)
+    out.writeShortLe(size)
+    out.writeShortLe(size.inv())
+    out.write(bytes, at, size)
+    at += size
+  } while (!last)
+  out.writeIntLe(crc32(bytes))
+  out.writeIntLe(bytes.size)
+  return out.readByteArray()
+}
+
 /** What local and central headers share: version, flags, method, time, sizes and name length. */
 private fun Buffer.header(crc: Int, size: Int, nameSize: Int) {
   writeShortLe(20)

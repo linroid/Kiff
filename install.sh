@@ -17,9 +17,10 @@
 #   curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh \
 #     | KIFF_INSTALL="$HOME/.local/bin" bash
 #
-# It installs the executable each release attaches for this machine, which needs nothing else.
-# A release without one, as 0.1.0 has none, is installed from its JVM zip instead, which runs on
-# Java 17 or newer, which this script does not install.
+# It installs the executable each release attaches for this machine, which needs nothing else: from
+# its archive, kiff-<version>-<platform>.tar.gz, or, as 0.2.0 attached it, bare. A release without
+# one, as 0.1.0 has none, is installed from its JVM zip instead, which runs on Java 17 or newer,
+# which this script does not install.
 #
 set -euo pipefail
 
@@ -89,8 +90,8 @@ detect_platform() {
     Darwin*) os="macos" ;;
     MINGW* | MSYS* | CYGWIN*)
       warn "This script installs kiff on Linux and macOS. On Windows, download"
-      warn "kiff-<version>-windows-x64.exe from https://github.com/${REPO}/releases/latest"
-      warn "and run it, renamed kiff.exe if you like."
+      warn "kiff-<version>-windows-x64.zip from https://github.com/${REPO}/releases/latest,"
+      warn "unpack it, and run the kiff.exe in it."
       error "Unsupported shell: $os"
       ;;
     *) error "Unsupported operating system: $os" ;;
@@ -212,8 +213,55 @@ fetch_checked() {
   fi
 }
 
+# The first of the archive entries on standard input, one per line, that is neither the directory $1
+# nor inside it, or nothing when every one is.
+entry_outside() {
+  local root="$1" entry
+  while IFS= read -r entry; do
+    if [ -z "$entry" ]; then
+      continue
+    fi
+    case "/${entry//\\//}/" in
+      */../*) ;;
+      /"$root"/*) continue ;;
+    esac
+    printf '%s' "$entry"
+    return
+  done
+}
+
+# Unpacks the archive $1, downloaded from $4, into $3 as a version is kept: its executable as
+# bin/kiff, and LICENSE and README.md beside bin. The archive holds them in its directory $2, and
+# anything outside that refuses it.
+unpack_archive() {
+  local archive="$1" root="$2" into="$3" url="$4" entries outside
+  if ! entries="$(tar -tzf "$archive")"; then
+    error "${url} is not an archive tar can read."
+  fi
+  outside="$(entry_outside "$root" <<<"$entries")"
+  if [ -n "$outside" ]; then
+    error "${url} holds ${outside}, which is outside its ${root} directory."
+  fi
+  local files="${UNPACK_DIR}/archive"
+  mkdir "$files"
+  tar -xzf "$archive" -C "$files"
+  files="${files}/${root}"
+  if [ ! -f "${files}/${BINARY_NAME}" ] || [ -L "${files}/${BINARY_NAME}" ]; then
+    error "${url} holds no ${root}/${BINARY_NAME}."
+  fi
+  mkdir -p "${into}/bin"
+  mv "${files}/${BINARY_NAME}" "${into}/bin/${BINARY_NAME}"
+  local file
+  for file in LICENSE README.md; do
+    if [ -f "${files}/${file}" ] && [ ! -L "${files}/${file}" ]; then
+      mv "${files}/${file}" "${into}/${file}"
+    fi
+  done
+}
+
 # Installs Kiff $1 for platform $3 in $2/versions/$1, the directory kiff --use keeps it in: the
-# executable built for the platform, or the JVM zip when the release has none.
+# executable built for the platform, from its archive or bare, or the JVM zip when the release has
+# none.
 install_version() {
   local version="$1" home="$2" platform="$3"
   local versions="${home}/versions"
@@ -227,18 +275,27 @@ install_version() {
   DOWNLOAD_DIR="$(mktemp -d)"
 
   # The checksum first, so a release without one is refused before anything large is downloaded.
-  local name="" native=""
+  # The archive of a release from after 0.2.0, then the bare executable 0.2.0 attached, then the
+  # JVM zip, which 0.1.0 has alone.
+  local name="" kind=""
   if [ -n "$platform" ]; then
-    name="kiff-${version}-${platform}"
+    name="kiff-${version}-${platform}.tar.gz"
     if fetch_checksum "${release}/${name}" "${DOWNLOAD_DIR}/${name}.sha256" "$name"; then
-      native=1
+      kind=archive
+      need_cmd tar
+    else
+      name="kiff-${version}-${platform}"
+      if fetch_checksum "${release}/${name}" "${DOWNLOAD_DIR}/${name}.sha256" "$name"; then
+        kind=bare
+      fi
     fi
   fi
-  if [ -z "$native" ]; then
+  if [ -z "$kind" ]; then
     name="kiff-${version}.zip"
     if ! fetch_checksum "${release}/${name}" "${DOWNLOAD_DIR}/${name}.sha256" "$name"; then
       error "Download failed. Check that kiff ${version} is a published release."
     fi
+    kind=jvm
     info "kiff ${version} has no build for ${platform:-this machine}, so its JVM build is installed"
     need_cmd unzip
   fi
@@ -250,16 +307,24 @@ install_version() {
   # Beside the target, so the move that installs it is a rename within one directory.
   UNPACK_DIR="$(mktemp -d "${versions}/.${version}-XXXXXXXX")"
   local unpacked="${UNPACK_DIR}/kiff-${version}"
-  if [ -n "$native" ]; then
-    mkdir -p "${unpacked}/bin"
-    mv "${DOWNLOAD_DIR}/${name}" "${unpacked}/bin/${BINARY_NAME}"
-  else
-    info "Extracting..."
-    unzip -q "${DOWNLOAD_DIR}/${name}" -d "$UNPACK_DIR"
-    if [ ! -f "${unpacked}/bin/${BINARY_NAME}" ]; then
-      error "${release}/${name} holds no kiff-${version}/bin/${BINARY_NAME}."
-    fi
-  fi
+  case "$kind" in
+    archive)
+      info "Extracting..."
+      unpack_archive "${DOWNLOAD_DIR}/${name}" "kiff-${version}-${platform}" "$unpacked" \
+        "${release}/${name}"
+      ;;
+    bare)
+      mkdir -p "${unpacked}/bin"
+      mv "${DOWNLOAD_DIR}/${name}" "${unpacked}/bin/${BINARY_NAME}"
+      ;;
+    jvm)
+      info "Extracting..."
+      unzip -q "${DOWNLOAD_DIR}/${name}" -d "$UNPACK_DIR"
+      if [ ! -f "${unpacked}/bin/${BINARY_NAME}" ]; then
+        error "${release}/${name} holds no kiff-${version}/bin/${BINARY_NAME}."
+      fi
+      ;;
+  esac
   chmod a+x "${unpacked}/bin/"*
 
   # Given its final name first, so that moving it into $versions fails rather than nesting it when

@@ -53,6 +53,23 @@ sha256_of() {
   printf '%s' "${line%% *}"
 }
 
+# The first of the archive entries on stdin, one per line, that is neither the directory $1 nor
+# inside it, or nothing when every one is. A backslash counts as a slash, as a zip may use one.
+entry_outside() {
+  local root=$1 entry
+  while IFS= read -r entry; do
+    if [[ -z $entry ]]; then
+      continue
+    fi
+    case /${entry//\\//}/ in
+      */../*) ;;
+      /"$root"/*) continue ;;
+    esac
+    printf '%s' "$entry"
+    return 0
+  done
+}
+
 # This runner's platform as a Kiff release names its executables, such as linux-x64, or nothing
 # where a release has none, read from RUNNER_OS and RUNNER_ARCH.
 runner_platform() {

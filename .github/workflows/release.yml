@@ -49,8 +49,9 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Each platform's executable, run on a machine of that platform, and the JVM zip. A manual run
-  # takes this workflow from the branch it was started on, but builds the tag.
+  # Each platform's executable in an archive, unpacked and run on a machine of that platform, and
+  # the JVM zip. A manual run takes this workflow from the branch it was started on, but builds the
+  # tag.
   cli:
     name: Build the CLI
     needs: version
@@ -79,9 +80,9 @@ jobs:
       - name: Check every file is there
         working-directory: dist
         run: |
-          files=("kiff-$VERSION.zip")
-          for platform in linux-x64 linux-arm64 macos-arm64 macos-x64 windows-x64.exe; do
-            files+=("kiff-$VERSION-$platform")
+          files=("kiff-$VERSION.zip" "kiff-$VERSION-windows-x64.zip")
+          for platform in linux-x64 linux-arm64 macos-arm64 macos-x64; do
+            files+=("kiff-$VERSION-$platform.tar.gz")
           done
           for file in "${files[@]}"; do
             if [[ ! -f "$file" || ! -f "$file.sha256" ]]; then
@@ -93,8 +94,8 @@ jobs:
           ls -l
 
       # Publishing stays with the maintainer: this only ever creates a draft, and re-runs replace
-      # the files on whatever release the tag already has. The executables are attached bare, so
-      # nothing needs unpacking.
+      # the files on whatever release the tag already has. A new draft's notes start with what the
+      # files are, ahead of GitHub's list of changes.
       - name: Attach to the release
         working-directory: dist
         env:
@@ -102,7 +103,30 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
+            notes=$(cat <<'EOF'
+          ## The kiff CLI
+
+          Install it on Linux or macOS with
+
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh | bash
+          ```
+
+          or download the archive for your platform: `kiff-X.Y.Z-PLATFORM.tar.gz` for
+          `linux-x64`, `linux-arm64`, `macos-arm64` and `macos-x64`, or
+          `kiff-X.Y.Z-windows-x64.zip`. Each holds `kiff` (`kiff.exe` for Windows), `LICENSE` and
+          `README.md` in a `kiff-X.Y.Z-PLATFORM` directory, with a `.sha256` beside the archive.
+          `kiff-X.Y.Z.zip` is the JVM build, for Java 17 or newer.
+
+          Kiff 0.2.0 attached its executables bare, not in archives, so `kiff --use X.Y.Z` run from
+          kiff 0.2.0 finds no executable in this release and runs its JVM zip instead, which needs
+          Java 17 or newer. Later versions of kiff, `install.sh` and the GitHub Action take the
+          archives.
+          EOF
+            )
+            printf '%s\n' "${notes//X.Y.Z/$VERSION}" > "$RUNNER_TEMP/notes.md"
+            gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes \
+              --notes-file "$RUNNER_TEMP/notes.md"
           fi
           gh release upload "$TAG" kiff-* --clobber
 
