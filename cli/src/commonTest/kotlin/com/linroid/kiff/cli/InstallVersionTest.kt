@@ -197,25 +197,62 @@ class InstallVersionTest {
   fun refusesAnArchiveWithoutItsExecutable() {
     val name = "kiff-9.9.9-$PLATFORM"
     val url = "$BASE/v9.9.9/$name.tar.gz"
-    val withoutIt = tarGzBytes(
-      listOf(TarEntry("$name/", null), TarEntry("$name/LICENSE", "the licence".encodeToByteArray()))
-    )
-    // A link is no executable either, wherever it points.
-    val aLink = tarGzBytes(
-      listOf(TarEntry("$name/", null), TarEntry("$name/kiff", null, link = "/bin/sh"))
-    )
-    for (bytes in listOf(withoutIt, aLink)) {
+    val licence = TarEntry("$name/LICENSE", "the licence".encodeToByteArray())
+    // An empty one is none either.
+    val empty = TarEntry("$name/kiff", ByteArray(0), mode = 0b111_101_101)
+    for (executable in listOf(emptyList(), listOf(empty))) {
       assets.clear()
-      assets["v9.9.9/$name.tar.gz"] = bytes
-      assets["v9.9.9/$name.tar.gz.sha256"] = "${sha256(bytes)}  $name.tar.gz\n".encodeToByteArray()
+      put("v9.9.9/$name.tar.gz", tarGzBytes(listOf(TarEntry("$name/", null), licence) + executable))
       val failure = assertFailsWith<UnavailableVersionException> { versions().install("9.9.9") }
 
-      // Windows's tar may not make the link at all, and says so.
-      if (bytes === withoutIt || !isWindows) {
-        assertEquals("$url holds no $name/kiff", failure.message)
-      }
+      assertEquals("$url holds no $name/kiff", failure.message)
       assertEquals(emptyList(), installed())
     }
+  }
+
+  @Test
+  fun refusesAnArchiveThatHoldsALink() {
+    val name = "kiff-9.9.9-$PLATFORM"
+    val url = "$BASE/v9.9.9/$name.tar.gz"
+    // As the executable or as any other file, since once Windows's tar has unpacked a link, okio
+    // reads it there as a file.
+    for (link in listOf("$name/kiff", "$name/README.md")) {
+      assets.clear()
+      val files = listOf(
+        TarEntry("$name/kiff", NATIVE, mode = 0b111_101_101),
+        TarEntry("$name/README.md", "the readme".encodeToByteArray())
+      ).filter { it.name != link }
+      val linked = TarEntry(link, null, link = "/bin/sh")
+      put("v9.9.9/$name.tar.gz", tarGzBytes(listOf(TarEntry("$name/", null)) + files + linked))
+      val failure = assertFailsWith<UnavailableVersionException> { versions().install("9.9.9") }
+
+      // What comes between is the entry as this tar lists it, in a layout of its own.
+      val message = failure.message!!
+      assertTrue(message.startsWith("$url holds "), message)
+      assertTrue(message.endsWith(", which is neither a file nor a directory"), message)
+      assertTrue(link in message, message)
+      assertEquals(emptyList(), installed())
+    }
+  }
+
+  @Test
+  fun neverAnswersAnInstalledVersionWithoutItsLauncher() {
+    val installed = home / "versions" / "9.9.9"
+    val launcher = installed / "bin" / LAUNCHER
+    systemFileSystem.createDirectories(installed / "bin")
+    val refusal = "$installed holds no bin/$LAUNCHER: delete it to download kiff 9.9.9 again"
+
+    // Empty, as a copy that stopped short leaves it.
+    systemFileSystem.write(launcher) {}
+    var failure = assertFailsWith<UnavailableVersionException> { versions().install("9.9.9") }
+    assertEquals(refusal, failure.message)
+
+    // A link to nothing, which okio reads as a file on Windows.
+    systemFileSystem.delete(launcher)
+    linkToNothing(launcher)
+    failure = assertFailsWith<UnavailableVersionException> { versions().install("9.9.9") }
+    assertEquals(refusal, failure.message)
+    assertEquals(emptyList(), requests)
   }
 
   @Test
@@ -348,7 +385,7 @@ class InstallVersionTest {
   }
 
   /** Serves [bytes] at [path], with the line sha256sum writes, of [sha256] if given, beside it. */
-  private fun put(path: String, bytes: ByteArray, sha256: String?) {
+  private fun put(path: String, bytes: ByteArray, sha256: String? = null) {
     assets[path] = bytes
     assets["$path.sha256"] =
       "${sha256 ?: sha256(bytes)}  ${path.substringAfterLast('/')}\n".encodeToByteArray()
@@ -370,6 +407,22 @@ class InstallVersionTest {
       "kiff-$version/lib/kiff-cli.jar" to ByteArray(0)
     ) + extra.associateWith { "outside".encodeToByteArray() }
   )
+
+  /** Makes [link] a link to a file that is not there: with mklink on Windows, where okio cannot. */
+  private fun linkToNothing(link: Path) {
+    val target = dir.resolve("nothing")
+    if (!isWindows) {
+      systemFileSystem.createSymlink(link, target)
+      return
+    }
+    val errors = dir.resolve("mklink.errors")
+    val status = runCommand(
+      listOf("cmd.exe", "/d", "/c", "mklink", link.toString(), target.toString()),
+      stdout = dir.resolve("mklink.out"),
+      stderr = errors
+    )
+    assertEquals(0, status, readBytes(errors).decodeToString())
+  }
 
   private fun installed(): List<String> = list(home / "versions")
 

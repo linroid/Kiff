@@ -257,8 +257,7 @@ internal class KiffVersions(
     } else {
       untar(archive, dir.parent!! / "untarred", root, url) / root
     }
-    // A link, which tar may unpack, is no executable either.
-    if (fileSystem.metadataOrNull(files / executable)?.isRegularFile != true) {
+    if (!isLauncher(files / executable)) {
       throw UnavailableVersionException("$url holds no $root/$executable")
     }
     val launcher = dir / "bin" / LAUNCHERS.first()
@@ -274,19 +273,27 @@ internal class KiffVersions(
 
   /**
    * Unpacks the `.tar.gz` [archive] into the new directory [dir] with the system's tar, which keeps
-   * each file's mode, and answers [dir]. It is refused first if any entry is outside [root], and
-   * tar itself does not write through a link it has unpacked.
+   * each file's mode, and answers [dir]. It is refused first if any entry is outside [root], or is
+   * anything but a file or a directory: once unpacked on Windows, a link looks like a file.
    */
   private fun untar(archive: Path, dir: Path, root: String, url: String): Path {
     val listing = archive.parent!! / ".entries"
     tar(url, listing, "-tzf", archive.toString())
-    fileSystem.read(listing) { readUtf8() }.lines()
-      .filter { it.isNotEmpty() }
-      .forEach { checkEntry(it, root, url) }
+    entries(listing).forEach { checkEntry(it, root, url) }
+    // Each tar starts an entry's long line with its type, as ls -l does: - for a file, d for a
+    // directory, l or h for a link. Its name is not read here, as the line's layout differs.
+    tar(url, listing, "-tvzf", archive.toString())
+    entries(listing).firstOrNull { it.first() != '-' && it.first() != 'd' }?.let {
+      throw UnavailableVersionException("$url holds $it, which is neither a file nor a directory")
+    }
     fileSystem.createDirectory(dir)
     tar(url, listing, "-xzf", archive.toString(), "-C", dir.toString())
     return dir
   }
+
+  /** The lines tar listed in [listing], one entry each. */
+  private fun entries(listing: Path): List<String> =
+    fileSystem.read(listing) { readUtf8() }.lines().filter { it.isNotBlank() }
 
   /** Runs tar with [args] and its output in [output], refusing [url] when tar fails. */
   private fun tar(url: String, output: Path, vararg args: String) {
@@ -395,8 +402,25 @@ internal class KiffVersions(
     environment("PATH").orEmpty().split(if (isWindows) ';' else ':')
       .any { it.isNotEmpty() && fileSystem.exists(platformPath(it) / program) }
 
-  private fun launcherIn(dir: Path): Path? = LAUNCHERS.map { dir / "bin" / it }
-    .firstOrNull { fileSystem.metadataOrNull(it)?.isRegularFile == true }
+  private fun launcherIn(dir: Path): Path? =
+    LAUNCHERS.map { dir / "bin" / it }.firstOrNull(::isLauncher)
+
+  /**
+   * Whether [path] is a file with something in it that opens. okio calls a link a file on Windows,
+   * where it holds nothing of its own and, pointing nowhere, does not open.
+   */
+  private fun isLauncher(path: Path): Boolean {
+    val metadata = fileSystem.metadataOrNull(path) ?: return false
+    if (!metadata.isRegularFile || metadata.symlinkTarget != null || metadata.size == 0L) {
+      return false
+    }
+    return try {
+      fileSystem.source(path).close()
+      true
+    } catch (e: IOException) {
+      false
+    }
+  }
 
   /** The first message along [e]'s causes. */
   private fun reason(e: Throwable): String {
