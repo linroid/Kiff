@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests how action/lib.sh finds the release the action was loaded from, against made-up paths and
-# git ls-remote --tags output, so no network or runner is needed.
+# git ls-remote --tags output, and the platform it runs on, so no network or runner is needed.
 set -euo pipefail
 
 # shellcheck source=action/lib.sh
@@ -69,6 +69,19 @@ expect 'A fork' '' "$(action_ref v0.2.0 $actions/someone/Kiff/v0.2.0)"
 expect 'uses: ./' '' "$(action_ref '' /home/runner/work/Kiff/Kiff)"
 expect 'A ref with a checkout for a path' '' "$(action_ref v0.2.0 /home/runner/work/Kiff/Kiff)"
 expect 'A ref that is a pattern' '' "$(action_ref '*' $actions/linroid/kiff/v0.2.0)"
+
+platform() {
+  RUNNER_OS=$1 RUNNER_ARCH=$2 runner_platform
+}
+
+expect 'Linux on x64' linux-x64 "$(platform Linux X64)"
+expect 'Linux on arm64' linux-arm64 "$(platform Linux ARM64)"
+expect 'macOS on Apple silicon' macos-arm64 "$(platform macOS ARM64)"
+expect 'macOS on Intel' macos-x64 "$(platform macOS X64)"
+expect 'Windows on x64' windows-x64 "$(platform Windows X64)"
+expect 'Windows on arm64, which has no executable' '' "$(platform Windows ARM64)"
+expect 'A 32-bit runner' '' "$(platform Linux X86)"
+expect 'No runner' '' "$(platform '' '')"
 
 if ((failures > 0)); then
   exit 1

@@ -66,13 +66,21 @@ val restored = Kiff.applyPatch(source, patch)  // == target, byte for byte
 curl -fsSL https://raw.githubusercontent.com/linroid/kiff/main/install.sh | bash
 ```
 
-That installs the latest release into `~/.kiff` and links `kiff` into `/usr/local/bin`. Give bash
-`KIFF_VERSION` to pin a release, as in `| KIFF_VERSION=X.Y.Z bash`, and `KIFF_INSTALL` to put the
-link somewhere else, such as `$HOME/.local/bin`. kiff runs on Java 17 or newer, which the script
-does not install.
+That installs the latest release's executable for your machine into `~/.kiff` and links `kiff`
+into `/usr/local/bin`. It is one file of about 3 to 4 MB, on Linux or macOS on x64 or arm64, and
+needs nothing else. Give bash `KIFF_VERSION` to pin a release, as in `| KIFF_VERSION=X.Y.Z bash`,
+and `KIFF_INSTALL` to put the link somewhere else, such as `$HOME/.local/bin`. A release without an
+executable for your machine, such as 0.1.0, which has none, is installed from its JVM zip instead,
+which runs on Java 17 or newer; the script says so, and does not install Java.
 
-Without the script, download `kiff-<version>.zip` from the
-[latest release](https://github.com/linroid/kiff/releases/latest), unzip it, and run `bin/kiff`.
+Without the script, download the executable for your platform from the
+[latest release](https://github.com/linroid/kiff/releases/latest): `kiff-<version>-linux-x64`,
+`kiff-<version>-linux-arm64`, `kiff-<version>-macos-arm64`, `kiff-<version>-macos-x64` or
+`kiff-<version>-windows-x64.exe`. Check it against the `.sha256` beside it, rename it `kiff`, make
+it executable, and put it on your `PATH`. macOS refuses a file a browser downloaded until
+`xattr -d com.apple.quarantine kiff` clears the flag, which curl does not set. On any other
+platform, download `kiff-<version>.zip`, the JVM build, unzip it, and run `bin/kiff` with Java 17 or
+newer.
 
 To uninstall, remove the `kiff` link and `~/.kiff`.
 
@@ -397,8 +405,10 @@ became of it:
 | `app-1.3.0.apk` | v1.0.0 | 60.2 MiB | 83.96% | dropped, over max-ratio 0.8 |
 
 The action runs on Linux and macOS runners, with bash, `gh` and `jq`, which hosted runners have. It
-installs Java 17 when the runner has no Java 17 or newer. kiff lets the JVM use up to 6 GiB, which
-fits hosted runners; on a smaller machine, set `KIFF_OPTS` to something like `-Xmx2g`.
+runs the release's executable for the runner, which needs nothing else. A release without one, such
+as 0.1.0, runs from its JVM zip, and a build from source needs a JDK, so then the action installs
+Java 17 when the runner has no Java 17 or newer. The JVM build may use up to 6 GiB, which fits
+hosted runners; on a smaller machine, set `KIFF_OPTS` to something like `-Xmx2g`.
 
 ### Attach the patches before publishing
 
@@ -513,20 +523,20 @@ embedded in a build of the app you update:
 
 A newer Kiff reads every patch an older one wrote, which `FormatVectorsTest` holds each build to,
 so patches from the oldest one apply on every later app as well. Raise `kiff-version` once no app
-you still update embeds anything older. The action downloads exactly that release's
-`kiff-VERSION.zip`, refuses it unless it matches the `kiff-VERSION.zip.sha256` beside it, and runs
-it; a release or zip it cannot download fails the run. It takes a released version such as `0.1.0`
-and refuses a `-SNAPSHOT`. The job summary and the manifest's `generator` say which kiff made the
-patches. As for `kiff --use`, `KIFF_DOWNLOAD_URL` replaces
-`https://github.com/linroid/kiff/releases/download` with a mirror that serves the same two files at
-`vVERSION/kiff-VERSION.zip`.
+you still update embeds anything older. The action downloads exactly that release's executable for
+the runner, `kiff-VERSION-PLATFORM`, or its `kiff-VERSION.zip` when it has none, refuses either
+unless it matches the `.sha256` beside it, and runs it; a release it cannot download fails the run.
+It takes a released version such as `0.1.0` and refuses a `-SNAPSHOT`. The job summary and the
+manifest's `generator` say which kiff made the patches. As for `kiff --use`, `KIFF_DOWNLOAD_URL`
+replaces `https://github.com/linroid/kiff/releases/download` with a mirror that serves the same
+files under `vVERSION/`.
 
 Without `kiff-version`, the action runs the Kiff release tagged at the commit it was loaded from,
 downloaded in the same way: `linroid/kiff@vX.Y.Z` runs kiff X.Y.Z, and so does the commit that
 `vX.Y.Z` names. A ref with no release at its commit, such as a branch, builds the CLI from the
 action's own source first, as `0.0.0-SNAPSHOT`, which adds a few minutes. So does a release whose
-zip cannot be downloaded, as that release's version. Pin the action to a release tag or its commit,
-not a branch. With `kiff-version` set, the action itself can move ahead of your apps, since the
+files cannot be downloaded, as that release's version. Pin the action to a release tag or its
+commit, not a branch. With `kiff-version` set, the action itself can move ahead of your apps, since the
 format comes from the kiff it runs.
 
 ### Updating from the manifest
@@ -883,10 +893,15 @@ A release's version is its tag. Nothing in the source names a version: any build
 `-Pversion` is `0.0.0-SNAPSHOT`, so releasing needs no commit of its own. To release `X.Y.Z`:
 
 1. Tag the commit `vX.Y.Z` and push the tag. A prerelease adds a suffix, as in `vX.Y.Z-rc.1`.
-2. The [release workflow](.github/workflows/release.yml) builds the CLI with `-Pversion=X.Y.Z`,
-   checks that it says `kiff X.Y.Z`, and attaches `kiff-X.Y.Z.zip` and `kiff-X.Y.Z.zip.sha256` to a
-   draft release for the tag. It refuses any other tag and a `-SNAPSHOT`, and can be re-run by hand
-   for an existing tag.
+2. The [release workflow](.github/workflows/release.yml) builds the CLI with `-Pversion=X.Y.Z`
+   through [CLI Binaries](.github/workflows/cli-binaries.yml): an executable each for Linux and
+   Windows on a Linux runner and for macOS on a Mac, stripped, and the JVM zip. Each executable runs
+   on a machine of its own platform, which checks that it says `kiff X.Y.Z`, restores a patch
+   exactly, and hands `kiff --use` over to a release of either kind. It then attaches
+   `kiff-X.Y.Z-linux-x64`, `kiff-X.Y.Z-linux-arm64`, `kiff-X.Y.Z-macos-arm64`,
+   `kiff-X.Y.Z-macos-x64`, `kiff-X.Y.Z-windows-x64.exe` and `kiff-X.Y.Z.zip`, each with a
+   `.sha256`, to a draft release for the tag. It refuses any other tag and a `-SNAPSHOT`, and can be
+   re-run by hand for an existing tag whose source builds the executables.
 3. It then uploads the library, built with the same `-Pversion`, to the Central Portal as a
    deployment. A run started by hand uploads only when told to, since Central takes each version
    once.
@@ -896,7 +911,8 @@ A release's version is its tag. Nothing in the source names a version: any build
    validation, so a failed one shows only there.
 
 To build a release by hand, pass its version the same way, as in
-`./gradlew -Pversion=X.Y.Z :cli:distZip`.
+`./gradlew -Pversion=X.Y.Z :cli:distZip :cli:linkReleaseExecutableMacosArm64`. Pull requests that
+touch the CLI or the library run CLI Binaries too, as `0.0.0-ci`.
 
 The upload needs five repository secrets, the same ones linroid/Ketch uses:
 `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`, a Central Portal user token; and

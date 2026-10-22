@@ -53,6 +53,26 @@ sha256_of() {
   printf '%s' "${line%% *}"
 }
 
+# This runner's platform as a Kiff release names its executables, such as linux-x64, or nothing
+# where a release has none, read from RUNNER_OS and RUNNER_ARCH.
+runner_platform() {
+  local os arch
+  case ${RUNNER_OS:-} in
+    Linux) os=linux ;;
+    macOS) os=macos ;;
+    Windows) os=windows ;;
+    *) return 0 ;;
+  esac
+  case ${RUNNER_ARCH:-} in
+    X64) arch=x64 ;;
+    ARM64) arch=arm64 ;;
+    *) return 0 ;;
+  esac
+  if [[ $os-$arch != windows-arm64 ]]; then
+    printf '%s' "$os-$arch"
+  fi
+}
+
 # The ref the action was loaded from: $1, which action.yml passes from github.action_ref, when the
 # action's path $2 agrees that it is linroid/kiff at that ref; nothing otherwise. The runner keeps
 # a downloaded action in _actions/OWNER/NAME/REF. github.action_ref is empty for uses: ./, and is

@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Puts the kiff CLI that makes the patches on the runner.
+# Puts the kiff CLI that makes the patches on the runner, in two steps around the one that sets up
+# Java, which only the second needs.
 #
-# With KIFF_VERSION set, that is exactly that release of Kiff: the zip its GitHub release
-# attaches, checked against the checksum beside it, or a failure when either is missing. Otherwise
-# it is the action's own version, so the scripts and the CLI come from one commit: the zip of the
-# release tagged at the commit the action was loaded from, or a build of the action's own source
-# when no release is, as with a branch or uses: ./, or when that zip cannot be downloaded.
+#   install-kiff.sh native  decides which Kiff to use and, when its release has an executable for
+#                           this runner, installs that: no Java is needed then.
+#   install-kiff.sh jvm     otherwise installs that release's JVM zip, or builds the action's own
+#                           source when there is no release to install, and both need Java.
+#
+# With KIFF_VERSION set, the Kiff is exactly that release: its executable or its zip, checked
+# against the checksum beside it, or a failure when neither is there. Otherwise it is the action's
+# own version, so the scripts and the CLI come from one commit: the release tagged at the commit the
+# action was loaded from, or a build of the action's own source when no release is, as with a
+# branch or uses: ./, or when its files cannot be downloaded.
 #
 # KIFF_DOWNLOAD_URL replaces https://github.com/linroid/kiff/releases/download, as it does for
-# kiff --use, with a mirror that serves vVERSION/kiff-VERSION.zip and its .sha256.
+# kiff --use, with a mirror that serves vVERSION/ the files a release attaches.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,82 +25,136 @@ root=${GITHUB_ACTION_PATH:?}
 releases=${KIFF_DOWNLOAD_URL:-https://github.com/linroid/kiff/releases/download}
 releases=${releases%/}
 
-# Installs release $1 and sets kiff to its launcher, or sets kiff to nothing and missing to the URL
-# that could not be downloaded. A zip that is not the one its checksum names fails the run.
-install_release() {
-  local version=$1 dir zip url expected actual
+# Downloads $1 to $2 and its checksum beside it, and fails unless they agree. Returns 1, leaving
+# missing set to what could not be downloaded, when either is not there.
+download() {
+  local url=$1 file=$2 expected actual
+  if ! curl -fsSL --retry 3 -o "$file.sha256" "$url.sha256"; then
+    missing=$url.sha256
+    return 1
+  fi
+  if ! curl -fsSL --retry 3 -o "$file" "$url"; then
+    missing=$url
+    return 1
+  fi
+  read -r expected _ < "$file.sha256" || true
+  actual=$(sha256_of "$file")
+  if [[ $actual != "$expected" ]]; then
+    fail "$url has sha256 $actual, but $url.sha256 says ${expected:-nothing}."
+  fi
+}
+
+# Installs the executable of release $1 for this runner and sets kiff to it, or sets kiff to
+# nothing when the release has none.
+install_native() {
+  local version=$1 platform name dir
+  platform=$(runner_platform)
+  if [[ -z $platform ]]; then
+    echo "Kiff releases have no executable for ${RUNNER_OS:-}/${RUNNER_ARCH:-}."
+    kiff=''
+    return 0
+  fi
+  name=kiff-$version-$platform
+  if [[ $platform == windows-* ]]; then
+    name=$name.exe
+  fi
   dir=${RUNNER_TEMP:?}/kiff-cli-$version
-  zip=kiff-$version.zip
-  url=$releases/v$version/$zip
-  kiff=$dir/kiff-$version/bin/kiff
+  kiff=$dir/$name
   if [[ -x $kiff ]]; then
     # An earlier run of the action in this job already installed it.
     return 0
   fi
   mkdir -p "$dir"
-  if ! curl -fsSL --retry 3 -o "$dir/$zip.sha256" "$url.sha256"; then
+  if ! download "$releases/v$version/$name" "$kiff"; then
+    echo "Kiff $version has no executable for $platform at $missing."
     kiff=''
-    missing=$url.sha256
     return 0
   fi
-  if ! curl -fsSL --retry 3 -o "$dir/$zip" "$url"; then
-    kiff=''
-    missing=$url
+  chmod +x "$kiff"
+  echo "Installed kiff $version from $releases/v$version/$name"
+}
+
+# Installs the JVM zip of release $1 and sets kiff to its launcher, or sets kiff to nothing and
+# missing to the URL that could not be downloaded.
+install_zip() {
+  local version=$1 dir zip
+  dir=${RUNNER_TEMP:?}/kiff-cli-$version
+  zip=kiff-$version.zip
+  kiff=$dir/kiff-$version/bin/kiff
+  if [[ -x $kiff ]]; then
     return 0
   fi
-  read -r expected _ < "$dir/$zip.sha256" || true
-  actual=$(sha256_of "$dir/$zip")
-  if [[ $actual != "$expected" ]]; then
-    fail "$url has sha256 $actual, but $url.sha256 says ${expected:-nothing}."
+  mkdir -p "$dir"
+  if ! download "$releases/v$version/$zip" "$dir/$zip"; then
+    kiff=''
+    return 0
   fi
   unzip -q -o "$dir/$zip" -d "$dir"
   if [[ ! -x $kiff ]]; then
-    fail "$url holds no kiff-$version/bin/kiff."
+    fail "$releases/v$version/$zip holds no kiff-$version/bin/kiff."
   fi
-  echo "Installed kiff $version from $url"
+  echo "Installed kiff $version from $releases/v$version/$zip"
+}
+
+# The release of Kiff to use: KIFF_VERSION, or the one tagged where the action was loaded from, or
+# nothing when there is none and the action's own source is built.
+resolve_version() {
+  local ref tags
+  if [[ -n ${KIFF_VERSION:-} ]]; then
+    printf '%s' "$KIFF_VERSION"
+    return 0
+  fi
+  # Nothing in the source says which release it is: only a tag does.
+  ref=$(action_ref "${KIFF_ACTION_REF:-}" "$root")
+  if [[ -z $ref ]]; then
+    echo "The action was not loaded from a ref of linroid/kiff." >&2
+  elif ! tags=$(GIT_TERMINAL_PROMPT=0 git ls-remote --tags https://github.com/linroid/kiff); then
+    notice "Could not list Kiff's tags to find the release at $ref, so the action builds Kiff \
+from source." >&2
+  else
+    release_at "$ref" <<< "$tags"
+  fi
 }
 
 kiff=''
 missing=''
-if [[ -n ${KIFF_VERSION:-} ]]; then
-  version=$KIFF_VERSION
-  install_release "$version"
-  if [[ -z $kiff ]]; then
-    fail "Could not download kiff $version from $missing. kiff-version takes a published Kiff \
-release, and a draft has nothing to download until it is published."
-  fi
-else
-  # Nothing in the source says which release it is: only a tag does.
-  version=''
-  ref=$(action_ref "${KIFF_ACTION_REF:-}" "$root")
-  if [[ -z $ref ]]; then
-    echo "The action was not loaded from a ref of linroid/kiff."
-  elif ! tags=$(GIT_TERMINAL_PROMPT=0 git ls-remote --tags https://github.com/linroid/kiff); then
-    notice "Could not list Kiff's tags to find the release at $ref, so the action builds Kiff \
-from source."
-  else
-    version=$(release_at "$ref" <<< "$tags")
-    if [[ -z $version ]]; then
-      echo "No Kiff release is tagged at linroid/kiff@$ref."
+case ${1:-} in
+  native)
+    version=$(resolve_version)
+    if [[ -n $version ]]; then
+      install_native "$version"
+    elif [[ -z ${KIFF_VERSION:-} ]]; then
+      echo "No Kiff release is tagged where the action was loaded from."
     fi
-  fi
-  if [[ -n $version ]]; then
-    install_release "$version"
+    set_output version "$version"
+    ;;
+  jvm)
+    # The native step's answer, so the tags are listed once.
+    version=${KIFF_RESOLVED:-}
+    kiff=${KIFF_NATIVE:-}
+    if [[ -z $kiff && -n $version ]]; then
+      install_zip "$version"
+      if [[ -z $kiff && -n ${KIFF_VERSION:-} ]]; then
+        fail "Could not download kiff $version from $missing. kiff-version takes a published \
+Kiff release, and a draft has nothing to download until it is published."
+      elif [[ -z $kiff ]]; then
+        notice "Kiff v$version has no CLI at $missing, so the action builds it from source."
+      fi
+    fi
     if [[ -z $kiff ]]; then
-      notice "Kiff v$version has no CLI at $missing, so the action builds it from source."
+      # The source of a release's tag is that release. Anything else is a snapshot.
+      version=${version:-0.0.0-SNAPSHOT}
+      echo "Building kiff $version from $root"
+      "$root/gradlew" -p "$root" --console=plain "-Pversion=$version" :cli:installDist
+      kiff=$root/cli/build/install/kiff/bin/kiff
     fi
-  fi
-  if [[ -z $kiff ]]; then
-    # The source of a release's tag is that release. Anything else is a snapshot.
-    version=${version:-0.0.0-SNAPSHOT}
-    echo "Building kiff $version from $root"
-    "$root/gradlew" -p "$root" --console=plain "-Pversion=$version" :cli:installDist
-    kiff=$root/cli/build/install/kiff/bin/kiff
-  fi
-fi
-
-if [[ ! -x $kiff ]]; then
-  fail "No kiff at $kiff."
-fi
+    if [[ ! -x $kiff ]]; then
+      fail "No kiff at $kiff."
+    fi
+    set_output version "$version"
+    ;;
+  *)
+    fail "install-kiff.sh takes native or jvm, not '${1:-}'."
+    ;;
+esac
 set_output kiff "$kiff"
-set_output version "$version"

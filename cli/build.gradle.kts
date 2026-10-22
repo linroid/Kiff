@@ -57,7 +57,12 @@ kotlin {
       entryPoint = "com.linroid.kiff.cli.main"
       // Only the system libraries kiff calls into: Kotlin/Native also asks for libcrypt.so.1 and
       // others it does not use, which some distributions no longer install.
-      if (target.konanTarget.family == Family.LINUX) linkerOpts("--as-needed")
+      if (target.konanTarget.family == Family.LINUX) {
+        linkerOpts("--as-needed")
+        // A release ships without its symbol table, a quarter of the file. The Apple linker and
+        // the Windows one ignore this, so the release workflow strips those executables itself.
+        if (buildType == NativeBuildType.RELEASE) linkerOpts("-s")
+      }
     }
     // Clikt's clikt-core and clikt-mordant each define selfAndAncestors, so the per-library caches
     // a debug build links on a Linux host clash over it in ld.lld. A release build is compiled

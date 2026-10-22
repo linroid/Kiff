@@ -25,25 +25,17 @@ defaults:
     shell: bash
 
 jobs:
-  cli:
-    name: Attach CLI
+  # The tag is the version: nothing in the source says which release a commit is.
+  version:
+    name: Read the version from the tag
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    permissions: {}
     outputs:
       version: ${{ steps.version.outputs.version }}
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
-      # A manual run takes this workflow from the branch it was started on, but builds the tag.
-      - uses: actions/checkout@v7
-        with:
-          ref: refs/tags/${{ env.TAG }}
-          persist-credentials: false
-
-      # The tag is the version: nothing in the source says which release a commit is.
-      - name: Read the version from the tag
-        id: version
+      - id: version
         run: |
           # The same versions as kiff --use and the action's kiff-version input take.
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
@@ -55,45 +47,56 @@ jobs:
             echo "::error::$TAG names a snapshot, which is not released."
             exit 1
           fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v6
+  # Each platform's executable, run on a machine of that platform, and the JVM zip. A manual run
+  # takes this workflow from the branch it was started on, but builds the tag.
+  cli:
+    name: Build the CLI
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/cli-binaries.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  attach:
+    name: Attach the CLI
+    needs: [ version, cli ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
         with:
-          distribution: temurin
-          java-version: 17
+          name: kiff-cli-release
+          path: dist
 
-      - uses: gradle/actions/setup-gradle@v6
-
-      - name: Build the CLI distribution
-        run: ./gradlew -Pversion="$VERSION" :cli:distZip
-
-      - name: Check the distribution runs
+      - name: Check every file is there
+        working-directory: dist
         run: |
-          zip="cli/build/distributions/kiff-$VERSION.zip"
-          if [[ ! -f "$zip" ]]; then
-            echo "::error::Gradle did not produce $zip from :cli:distZip."
-            exit 1
-          fi
-          unzip -q "$zip" -d "$RUNNER_TEMP/dist"
-          kiff="$RUNNER_TEMP/dist/kiff-$VERSION/bin/kiff"
-          "$kiff" --help
-          said=$("$kiff" --version)
-          if [[ "$said" != "kiff $VERSION" ]]; then
-            echo "::error::The distribution says '$said' to --version, not 'kiff $VERSION'."
-            exit 1
-          fi
-
-      - name: Write the checksum
-        working-directory: cli/build/distributions
-        run: |
-          sha256sum "kiff-$VERSION.zip" > "kiff-$VERSION.zip.sha256"
-          sha256sum --check "kiff-$VERSION.zip.sha256"
+          files=("kiff-$VERSION.zip")
+          for platform in linux-x64 linux-arm64 macos-arm64 macos-x64 windows-x64.exe; do
+            files+=("kiff-$VERSION-$platform")
+          done
+          for file in "${files[@]}"; do
+            if [[ ! -f "$file" || ! -f "$file.sha256" ]]; then
+              echo "::error::The build gave no $file or no $file.sha256."
+              exit 1
+            fi
+          done
+          sha256sum --check ./*.sha256
+          ls -l
 
       # Publishing stays with the maintainer: this only ever creates a draft, and re-runs replace
-      # the files on whatever release the tag already has.
+      # the files on whatever release the tag already has. The executables are attached bare, so
+      # nothing needs unpacking.
       - name: Attach to the release
-        working-directory: cli/build/distributions
+        working-directory: dist
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -101,13 +104,13 @@ jobs:
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --draft --verify-tag --title "$TAG" --generate-notes
           fi
-          gh release upload "$TAG" "kiff-$VERSION.zip" "kiff-$VERSION.zip.sha256" --clobber
+          gh release upload "$TAG" kiff-* --clobber
 
   maven:
     name: Upload to Maven Central
-    # The CLI job reads the version from the tag and refuses a snapshot. A build without
+    # The version job reads the version from the tag and refuses a snapshot. A build without
     # -Pversion is 0.0.0-SNAPSHOT, which would go to Central's snapshot repository instead.
-    needs: cli
+    needs: version
     # A tag always uploads. A manual run uploads only when asked, since it is usually there to
     # rebuild the CLI for a version Central already has.
     if: github.event_name == 'push' || inputs.maven
@@ -118,7 +121,7 @@ jobs:
       contents: read
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
-      VERSION: ${{ needs.cli.outputs.version }}
+      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -160,7 +163,7 @@ jobs:
       - name: Upload the library
         run: |
           if [[ -z "$VERSION" ]]; then
-            echo "::error::The CLI job gave no version for $TAG."
+            echo "::error::The version job gave no version for $TAG."
             exit 1
           fi
           ./gradlew -Pversion="$VERSION" :library:publishToMavenCentral --no-configuration-cache
