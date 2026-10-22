@@ -56,3 +56,26 @@ class TestDexBuilder {
     const val HEADER_SIZE = 112
   }
 }
+
+/**
+ * A `string_ids` table: [rows] offsets of strings 11 to 17 bytes long. With [insertAt], a 64-byte
+ * string goes in at that row, so every offset after it moves by 64.
+ */
+fun stringIdTable(rows: Int, insertAt: Int? = null): ByteArray {
+  val offsets = ArrayList<Int>(rows + 1)
+  var value = 500
+  for (row in 0 until rows) {
+    offsets += value
+    value += 11 + (row % 7)
+  }
+  if (insertAt != null) {
+    val inserted = offsets[insertAt]
+    for (row in insertAt until rows) offsets[row] += 64
+    offsets.add(insertAt, inserted)
+  }
+  val out = ByteArray(offsets.size * 4)
+  for ((row, offset) in offsets.withIndex()) {
+    for (i in 0 until 4) out[row * 4 + i] = ((offset shr (8 * i)) and 0xFF).toByte()
+  }
+  return out
+}

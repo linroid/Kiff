@@ -22,8 +22,11 @@ import kotlin.test.assertEquals
  * whole file, grouped dex files, columns, pairing by ordinal, nesting as deep as a reader goes, and
  * the malformed inputs a format has to leave whole. Equal here means a change left every patch byte
  * for byte as it was, as the format API's move from arrays and `Int` offsets to sources and `Long`
- * ones did. Matching the content lazily did not, by design: it packs the same regions tighter, and
- * the values were captured again for it.
+ * ones did. Two writer changes did not, by design, and the values were captured again for each:
+ * the delta writer copying the long exact stretches inside a DIFF rather than storing zeroes for
+ * them, and the content codec matching lazily, which packs the same regions tighter. The id table
+ * gained an entry with the first: shifted alone, it no longer made taking the dex apart pay, and so
+ * no longer reached columns.
  */
 class ContainerPatchBytesTest {
 
@@ -39,19 +42,19 @@ class ContainerPatchBytesTest {
   private val pinned = mapOf(
     "a registered format, whole" to Pinned(4716, 0x322a2f7eu),
     "a registered format inside a zip" to Pinned(4834, 0xa1790ebau),
-    "a dex, whole" to Pinned(2962, 0x1ac83d4au),
-    "a dex whose id table shifts" to Pinned(302, 0x2d4f1745u),
-    "a dex with an offset near Int.MAX_VALUE" to Pinned(279, 0xeaf19e1eu),
+    "a dex, whole" to Pinned(2871, 0x745d0795u),
+    "a dex whose id table shifts" to Pinned(348, 0xe9b9dd78u),
+    "a dex with an offset near Int.MAX_VALUE" to Pinned(163, 0x3526ff37u),
     "an apk whose dex files are grouped" to Pinned(2741, 0x4a208fc0u),
-    "an apk that loses a dex" to Pinned(1114, 0x6db6e064u),
+    "an apk that loses a dex" to Pinned(1136, 0xe89d86e7u),
     "an apk with ApkFormat registered" to Pinned(44526, 0x3f345dd2u),
     "an apk without DexFormat" to Pinned(43302, 0x6443f734u),
     "a reordered inner archive" to Pinned(323, 0x56148f92u),
-    "an inner archive with edited text" to Pinned(308, 0xd6a38400u),
+    "an inner archive with edited text" to Pinned(307, 0x59589686u),
     "a deflated inner archive" to Pinned(318, 0xe5948d61u),
-    "archives nested eight deep" to Pinned(762, 0x836095bcu),
+    "archives nested eight deep" to Pinned(760, 0x0d6950adu),
     "archives nested twelve deep" to Pinned(11975, 0xeb071b38u),
-    "a zip with a gap before its directory" to Pinned(1155, 0xbb7ca2a8u)
+    "a zip with a gap before its directory" to Pinned(1158, 0x2629c453u)
   )
 
   @Test
@@ -94,8 +97,8 @@ class ContainerPatchBytesTest {
       Case("a dex, whole", dex(seed = 1, codeSize = 60_000), dex(seed = 1, codeSize = 63_000)),
       Case(
         "a dex whose id table shifts",
-        zip { entry("classes.dex", tableDex(firstOffset = 500)) },
-        zip { entry("classes.dex", tableDex(firstOffset = 564)) }
+        zip { entry("classes.dex", tableDex()) },
+        zip { entry("classes.dex", tableDex(insertAt = 20)) }
       ),
       Case(
         "a dex with an offset near Int.MAX_VALUE",
@@ -218,16 +221,10 @@ class ContainerPatchBytesTest {
     .build()
 
   /** A dex whose `string_ids` is a table of offsets that all shift when [firstOffset] does. */
-  private fun tableDex(firstOffset: Int): ByteArray {
-    val table = ByteArray(400 * 4)
-    var value = firstOffset
-    for (row in 0 until 400) {
-      for (i in 0 until 4) table[row * 4 + i] = ((value shr (8 * i)) and 0xFF).toByte()
-      value += 11 + (row % 7)
-    }
-    return TestDexBuilder().section(0x0001, table).section(0x2001, structuredBytes(3_000, 1))
-      .build()
-  }
+  private fun tableDex(insertAt: Int? = null): ByteArray = TestDexBuilder()
+    .section(0x0001, stringIdTable(400, insertAt))
+    .section(0x2001, structuredBytes(3_000, 1))
+    .build()
 
   private fun withMapOffset(dex: ByteArray): ByteArray = dex.copyOf().also {
     for (i in 0 until 4) it[0x34 + i] = (Int.MAX_VALUE ushr (8 * i)).toByte()

@@ -15,36 +15,38 @@ import kotlin.test.assertTrue
 
 class StructureDetectionTest {
 
-  /** A patch Kiff 0.1.0's patchers wrote, unpacked, by size and CRC-32 rather than whole. */
+  /** A patch the pair's patcher writes, unpacked, by size and CRC-32 rather than whole. */
   private class Golden(val name: String, val size: Int, val crc32: UInt)
 
   /**
    * What the patcher each pair names wrote for it before detection existed, with its tree and
    * content unpacked. Equal here means byte for byte the same regions and the same bytes in them,
    * which is everything detection decides; how tightly they pack is the codec's business, and it
-   * has packed them tighter since.
+   * has packed them tighter since. Eight were captured again when the delta writer began copying
+   * the long exact stretches inside a DIFF rather than storing zeroes for them, which detection has
+   * no part in either.
    */
   private val golden = listOf(
     Golden("a rebuilt apk", 10620, 0x47e301bau),
-    Golden("an apk whose classes move between dex files", 60303, 0x6675b6e9u),
-    Golden("an apk that gains a dex", 91459, 0x495ec8d9u),
+    Golden("an apk whose classes move between dex files", 301, 0x756f94c0u),
+    Golden("an apk that gains a dex", 34530, 0x05354812u),
     Golden("an apk from a plain zip", 371706, 0x286a56d4u),
     Golden("an apk from bytes that are no archive", 361275, 0x80bce3d6u),
-    Golden("an edited zip", 12780, 0x2f914edcu),
-    Golden("a zip with a preamble", 58097, 0xd93ac148u),
+    Golden("an edited zip", 11451, 0x053afc53u),
+    Golden("a zip with a preamble", 8203, 0x82574ae6u),
     Golden("a zip that renames an entry", 200, 0x423547abu),
-    Golden("a zip holding a zip and a dex", 78655, 0x214722e6u),
+    Golden("a zip holding a zip and a dex", 5977, 0x6ec6a8e6u),
     Golden("an empty zip that gains an entry", 145, 0x5192db53u),
     Golden("a zip from bytes that are no archive", 32466, 0xcf04b43cu),
     Golden("a zip from an apk", 40255, 0x712e0b10u),
-    Golden("edited bytes", 147988, 0x4a0d7bb0u),
-    Golden("edited text", 31299, 0xff79021au),
+    Golden("edited bytes", 15021, 0xc438b720u),
+    Golden("edited text", 5827, 0xff0b5b9fu),
     Golden("bytes from nothing", 3777, 0x22eb42ddu),
     Golden("nothing from bytes", 28, 0x18eaf84au),
     Golden("nothing from nothing", 27, 0x9d699ff0u),
     Golden("unrelated bytes", 20037, 0x8c6c8c9fu),
     Golden("bytes that only start like a zip", 44, 0xdc23ed8eu),
-    Golden("bytes from a zip", 38108, 0x7b43efc1u)
+    Golden("bytes from a zip", 3966, 0x1a85524au)
   ).associateBy { it.name }
 
   @Test
@@ -53,9 +55,9 @@ class StructureDetectionTest {
     val packed = mutableSetOf<String>()
     for (pair in StructurePairs.all) {
       val patch = Kiff.createPatch(pair.source, pair.target)
-      // Packing the tree is one thing a writer has changed since, and only where it makes the
-      // patch smaller. Matching the content lazily is the other, which packs the same content
-      // tighter. Unpacked, every patch is still exactly the one written then.
+      // Packing the tree changed what a writer writes since, and only where it makes the patch
+      // smaller. Matching the content lazily packs the same content tighter. Unpacked, every patch
+      // is still the pinned one.
       if (Kiff.info(patch).treePacked) {
         packed += pair.name
         assertTrue(patch.size < withStoredTree(patch).size, "${pair.name} was packed for nothing")

@@ -54,7 +54,38 @@ internal class DeltaWriter(
     targetSize += length
   }
 
+  /**
+   * Stores the region as differences from the source, except that a stretch of
+   * [DeltaOp.MIN_COPY_IN_DIFF] bytes or more that equals the source exactly becomes a COPY from the
+   * same place. The reader rebuilds the same bytes either way, but not from a zero per byte.
+   */
   override fun diff(sourceOffset: Long, target: ByteArray, from: Int, to: Int) {
+    if (to - from < DeltaOp.MIN_COPY_IN_DIFF) {
+      writeDiff(sourceOffset, target, from, to)
+      return
+    }
+    // target[i] is read against source[base + i].
+    val base = sourceOffset.toIntIndex("Source offset") - from
+    var start = from
+    var position = from
+    while (position < to) {
+      if (target[position] != source[base + position]) {
+        position++
+        continue
+      }
+      var end = position + 1
+      while (end < to && target[end] == source[base + end]) end++
+      if (end - position >= DeltaOp.MIN_COPY_IN_DIFF) {
+        writeDiff(sourceOffset + (start - from), target, start, position)
+        copy(sourceOffset + (position - from), (end - position).toLong())
+        start = end
+      }
+      position = end
+    }
+    writeDiff(sourceOffset + (start - from), target, start, to)
+  }
+
+  private fun writeDiff(sourceOffset: Long, target: ByteArray, from: Int, to: Int) {
     val length = (to - from).toLong()
     if (length <= 0) return
     flushAdd()
