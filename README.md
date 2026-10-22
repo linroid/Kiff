@@ -634,22 +634,59 @@ and changes neither the node set nor the reader.
 
 A container is taken apart by a `ContainerFormat`, and that is the whole extension point. It is
 public API, kept compatible like the rest, so a format Kiff does not ship, such as an ISO image or
-a DMG, can be added from outside Kiff:
+a DMG, can be added from outside Kiff and registered through `KiffOptions.containers`:
 
 ```kotlin
 class TarFormat : ContainerFormat {
   override val name = "tar"
-  override fun detect(bytes: ByteArray, from: Int, to: Int) = /* magic */
-  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> = /* members */
+
+  // Asked of every region that might be a container, so cheap: one header.
+  override fun detect(input: SeekableSource, from: Long, to: Long): Boolean =
+    to - from >= 512 && isHeader(input.readBytes(from, 512))
+
+  // The members of [from, to), in order, with every byte belonging to exactly one of them.
+  override fun decompose(input: SeekableSource, from: Long, to: Long): List<Child> {
+    val children = mutableListOf<Child>()
+    var at = from
+    while (to - at >= 512) {
+      val header = input.readBytes(at, 512)
+      if (header.all { it == 0.toByte() }) break
+      val size = sizeOf(header)
+      if (size > to - at - 512) return emptyList() // not a tar this can describe
+      val end = minOf(to, at + 512 + (size + 511) / 512 * 512)
+      // The header and the padding are framing; the data is the payload.
+      children += Child(nameOf(header), RegionKind.CONTENT, at, end, at + 512, at + 512 + size)
+      at = end
+    }
+    if (at < to) children += Child("(end of archive)", RegionKind.GAP, at, to)
+    return children
+  }
 }
 
 val options = KiffOptions(containers = NestedContainers + TarFormat())
 val patch = Kiff.createPatch(source, target, options)
+val restored = Kiff.applyPatch(source, patch) // applying never needs to know the format
 ```
+
+A format reads its input through a `SeekableSource`, at 64-bit positions, and reads only what it
+asks for: `readBytes(position, length)` fetches a header, a directory or a table wherever it sits.
+Nothing in the interface assumes the input is in memory or smaller than 2 GB, so a format describes
+an image of many gigabytes by reading a few kilobytes of it, and a `Child` can start past 4 GB.
+A range is `[from, to)` in the coordinates of the whole input: a container found inside another is
+handed the input it sits in rather than a copy of itself, so the offsets it records about itself
+are added to `from`. The complete tar format, with its tests - one of them over a 14 GiB archive
+that exists only as its headers - is in
+[`library/src/commonTest/kotlin/com/example/tar`](library/src/commonTest/kotlin/com/example/tar),
+written against the public API alone.
 
 `NestedContainers` already holds `ZipFormat` and `DexFormat`, so an archive inside an archive, and
 a dex inside either, are taken apart without being asked. The registry is asked about the file as
 a whole too, so a tar is taken apart whether it is the file being patched or inside one.
+
+That registry is all the `kiff` CLI and the GitHub Action know: they take apart zips, APKs and dex
+files, and describe anything else as bytes. A format of your own is for code that calls the
+library, which passes it in `KiffOptions`. A patch built with it still applies anywhere, the CLI
+included, because applying never asks which formats a patch was built with.
 
 Nothing else moves. The patch format does not change, because a decomposed region is more nodes of
 the same four kinds; the reader does not change, because a patch records the structure it used
@@ -666,8 +703,12 @@ one group, and the members are indexed together rather than one at a time.
 
 **The one rule**: children must tile their parent exactly, gaps included. Everything the format does
 not name - a preamble, alignment padding, an APK signing block, a trailer - is still a child, just
-an unnamed one. A patch restores byte for byte only because every byte belongs to something.
-`ContainerFormatTiling.describe(format, bytes)` asserts this; call it from your tests.
+an unnamed one. A patch restores byte for byte only because every byte belongs to something, so
+Kiff does not use children that leave a hole, overlap or run outside their parent: it describes
+the range whole, as if the format had not claimed it. Such a mistake costs patch size and nothing
+else, which also makes it easy to miss, so check for it:
+`ContainerFormatTiling.describe(format, bytes.asSource())` says what is wrong, or returns null when
+the children tile. Call it from your tests, over inputs as awkward as you can make them.
 
 Decomposing is weighed, not assumed. A nested region, or a whole file of any format but a zip, is
 encoded both ways and the bigger result is discarded, so a format that does not pay off costs encode
@@ -812,8 +853,9 @@ JS it ships in a separate artifact.
 
 **Current limit:** the bundled `RollingHashAlgorithm` still indexes a `ByteArray`, so Kiff
 materializes both inputs once before encoding and refuses an input above 2 GB with
-`KiffException.UnsupportedInput`. The format and the algorithm contract address more than that; a
-bounded-memory search is the next piece of work, and it needs no format change when it lands.
+`KiffException.UnsupportedInput`. The format, the algorithm contract and `ContainerFormat` all
+address more than that; a bounded-memory search is the next piece of work, and it needs no format
+change and no API change when it lands.
 
 ## Zip archives
 
