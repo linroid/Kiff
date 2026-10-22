@@ -15,6 +15,9 @@
 #
 # KIFF_DOWNLOAD_URL replaces https://github.com/linroid/kiff/releases/download, as it does for
 # kiff --use, with a mirror that serves vVERSION/ the files a release attaches.
+#
+# The create action runs it too, always with KIFF_VERSION set, and KIFF_VERSION_INPUT naming the
+# input that set it, which is kiff-version here.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -172,8 +175,8 @@ case ${1:-} in
     if [[ -z $kiff && -n $version ]]; then
       install_zip "$version"
       if [[ -z $kiff && -n ${KIFF_VERSION:-} ]]; then
-        fail "Could not download kiff $version from $missing. kiff-version takes a published \
-Kiff release, and a draft has nothing to download until it is published."
+        fail "Could not download kiff $version from $missing. ${KIFF_VERSION_INPUT:-kiff-version} \
+takes a published Kiff release, and a draft has nothing to download until it is published."
       elif [[ -z $kiff ]]; then
         notice "Kiff v$version has no CLI at $missing, so the action builds it from source."
       fi

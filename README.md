@@ -429,7 +429,8 @@ against the new file's SHA-256, and attaches the patches and a `kiff-patches.jso
 release. A project that already attaches its builds to releases adds one workflow, the one in
 [Setting up the GitHub Action](#setting-up-the-github-action). Here and below, `vX.Y.Z` stands for
 the latest Kiff release, which the Release badge above shows. Pin that exact tag, or the commit it
-names, rather than a branch.
+names, rather than a branch. To create one patch between two files a job already has, without
+GitHub releases, use the [create action](#create-a-single-patch) instead.
 
 Publishing `v1.3.0` with `app-1.3.0.apk` then attaches a patch from each of the three releases
 before it, such as `app-1.3.0.apk.from-v1.2.0.kiff`, and the manifest. The job summary names the
@@ -611,6 +612,51 @@ declare gigabytes of target, and the declared size is what a restore writes and 
 there is no such patch, because the installed version is too old, was dropped for size or the
 release has no manifest, it downloads the full file from `url` instead. It does the same when
 applying refuses the patch, as Kiff 0.1 and 0.2 refuse one whose tree is packed.
+
+### Create a single patch
+
+The action in this repository's `create` directory creates one patch from two files on the runner,
+with `kiff create`, which reads each file the way [the library](#how-structure-is-detected) does. It
+needs no GitHub release, so the files can come from a build, a download or a cache:
+
+```yaml
+- uses: linroid/kiff/create@v1
+  id: patch
+  with:
+    base: build/old/app.apk        # the file the patch starts from
+    target: build/new/app.apk      # the file the patch rebuilds
+    # version: 1.0.0               # optional: Kiff release to use; default = latest release
+    # output: patches/app.kiff     # optional: default = "<target>.kiff" next to the target
+- run: echo "$PATCH"
+  env:
+    PATCH: ${{ steps.patch.outputs.patch }}
+```
+
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `base` | required | Path of the file the patch starts from, relative to the workspace |
+| `target` | required | Path of the file the patch rebuilds, relative to the workspace |
+| `version` | the latest release | Released Kiff to create the patch with, such as `1.0.0` or `v1.0.0` |
+| `output` | `<target>.kiff` | Path to write the patch to; missing directories are created |
+
+| Output | Meaning |
+| --- | --- |
+| `patch` | Path of the patch, relative to the workspace unless `output` was absolute |
+| `size` | Size of the patch in bytes |
+| `ratio` | Size of the patch divided by the size of the target, rounded to four places |
+| `kiff-version` | Version of the Kiff that created the patch |
+
+The action fails before downloading anything when `base` or `target` is not a regular file, when
+`output` is either of them, or when `version` is not a released version. It installs Kiff as the
+release action does, with the same checksums, Java fallback and `KIFF_DOWNLOAD_URL`, runs on Linux
+and macOS runners, and lists the three files' sizes and the Kiff it ran in the job summary.
+
+Pin `version` to the oldest Kiff embedded in the apps that will apply the patch, for the reason
+[Versions](#versions) gives for `kiff-version`: that Kiff reads the patch, and refuses a format
+newer than it knows. Left empty, `version` is the latest published release, which
+`https://github.com/linroid/kiff/releases/latest` names, so it never picks a draft or a prerelease
+but changes with every Kiff release. Kiff 0.1.0 reads every file as plain bytes here, since its
+`create` compares structure only when asked to.
 
 
 ## How a patch is built
