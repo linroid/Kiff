@@ -3,7 +3,7 @@ package com.linroid.kiff.apk
 import com.linroid.kiff.region.RegionReport
 
 /** What the entries of one kind cost in a patch. */
-data class ApkKindCost(
+public data class ApkKindCost(
   val kind: ApkEntryKind,
   /** Entries of this kind in the target archive. */
   val entryCount: Int,
@@ -28,7 +28,7 @@ data class ApkKindCost(
  * what the change cost, which is not the same thing - a large entry can change and still be nearly
  * free, and a small one can be expensive.
  */
-data class ApkPatchReport(
+public data class ApkPatchReport(
   /** The underlying region-by-region attribution. */
   val regions: RegionReport,
   /** Entry kinds, most expensive first. */

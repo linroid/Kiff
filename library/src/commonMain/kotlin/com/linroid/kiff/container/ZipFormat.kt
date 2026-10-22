@@ -14,8 +14,15 @@ import kotlin.math.abs
  * carries a preamble, builds pad for alignment, and an APK keeps its signing block in the unnamed
  * run before the central directory. All of it has to be named for a patch to restore, so all of it
  * is a child.
+ *
+ * [groupOf] names the group an entry belongs to, by its name, for [ApkFormat]; a plain zip knows
+ * of none.
  */
-open class ZipFormat : ContainerFormat {
+public class ZipFormat internal constructor(
+  private val groupOf: (name: String) -> String?
+) : ContainerFormat {
+
+  public constructor() : this({ null })
 
   override val name: String get() = "zip"
 
@@ -70,9 +77,6 @@ open class ZipFormat : ContainerFormat {
     }
   }
 
-  /** Entries content migrates between; a plain zip knows of none. */
-  protected open fun groupOf(name: String): String? = null
-
   private fun labelOfGap(key: ZipGapKey): String = when {
     key.beforeDirectory -> BEFORE_DIRECTORY
     key.afterEntry == null -> PREAMBLE
@@ -88,7 +92,7 @@ open class ZipFormat : ContainerFormat {
   /** What makes two entries the same content without comparing their bytes. */
   private data class ContentKey(val crc32: UInt, val compressedSize: Int, val method: Int)
 
-  companion object {
+  internal companion object {
     const val CENTRAL_DIRECTORY = "(central directory)"
     const val PREAMBLE = "(preamble)"
 
@@ -107,10 +111,20 @@ open class ZipFormat : ContainerFormat {
  * A build that gains or loses a dex renumbers the rest, so `classes4.dex` can have no counterpart
  * by name and no counterpart by content, and still be far closer to the source's highest-numbered
  * dex than to nothing at all.
+ *
+ * It reads an APK exactly as [ZipFormat] reads any zip, and adds only its grouping and pairing of
+ * dex files.
  */
-class ApkFormat : ZipFormat() {
+public class ApkFormat : ContainerFormat {
+
+  private val zip = ZipFormat(::groupOf)
 
   override val name: String get() = "apk"
+
+  override fun detect(bytes: ByteArray, from: Int, to: Int): Boolean = zip.detect(bytes, from, to)
+
+  override fun decompose(bytes: ByteArray, from: Int, to: Int): List<Child> =
+    zip.decompose(bytes, from, to)
 
   /**
    * Every dex is one group.
@@ -120,7 +134,7 @@ class ApkFormat : ZipFormat() {
    * changing nothing else. Searching each dex only against the dex of the same name cannot find
    * any of it.
    */
-  override fun groupOf(name: String): String? =
+  private fun groupOf(name: String): String? =
     if (ApkEntries.dexOrdinal(name) != null) DEX_GROUP else null
 
   override fun pairUnmatched(target: Child, source: List<Child>): Child? {

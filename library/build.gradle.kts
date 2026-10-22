@@ -12,6 +12,9 @@ plugins {
 }
 
 kotlin {
+  // Every public declaration says so, so nothing joins the API by leaving out `internal`.
+  explicitApi()
+
   jvm()
 
   iosArm64()

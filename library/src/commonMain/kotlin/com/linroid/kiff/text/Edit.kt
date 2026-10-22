@@ -1,7 +1,7 @@
 package com.linroid.kiff.text
 
-sealed class Edit {
-  data class Insert(val position: Int, val lines: List<String>) : Edit()
-  data class Delete(val position: Int, val count: Int) : Edit()
-  data class Equal(val position: Int, val count: Int) : Edit()
+public sealed class Edit {
+  public data class Insert(val position: Int, val lines: List<String>) : Edit()
+  public data class Delete(val position: Int, val count: Int) : Edit()
+  public data class Equal(val position: Int, val count: Int) : Edit()
 }

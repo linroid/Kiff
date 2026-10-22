@@ -22,4 +22,4 @@ import com.linroid.kiff.container.ZipFormat
  * as one opaque leaf is more nodes of the same four kinds, so a decoder that has never heard of
  * tar still applies the patch.
  */
-val NestedContainers: ContainerRegistry = ContainerRegistry(ZipFormat(), DexFormat())
+public val NestedContainers: ContainerRegistry = ContainerRegistry(ZipFormat(), DexFormat())

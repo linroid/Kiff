@@ -1,6 +1,6 @@
 package com.linroid.kiff.zip
 
-data class ZipEntryChange(
+public data class ZipEntryChange(
   val name: String,
   val status: ZipEntryStatus,
   /** Compressed size in the source archive, or 0 when the entry is new. */
@@ -12,14 +12,14 @@ data class ZipEntryChange(
 )
 
 /** Entry-level summary of what differs between two archives. */
-data class ZipDiffReport(
+public data class ZipDiffReport(
   val changes: List<ZipEntryChange>,
   val sourceSize: Int,
   val targetSize: Int
 ) {
-  fun count(status: ZipEntryStatus): Int = changes.count { it.status == status }
+  public fun count(status: ZipEntryStatus): Int = changes.count { it.status == status }
 
-  fun bytes(status: ZipEntryStatus): Long = changes
+  public fun bytes(status: ZipEntryStatus): Long = changes
     .filter { it.status == status }
     .sumOf { (if (status == ZipEntryStatus.REMOVED) it.sourceSize else it.targetSize).toLong() }
 

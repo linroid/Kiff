@@ -10,13 +10,13 @@ package com.linroid.kiff.delta
  * A sink describes the target in order. The regions passed to [add], [copy], [diff] and [run] must
  * tile `target[from, to)` exactly, with no gap and no overlap, or the patch will not restore.
  */
-interface DeltaSink {
+public interface DeltaSink {
 
   /** Literal bytes that could not be found in the source. */
-  fun add(bytes: ByteArray, from: Int = 0, to: Int = bytes.size)
+  public fun add(bytes: ByteArray, from: Int = 0, to: Int = bytes.size)
 
   /** A run of [length] bytes copied verbatim from the source at [sourceOffset]. */
-  fun copy(sourceOffset: Long, length: Long)
+  public fun copy(sourceOffset: Long, length: Long)
 
   /**
    * A region that *almost* matches the source: the sink stores `target - source`, byte by byte,
@@ -26,8 +26,8 @@ interface DeltaSink {
    * embedded offsets shifted, say. The differences are mostly zero and collapse in the literal
    * stream, where the same region emitted through [add] would not compress at all.
    */
-  fun diff(sourceOffset: Long, target: ByteArray, from: Int = 0, to: Int = target.size)
+  public fun diff(sourceOffset: Long, target: ByteArray, from: Int = 0, to: Int = target.size)
 
   /** [length] repetitions of a single byte. */
-  fun run(value: Byte, length: Long)
+  public fun run(value: Byte, length: Long)
 }

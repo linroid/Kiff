@@ -3,7 +3,7 @@ package com.linroid.kiff.delta
 import com.linroid.kiff.io.SeekableSource
 
 /** Describes target regions against the source range its [DeltaAlgorithm] indexed. */
-interface DeltaScanner : AutoCloseable {
+public interface DeltaScanner : AutoCloseable {
 
   /**
    * Describes `target[from, to)` by driving [sink].
@@ -12,7 +12,7 @@ interface DeltaScanner : AutoCloseable {
    *   [from]; an archive entry passes the offset of the matching entry so a changed entry can start
    *   out aligned. Pass 0 when nothing is known.
    */
-  fun scan(
+  public fun scan(
     target: SeekableSource,
     from: Long,
     to: Long,

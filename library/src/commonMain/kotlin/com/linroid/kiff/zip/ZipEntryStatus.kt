@@ -1,6 +1,6 @@
 package com.linroid.kiff.zip
 
-enum class ZipEntryStatus {
+public enum class ZipEntryStatus {
   /** Byte-identical local record, header included. */
   UNCHANGED,
 

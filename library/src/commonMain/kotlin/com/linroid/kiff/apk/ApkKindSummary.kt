@@ -1,6 +1,6 @@
 package com.linroid.kiff.apk
 
-data class ApkKindSummary(
+public data class ApkKindSummary(
   val kind: ApkEntryKind,
   /** Entries of this kind in the target archive. */
   val entryCount: Int,

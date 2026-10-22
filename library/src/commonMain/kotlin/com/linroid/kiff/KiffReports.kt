@@ -23,21 +23,22 @@ import com.linroid.kiff.zip.analyzeArchives
  * can change and still be nearly free, and a small one can be expensive - and has to build the
  * patch to answer it.
  */
-object KiffReports {
+public object KiffReports {
 
   /**
    * Reports what changed between two zip archives, entry by entry.
    *
    * @throws KiffException.UnsupportedInput if either input is not a readable zip archive.
    */
-  fun zip(source: ByteArray, target: ByteArray): ZipDiffReport = analyzeArchives(source, target)
+  public fun zip(source: ByteArray, target: ByteArray): ZipDiffReport =
+    analyzeArchives(source, target)
 
   /**
    * Reports what changed between two Android packages, entry by entry and grouped by kind.
    *
    * @throws KiffException.UnsupportedInput if either input is not a readable zip archive.
    */
-  fun apk(source: ByteArray, target: ByteArray): ApkDiffReport = analyzeApk(source, target)
+  public fun apk(source: ByteArray, target: ByteArray): ApkDiffReport = analyzeApk(source, target)
 
   /**
    * Builds the patch [Kiff.createPatch] would, and reports where its bytes went, region by region.
@@ -46,7 +47,7 @@ object KiffReports {
    * single whole, so every patch can say what each of its regions cost. A region's cost is only
    * known once it has been described, so this does the full encode; the patch is discarded.
    */
-  fun explain(
+  public fun explain(
     source: ByteArray,
     target: ByteArray,
     options: KiffOptions = KiffOptions()
@@ -58,7 +59,7 @@ object KiffReports {
    * Entry kinds are what makes the attribution actionable: knowing a patch is 80% dex says which
    * part of the encoder is worth work, where a list of entry names does not.
    */
-  fun explainApk(
+  public fun explainApk(
     source: ByteArray,
     target: ByteArray,
     options: KiffOptions = KiffOptions()
@@ -68,10 +69,10 @@ object KiffReports {
    * True when [bytes] is a zip archive that carries an `AndroidManifest.xml`: what
    * [Kiff.createPatch] takes for an APK.
    */
-  fun isApk(bytes: ByteArray): Boolean = looksLikeApk(bytes)
+  public fun isApk(bytes: ByteArray): Boolean = looksLikeApk(bytes)
 
   /** The kind of entry [entryName] is in an Android package, as [apk] groups them. */
-  fun apkEntryKind(entryName: String): ApkEntryKind = ApkEntries.kindOf(entryName)
+  public fun apkEntryKind(entryName: String): ApkEntryKind = ApkEntries.kindOf(entryName)
 
   /** [explain], with [structure] in place of detection when it is given. */
   internal fun explainAs(

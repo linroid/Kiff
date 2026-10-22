@@ -19,7 +19,7 @@ import com.linroid.kiff.region.RegionKind
  * have to be understood, which is what keeps this a description of the layout rather than a second
  * implementation of the format.
  */
-class DexFormat : ContainerFormat {
+public class DexFormat : ContainerFormat {
 
   override val name: String get() = "dex"
 

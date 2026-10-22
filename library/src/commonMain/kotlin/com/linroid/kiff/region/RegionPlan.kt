@@ -8,7 +8,7 @@ package com.linroid.kiff.region
  * manifest in an archive can be diffed as lines while the native library beside it is diffed as
  * bytes, in the same patch.
  */
-enum class RegionAlgorithm {
+public enum class RegionAlgorithm {
   /** The delta instruction set: a byte-level search over the source. Suits anything. */
   BINARY,
 
@@ -20,7 +20,7 @@ enum class RegionAlgorithm {
 }
 
 /** What a planner is told about a region before it chooses. */
-data class RegionInfo(
+public data class RegionInfo(
   /** Entry name, or a bracketed label for a region the format does not name. */
   val name: String,
   val kind: RegionKind,
@@ -44,14 +44,14 @@ data class RegionInfo(
  * [RegionAlgorithm.RAW] when the encoding it asked for came out larger than the bytes themselves,
  * so a bad guess costs size it could not have saved rather than a bigger patch.
  */
-fun interface RegionPlanner {
-  fun plan(region: RegionInfo): RegionAlgorithm
+public fun interface RegionPlanner {
+  public fun plan(region: RegionInfo): RegionAlgorithm
 }
 
 /**
  * Byte-level for everything, which is how every region was described before regions could choose.
  */
-val BinaryRegionPlanner: RegionPlanner = RegionPlanner { RegionAlgorithm.BINARY }
+public val BinaryRegionPlanner: RegionPlanner = RegionPlanner { RegionAlgorithm.BINARY }
 
 /**
  * Line-level for regions that look like text and are small enough to be worth it, byte-level
@@ -61,7 +61,7 @@ val BinaryRegionPlanner: RegionPlanner = RegionPlanner { RegionAlgorithm.BINARY 
  * lines, so it is the wrong tool for a large region however text-like it looks; past the cap the
  * byte-level search is both faster and, on that much data, usually smaller too.
  */
-val TextAwareRegionPlanner: RegionPlanner = RegionPlanner { region ->
+public val TextAwareRegionPlanner: RegionPlanner = RegionPlanner { region ->
   val withinCap = region.targetBytes <= TEXT_REGION_LIMIT && region.sourceBytes <= TEXT_REGION_LIMIT
   if (region.looksLikeText && withinCap && region.sourceBytes > 0) {
     RegionAlgorithm.TEXT
@@ -71,4 +71,4 @@ val TextAwareRegionPlanner: RegionPlanner = RegionPlanner { region ->
 }
 
 /** Largest region [TextAwareRegionPlanner] will hand to the line search. */
-const val TEXT_REGION_LIMIT: Long = 1L shl 20
+internal const val TEXT_REGION_LIMIT: Long = 1L shl 20

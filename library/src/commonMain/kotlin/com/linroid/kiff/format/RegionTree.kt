@@ -9,7 +9,7 @@ import com.linroid.kiff.KiffException
  * the code rather than assuming every region speaks the delta instruction set. Codes are part of
  * the patch format and never change meaning.
  */
-enum class RegionEncoding(internal val code: Int) {
+public enum class RegionEncoding(internal val code: Int) {
   /** Children tile this region's target range, in order. */
   COMPOSITE(0),
 

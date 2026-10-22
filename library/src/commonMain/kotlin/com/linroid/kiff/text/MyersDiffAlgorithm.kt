@@ -13,8 +13,8 @@ package com.linroid.kiff.text
  * Within each run of changes, deletions come before insertions, which is the order unified diffs
  * print them in.
  */
-class MyersDiffAlgorithm : LineDiffAlgorithm {
-  override val name = "myers"
+public class MyersDiffAlgorithm : LineDiffAlgorithm {
+  override val name: String = "myers"
 
   override fun diff(source: List<String>, target: List<String>): List<Edit> =
     checkNotNull(Search(source, target).run(Int.MAX_VALUE)) { "an unbounded search always ends" }

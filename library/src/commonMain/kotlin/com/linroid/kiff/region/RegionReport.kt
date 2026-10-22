@@ -9,7 +9,7 @@ import com.linroid.kiff.format.RegionEncoding
  * both [CONTENT], a central directory and a dex map list are both [INDEX]. A container format that
  * carves a new kind of file up reuses these rather than inventing its own.
  */
-enum class RegionKind {
+public enum class RegionKind {
   /** Payload the format names: a zip entry's record, a dex section's items. */
   CONTENT,
 
@@ -31,7 +31,7 @@ enum class RegionKind {
  * copied wholesale still costs a COPY instruction - a few bytes - which is why cheap is not free,
  * and why an archive of many unchanged entries has a floor no delta algorithm can go below.
  */
-data class RegionCost(
+public data class RegionCost(
   val name: String,
   val kind: RegionKind,
   /**
@@ -62,7 +62,7 @@ data class RegionCost(
   val patchBytes: Long get() = instructionBytes + literalBytes
 
   /** This region and everything below it, deepest last. */
-  fun flatten(): List<RegionCost> = buildList {
+  public fun flatten(): List<RegionCost> = buildList {
     add(this@RegionCost)
     for (child in children) addAll(child.flatten())
   }
@@ -85,7 +85,7 @@ data class RegionCost(
  * [patchSize]. What they are for is the shape of the distribution - which parts of a file a patch
  * is actually spent on - not an exact accounting of the compressed bytes.
  */
-data class RegionReport(
+public data class RegionReport(
   val regions: List<RegionCost>,
   val targetSize: Long,
   val patchSize: Long
@@ -114,7 +114,7 @@ data class RegionReport(
     get() = allRegions.filter { it.children.isEmpty() && it.literalBytes > 0 }
       .sortedByDescending { it.patchBytes }
 
-  fun bytes(kind: RegionKind): Long =
+  public fun bytes(kind: RegionKind): Long =
     regions.filter { it.kind == kind }.sumOf { it.patchBytes }
 }
 

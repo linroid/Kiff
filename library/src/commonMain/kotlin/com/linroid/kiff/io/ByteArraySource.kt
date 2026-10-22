@@ -1,7 +1,7 @@
 package com.linroid.kiff.io
 
 /** A [SeekableSource] over bytes already in memory. */
-class ByteArraySource(internal val bytes: ByteArray) : SeekableSource {
+public class ByteArraySource(internal val bytes: ByteArray) : SeekableSource {
 
   override val size: Long get() = bytes.size.toLong()
 
@@ -15,4 +15,4 @@ class ByteArraySource(internal val bytes: ByteArray) : SeekableSource {
 }
 
 /** Wraps these bytes as a [SeekableSource] without copying them. */
-fun ByteArray.asSource(): SeekableSource = ByteArraySource(this)
+public fun ByteArray.asSource(): SeekableSource = ByteArraySource(this)

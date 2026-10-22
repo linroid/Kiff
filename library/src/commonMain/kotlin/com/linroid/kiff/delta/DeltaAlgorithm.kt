@@ -15,10 +15,10 @@ import com.linroid.kiff.io.SeekableSource
  * An algorithm prepares a [DeltaScanner] over a source range once, and Kiff reuses a single scanner
  * across many target regions, so whatever index the search needs is built one time.
  */
-interface DeltaAlgorithm {
+public interface DeltaAlgorithm {
 
   /** Short identifier, for diagnostics; it is not recorded in the patch. */
-  val name: String
+  public val name: String
 
   /**
    * Prepares a scanner that describes target regions against `source[from, to)`.
@@ -26,5 +26,5 @@ interface DeltaAlgorithm {
    * Only that range need be indexed, but a match may reach anywhere in [source], so an archive
    * entry can be indexed alone and still emit copies pointing outside it.
    */
-  fun scanner(source: SeekableSource, from: Long = 0, to: Long = source.size): DeltaScanner
+  public fun scanner(source: SeekableSource, from: Long = 0, to: Long = source.size): DeltaScanner
 }
