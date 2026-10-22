@@ -111,12 +111,25 @@ done <<< "${INPUT_FROM:-}"
 work=$(mktemp -d "${RUNNER_TEMP:?}/kiff-release.XXXXXX")
 
 # The API lists drafts only to a token that can write to the repository, which is why the release
-# is looked for in the list rather than fetched by its tag.
-if ! gh api --paginate "repos/$repo/releases?per_page=100" \
-  --jq '.[] | {id, tag: .tag_name, draft, prerelease, assets: [.assets[] | {id, name, size}]}' \
-  > "$work/releases.jsonl"; then
-  fail "Could not list the releases of $repo."
-fi
+# is looked for in the list rather than fetched by its tag. Now and then the list leaves out
+# releases that are there, so one without a tag the inputs name is fetched again, after a pause,
+# before that tag counts as missing.
+for pause in 2 4 8 ''; do
+  if ! gh api --paginate "repos/$repo/releases?per_page=100" \
+    --jq '.[] | {id, tag: .tag_name, draft, prerelease, assets: [.assets[] | {id, name, size}]}' \
+    > "$work/releases.jsonl"; then
+    fail "Could not list the releases of $repo."
+  fi
+  absent=$(jq -rs '
+    [.[].tag] as $listed | [$ARGS.positional[] | select(IN($listed[]) | not)] | join(", ")
+  ' "$work/releases.jsonl" --args "$tag" ${froms[@]+"${froms[@]}"})
+  if [[ -z $absent || -z $pause ]]; then
+    break
+  fi
+  echo "The listing of $repo has $(jq -s length "$work/releases.jsonl") releases and leaves out \
+$absent, so it is fetched again in ${pause}s."
+  sleep "$pause"
+done
 
 # The release, and the published releases before it in version order, closest first. A tag that
 # reads as a version is only compared with others that do; any other is compared naturally.
