@@ -8,6 +8,8 @@ import com.linroid.kiff.format.RegionEncoding
  * The vocabulary is deliberately format-neutral: a zip entry's record and a dex section's items are
  * both [CONTENT], a central directory and a dex map list are both [INDEX]. A container format that
  * carves a new kind of file up reuses these rather than inventing its own.
+ *
+ * A minor release may add a kind, so a `when` over these keeps an `else` branch.
  */
 public enum class RegionKind {
   /** Payload the format names: a zip entry's record, a dex section's items. */

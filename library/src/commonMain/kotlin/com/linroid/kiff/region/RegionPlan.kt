@@ -7,6 +7,8 @@ package com.linroid.kiff.region
  * regions *are*; a plan decides, per region, which encoding suits the bytes inside it - so the
  * manifest in an archive can be diffed as lines while the native library beside it is diffed as
  * bytes, in the same patch.
+ *
+ * A minor release may add a choice, so a `when` over these keeps an `else` branch.
  */
 public enum class RegionAlgorithm {
   /** The delta instruction set: a byte-level search over the source. Suits anything. */

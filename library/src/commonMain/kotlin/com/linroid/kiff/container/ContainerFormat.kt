@@ -56,7 +56,11 @@ public interface ContainerFormat {
   public fun pairUnmatched(target: Child, source: List<Child>): Child? = null
 }
 
-/** How a child's payload is stored inside its container. */
+/**
+ * How a child's payload is stored inside its container.
+ *
+ * A minor release may add an entry, so a `when` over these keeps an `else` branch.
+ */
 public enum class Storage {
   /** Payload bytes are the real bytes: they can be compared, and recursed into. */
   STORED,

@@ -6,6 +6,9 @@ package com.linroid.kiff
  * Kiff picks it from the target, and reads it back as [PatchInfo.patcher] for display. Nothing in
  * a patch's payload depends on it, so it never decides how a patch is applied. Version 1 of the
  * format has these three codes, and a reader refuses any other.
+ *
+ * A later format version may add a code, and the minor release that reads it adds an entry here,
+ * so a `when` over these keeps an `else` branch.
  */
 public enum class PatcherId(public val code: Int) {
   BINARY(1),

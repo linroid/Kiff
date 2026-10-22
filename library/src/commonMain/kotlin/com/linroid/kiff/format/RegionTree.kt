@@ -8,6 +8,9 @@ import com.linroid.kiff.KiffException
  * This is what lets regions nest and lets a leaf choose its own encoding: the reader dispatches on
  * the code rather than assuming every region speaks the delta instruction set. Codes are part of
  * the patch format and never change meaning.
+ *
+ * A later format version may add an encoding, and the minor release that reads it adds an entry
+ * here, so a `when` over these keeps an `else` branch.
  */
 public enum class RegionEncoding(internal val code: Int) {
   /** Children tile this region's target range, in order. */
