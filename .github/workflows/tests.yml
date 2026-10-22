@@ -47,9 +47,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      # jvmTest matches only the library: the CLI is a plain JVM project, whose tests are :cli:test.
-      - name: Run JVM and CLI tests
-        run: ./gradlew jvmTest :cli:test
+      # The library's and the CLI's, whose --use tests download through curl from a local server.
+      - name: Run JVM tests
+        run: ./gradlew jvmTest
 
       - name: Upload test results
         if: always()
@@ -126,6 +126,70 @@ jobs:
         with:
           name: test-results-linux
           path: '**/build/test-results/**/TEST-*.xml'
+
+  # Kotlin/Native builds for Linux arm64 and Windows from here, and each test executable is then run
+  # on a machine of its own platform, which needs nothing installed.
+  cross-native-tests:
+    name: Build Linux arm64 and Windows Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Link the test executables
+        run: ./gradlew linkDebugTestLinuxArm64 linkDebugTestMingwX64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-test-executables
+          path: |
+            */build/bin/linuxArm64/debugTest/test.kexe
+            */build/bin/mingwX64/debugTest/test.exe
+          if-no-files-found: error
+
+  linux-arm64-tests:
+    name: Linux arm64 Native Tests
+    needs: cross-native-tests
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-test-executables
+
+      - name: Run the library's and the CLI's tests
+        run: |
+          set -e
+          for test in */build/bin/linuxArm64/debugTest/test.kexe; do
+            echo "::group::$test"
+            chmod +x "$test"
+            "$test"
+            echo "::endgroup::"
+          done
+
+  windows-tests:
+    name: Windows Native Tests
+    needs: cross-native-tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-test-executables
+
+      - name: Run the library's and the CLI's tests
+        shell: bash
+        run: |
+          set -e
+          for test in */build/bin/mingwX64/debugTest/test.exe; do
+            echo "::group::$test"
+            "./$test"
+            echo "::endgroup::"
+          done
 
   macos-tests:
     name: macOS Native Tests
