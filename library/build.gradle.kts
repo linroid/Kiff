@@ -1,6 +1,7 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinMultiplatform
 import java.util.concurrent.Callable
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
   alias(libs.plugins.kotlin.multiplatform)
@@ -14,6 +15,14 @@ plugins {
 kotlin {
   // Every public declaration says so, so nothing joins the API by leaving out `internal`.
   explicitApi()
+
+  // The API as callers compile against it - the JVM classes and each target's klib - is recorded
+  // in api/, and `check` fails when the code no longer matches the record. A change that is meant
+  // is recorded with `updateKotlinAbi`; AGENTS.md says when that is a breaking one. Apple targets
+  // only compile on a Mac, so elsewhere their part of the record is carried over rather than
+  // checked: CI checks on macOS.
+  @OptIn(ExperimentalAbiValidation::class)
+  abiValidation()
 
   jvm()
 

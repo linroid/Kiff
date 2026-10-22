@@ -32,6 +32,8 @@ Use the Gradle wrapper and JDK 17, matching CI.
 - `./gradlew publishToMavenLocal` publishes artifacts locally for integration testing.
 - Builds are `0.0.0-SNAPSHOT` unless given `-Pversion=X.Y.Z`, which the release workflow takes
   from the `vX.Y.Z` tag. Never put a version in `gradle.properties` or commit a version bump.
+- `./gradlew :library:checkKotlinAbi` checks the library's public API against `library/api/`;
+  `check` runs it too. See [Public API](#public-api).
 
 ## Coding Style & Naming Conventions
 
@@ -51,10 +53,34 @@ exactly; verify this with `ContainerFormatTiling.describe`.
 Preserve `FormatVectorsTest` compatibility vectors. Intentional format changes require updating
 `FORMAT.md` and considering versioning and support for previously released patches.
 
+## Public API
+
+The library is in explicit API mode: a declaration callers may use says `public`, and anything else
+is `internal` or narrower. `library/api/` records that API as callers compile against it:
+`library.api` for the JVM classes, `library.klib.api` for every other target. `checkKotlinAbi`
+fails when the code no longer matches the record, and the Tests workflow runs it on macOS.
+
+To change the API on purpose, make the change, run `./gradlew :library:updateKotlinAbi`, and
+commit the updated dumps with it. Run it on macOS: only a Mac compiles the Apple targets, and
+elsewhere their part of the dump is carried over from the old one rather than regenerated.
+
+Review the dump's diff before committing it. Added lines are compatible. A removed or changed line
+breaks callers built against the last release, and within 1.x it needs keeping the old declaration,
+usually as a `@Deprecated(level = DeprecationLevel.HIDDEN)` overload. Some breaks look like
+additions: a new parameter, even with a default, changes the signature of its function or
+constructor, and a new property of a public data class changes its constructor and `copy`.
+Moving a public top-level declaration to another file changes the JVM class that holds it.
+
+A minor release may add a subclass of `KiffException` or an entry to a public enum; their KDoc
+tells callers to keep an `else` branch, and new ones should say the same. The check is Kotlin's
+own and still experimental, so a Kotlin upgrade can change the dump's format: regenerate it in the
+upgrade's PR and check that only the format moved.
+
 ## Commit & Pull Request Guidelines
 
 Use short, imperative commit subjects, following history such as “Refuse a malformed patch rather
 than trusting it.” Conventional Commit prefixes are not required. Choose descriptive branch names
 without a `codex/` prefix. Keep PRs focused; describe the problem, resulting behavior, related
 issues, and validation performed. Include CLI output examples when output changes, and flag
-format compatibility or performance implications. Run relevant tests before requesting review.
+format compatibility, public API changes, or performance implications. Run relevant tests before
+requesting review.
