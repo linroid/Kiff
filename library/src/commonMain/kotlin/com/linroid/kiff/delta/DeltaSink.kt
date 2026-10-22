@@ -25,6 +25,9 @@ public interface DeltaSink {
    * This is what keeps a patch small when a region is nearly a copy - recompiled code whose
    * embedded offsets shifted, say. The differences are mostly zero and collapse in the literal
    * stream, where the same region emitted through [add] would not compress at all.
+   *
+   * The bundled sink writes a long stretch that equals the source exactly as a [copy] instead, so
+   * an algorithm can pass a whole aligned region here without looking for such stretches itself.
    */
   public fun diff(sourceOffset: Long, target: ByteArray, from: Int = 0, to: Int = target.size)
 
