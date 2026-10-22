@@ -5,12 +5,19 @@ package com.linroid.kiff.format
  * entitled to write, and a way to reach a packed tree from inputs small enough to corrupt byte by
  * byte.
  */
-internal fun withPackedTree(patch: ByteArray): ByteArray = rewriteTree(patch, packed = true)
+internal fun withPackedTree(patch: ByteArray): ByteArray = rewrite(patch, packed = true)
 
 /** [patch] with its region tree as it is, which is what Kiff 0.1 and 0.2 wrote. */
-internal fun withStoredTree(patch: ByteArray): ByteArray = rewriteTree(patch, packed = false)
+internal fun withStoredTree(patch: ByteArray): ByteArray = rewrite(patch, packed = false)
 
-private fun rewriteTree(patch: ByteArray, packed: Boolean): ByteArray {
+/**
+ * [patch] with its tree and its content both as they are: the regions and bytes a writer chose,
+ * whatever it then packed them to.
+ */
+internal fun unpacked(patch: ByteArray): ByteArray =
+  rewrite(patch, packed = false, storeContent = true)
+
+private fun rewrite(patch: ByteArray, packed: Boolean, storeContent: Boolean = false): ByteArray {
   val reader = ByteReader(patch)
   val header = PatchFormat.readHeader(reader)
   val headerEnd = reader.offset
@@ -21,7 +28,10 @@ private fun rewriteTree(patch: ByteArray, packed: Boolean): ByteArray {
   val storedContentLength = reader.readVarInt()
   val storedTree = reader.readBytes(storedTreeLength)
   val tree = if (header.treePacked) LzHuffman.decompress(storedTree, treeLength) else storedTree
-  val content = reader.readBytes(reader.remaining)
+  val storedContent = reader.readBytes(reader.remaining)
+  val unpackContent = storeContent && encoding == PatchPayload.CONTENT_LZ_HUFFMAN
+  val content =
+    if (unpackContent) LzHuffman.decompress(storedContent, contentLength) else storedContent
 
   val out = ByteWriter(patch.size + 64)
   out.writeBytes(patch, 0, headerEnd)
@@ -29,8 +39,8 @@ private fun rewriteTree(patch: ByteArray, packed: Boolean): ByteArray {
   val written = if (packed) LzHuffman.compress(tree) else tree
   if (packed) out.writeVarInt(written.size)
   out.writeVarInt(contentLength)
-  out.writeByte(encoding)
-  out.writeVarInt(storedContentLength)
+  out.writeByte(if (unpackContent) PatchPayload.CONTENT_STORED else encoding)
+  out.writeVarInt(if (unpackContent) contentLength else storedContentLength)
   out.writeBytes(written)
   out.writeBytes(content)
   val flags = if (packed) {

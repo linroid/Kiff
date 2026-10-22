@@ -20,9 +20,10 @@ import kotlin.test.assertEquals
  * `StructureDetectionTest` pins what each kind of file is taken to be. This pins what taking it
  * apart produces: formats found inside other formats, a registered format weighed against the
  * whole file, grouped dex files, columns, pairing by ordinal, nesting as deep as a reader goes, and
- * the malformed inputs a format has to leave whole. The values were captured before the format API
- * moved from arrays and `Int` offsets to sources and `Long` ones, so equal here means that change
- * left every patch byte for byte as it was.
+ * the malformed inputs a format has to leave whole. Equal here means a change left every patch byte
+ * for byte as it was, as the format API's move from arrays and `Int` offsets to sources and `Long`
+ * ones did. Matching the content lazily did not, by design: it packs the same regions tighter, and
+ * the values were captured again for it.
  */
 class ContainerPatchBytesTest {
 
@@ -36,21 +37,21 @@ class ContainerPatchBytesTest {
   private class Pinned(val size: Int, val crc32: UInt)
 
   private val pinned = mapOf(
-    "a registered format, whole" to Pinned(4786, 0x5b735002u),
-    "a registered format inside a zip" to Pinned(4894, 0x5d9f9b45u),
+    "a registered format, whole" to Pinned(4716, 0x322a2f7eu),
+    "a registered format inside a zip" to Pinned(4834, 0xa1790ebau),
     "a dex, whole" to Pinned(2962, 0x1ac83d4au),
-    "a dex whose id table shifts" to Pinned(304, 0xb6020ff7u),
-    "a dex with an offset near Int.MAX_VALUE" to Pinned(280, 0x3823539eu),
-    "an apk whose dex files are grouped" to Pinned(2745, 0x2bf3accfu),
-    "an apk that loses a dex" to Pinned(1136, 0xdca1813eu),
-    "an apk with ApkFormat registered" to Pinned(44609, 0x1c6e6c46u),
-    "an apk without DexFormat" to Pinned(43401, 0xf4faa9d9u),
+    "a dex whose id table shifts" to Pinned(302, 0x2d4f1745u),
+    "a dex with an offset near Int.MAX_VALUE" to Pinned(279, 0xeaf19e1eu),
+    "an apk whose dex files are grouped" to Pinned(2741, 0x4a208fc0u),
+    "an apk that loses a dex" to Pinned(1114, 0x6db6e064u),
+    "an apk with ApkFormat registered" to Pinned(44526, 0x3f345dd2u),
+    "an apk without DexFormat" to Pinned(43302, 0x6443f734u),
     "a reordered inner archive" to Pinned(323, 0x56148f92u),
-    "an inner archive with edited text" to Pinned(308, 0x5facc3b8u),
+    "an inner archive with edited text" to Pinned(308, 0xd6a38400u),
     "a deflated inner archive" to Pinned(318, 0xe5948d61u),
-    "archives nested eight deep" to Pinned(764, 0xd3506813u),
-    "archives nested twelve deep" to Pinned(12012, 0xebe2ccb0u),
-    "a zip with a gap before its directory" to Pinned(1166, 0x07953fafu)
+    "archives nested eight deep" to Pinned(762, 0x836095bcu),
+    "archives nested twelve deep" to Pinned(11975, 0xeb071b38u),
+    "a zip with a gap before its directory" to Pinned(1155, 0xbb7ca2a8u)
   )
 
   @Test

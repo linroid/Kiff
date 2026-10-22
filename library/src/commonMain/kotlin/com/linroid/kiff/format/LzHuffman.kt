@@ -16,21 +16,22 @@ import com.linroid.kiff.KiffException
  * distance buckets are deflate's thirty, extended by ten to reach a 1 MiB window; the length
  * buckets are Kiff's own, thirty-two of them covering 4 to 4,119 bytes.
  *
- * ## What is left, measured on the content stream of a real patch
+ * ## What is left, measured on the content stream of a patch between two 72 MiB release APKs
  *
  * ```
- * this codec          3,873,349   40.9% of the raw stream
- * gzip -9             3,694,413   -4.6% against this
- * zstd -19            3,244,018  -16.2%
- * brotli -q 11        3,054,043  -21.2%
- * xz -9e              2,999,532  -22.6%
+ * this codec          3,629,686   37.2% of the raw stream
+ * matching greedily   3,703,606   +2.0% against this
+ * gzip -9             3,518,358   -3.1%
+ * zstd -19            3,102,331  -14.5%
+ * brotli -q 11        2,924,651  -19.4%
+ * xz -9e              2,875,404  -20.8%
  * ```
  *
  * Three things follow, and each of them cost an experiment to learn.
  *
- * Being within 4.6% of gzip is the Huffman layer doing its job; closing the rest means lazy
- * matching, deeper chains, and coding the code lengths rather than writing them flat, which is
- * fiddly work for very little.
+ * Being within 3.1% of gzip is the Huffman layer doing its job, and matching lazily as gzip does
+ * closed two of the five points greedy matching left. Closing the rest means deeper chains and
+ * coding the code lengths rather than writing them flat, which is fiddly work for very little.
  *
  * A larger window is not the lever, however tempting it looks with a 1 MiB window over a 9 MB
  * stream. Giving zstd a 128 MB window instead of its usual one is worth 0.04%: a patch's content
@@ -44,10 +45,22 @@ import com.linroid.kiff.KiffException
  */
 internal object LzHuffman {
 
-  fun compress(data: ByteArray): ByteArray {
+  /** Packs [data] as a patch stores it, matching lazily: see [match]. */
+  fun compress(data: ByteArray): ByteArray = pack(data, lazy = true)
+
+  /**
+   * About what [compress] packs [data] to, for weighing one way of describing bytes against
+   * another. It matches greedily, which packs about 2% larger but ranks the alternatives as well,
+   * and the encoder packs several alternatives for every region it writes. Weighing lazily too was
+   * measured: on APKs it doubled the time lazy matching adds to creating a patch, and the two
+   * patches of six it changed both came out larger, by under 0.02%.
+   */
+  fun estimate(data: ByteArray): Int = pack(data, lazy = false).size
+
+  private fun pack(data: ByteArray, lazy: Boolean): ByteArray {
     if (data.isEmpty()) return ByteArray(0)
     val tokens = Tokens(data.size)
-    match(data, tokens)
+    match(data, tokens, lazy)
 
     val literalLengths = codeLengths(tokens.literalFrequencies, MAX_CODE_BITS)
     val distanceLengths = codeLengths(tokens.distanceFrequencies, MAX_CODE_BITS)
@@ -204,21 +217,25 @@ internal object LzHuffman {
     }
   }
 
-  /** LZ77 matching through hash chains over a window of up to [MAX_WINDOW] bytes. */
-  private fun match(data: ByteArray, tokens: Tokens) {
+  /**
+   * LZ77 matching through hash chains over a window of up to [MAX_WINDOW] bytes.
+   *
+   * Taking the first match found can swallow the start of a better one, so [lazy] matching puts a
+   * match off when the next position starts a longer one, and writes that byte as a literal. It
+   * looks one byte ahead, not further. On real patches it takes 0.6-2.9% off for about a tenth more
+   * time to create them. It is the writer's choice of what to emit, so the stream it writes is the
+   * same encoding, and every reader reads it.
+   */
+  private fun match(data: ByteArray, tokens: Tokens, lazy: Boolean) {
     val head = IntArray(HASH_SIZE) { -1 }
     val window = windowFor(data.size)
     val windowMask = window - 1
     val prev = IntArray(window)
-    var position = 0
 
-    while (position < data.size) {
-      if (position + MIN_MATCH > data.size) {
-        while (position < data.size) tokens.literal(data[position++].toInt() and 0xFF)
-        break
-      }
-      val hash = hash4(data, position)
-      var candidate = head[hash]
+    // The longest match at [position] among what is already inserted, as its length in the high
+    // half and its distance in the low, or zero for none.
+    fun longest(position: Int): Long {
+      var candidate = head[hash4(data, position)]
       var bestLength = 0
       var bestDistance = 0
       var chain = 0
@@ -234,17 +251,41 @@ internal object LzHuffman {
         candidate = prev[candidate and windowMask]
         chain++
       }
+      return (bestLength.toLong() shl 32) or bestDistance.toLong()
+    }
+
+    fun insert(position: Int) {
+      val hash = hash4(data, position)
       prev[position and windowMask] = head[hash]
       head[hash] = position
+    }
 
-      if (bestLength >= MIN_MATCH) {
-        val length = minOf(bestLength, MAX_MATCH)
-        tokens.match(length, bestDistance)
+    var position = 0
+    while (position < data.size) {
+      if (position + MIN_MATCH > data.size) {
+        while (position < data.size) tokens.literal(data[position++].toInt() and 0xFF)
+        break
+      }
+      var found = longest(position)
+      insert(position)
+      var length = (found ushr 32).toInt()
+
+      if (lazy && length in MIN_MATCH until MAX_MATCH && position + 1 + MIN_MATCH <= data.size) {
+        val next = longest(position + 1)
+        if ((next ushr 32).toInt() > length) {
+          tokens.literal(data[position].toInt() and 0xFF)
+          position++
+          insert(position)
+          found = next
+          length = (next ushr 32).toInt()
+        }
+      }
+
+      if (length >= MIN_MATCH) {
+        tokens.match(length, found.toInt())
         for (i in position + 1 until position + length) {
           if (i + MIN_MATCH > data.size) break
-          val h = hash4(data, i)
-          prev[i and windowMask] = head[h]
-          head[h] = i
+          insert(i)
         }
         position += length
       } else {

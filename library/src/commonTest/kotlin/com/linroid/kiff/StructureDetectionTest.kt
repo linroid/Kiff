@@ -4,6 +4,7 @@ import com.linroid.kiff.container.ContainerRegistry
 import com.linroid.kiff.container.TestDexBuilder
 import com.linroid.kiff.container.TestSectionFormat
 import com.linroid.kiff.format.Crc32
+import com.linroid.kiff.format.unpacked
 import com.linroid.kiff.format.withStoredTree
 import com.linroid.kiff.region.RegionKind
 import kotlin.random.Random
@@ -14,34 +15,36 @@ import kotlin.test.assertTrue
 
 class StructureDetectionTest {
 
-  /** A patch Kiff 0.1.0's patchers wrote, by size and CRC-32 rather than whole. */
+  /** A patch Kiff 0.1.0's patchers wrote, unpacked, by size and CRC-32 rather than whole. */
   private class Golden(val name: String, val size: Int, val crc32: UInt)
 
   /**
-   * What the patcher each pair names wrote for it before detection existed, captured from that
-   * code. Equal here means byte for byte the same patch: same format, same size.
+   * What the patcher each pair names wrote for it before detection existed, with its tree and
+   * content unpacked. Equal here means byte for byte the same regions and the same bytes in them,
+   * which is everything detection decides; how tightly they pack is the codec's business, and it
+   * has packed them tighter since.
    */
   private val golden = listOf(
-    Golden("a rebuilt apk", 9792, 0x7cbd943bu),
-    Golden("an apk whose classes move between dex files", 370, 0xb9217bfau),
-    Golden("an apk that gains a dex", 24648, 0x87d08c08u),
-    Golden("an apk from a plain zip", 343063, 0x7c47b655u),
-    Golden("an apk from bytes that are no archive", 343645, 0xce2e3571u),
-    Golden("an edited zip", 8252, 0x6bdc8f72u),
-    Golden("a zip with a preamble", 1344, 0x51b9dad9u),
+    Golden("a rebuilt apk", 10620, 0x47e301bau),
+    Golden("an apk whose classes move between dex files", 60303, 0x6675b6e9u),
+    Golden("an apk that gains a dex", 91459, 0x495ec8d9u),
+    Golden("an apk from a plain zip", 371706, 0x286a56d4u),
+    Golden("an apk from bytes that are no archive", 361275, 0x80bce3d6u),
+    Golden("an edited zip", 12780, 0x2f914edcu),
+    Golden("a zip with a preamble", 58097, 0xd93ac148u),
     Golden("a zip that renames an entry", 200, 0x423547abu),
-    Golden("a zip holding a zip and a dex", 2785, 0x1ca84eeau),
+    Golden("a zip holding a zip and a dex", 78655, 0x214722e6u),
     Golden("an empty zip that gains an entry", 145, 0x5192db53u),
-    Golden("a zip from bytes that are no archive", 30973, 0xfa27640du),
-    Golden("a zip from an apk", 30561, 0x32823d57u),
-    Golden("edited bytes", 1280, 0xbe69b261u),
-    Golden("edited text", 1012, 0x914dd18du),
-    Golden("bytes from nothing", 3620, 0x29b924d1u),
+    Golden("a zip from bytes that are no archive", 32466, 0xcf04b43cu),
+    Golden("a zip from an apk", 40255, 0x712e0b10u),
+    Golden("edited bytes", 147988, 0x4a0d7bb0u),
+    Golden("edited text", 31299, 0xff79021au),
+    Golden("bytes from nothing", 3777, 0x22eb42ddu),
     Golden("nothing from bytes", 28, 0x18eaf84au),
     Golden("nothing from nothing", 27, 0x9d699ff0u),
     Golden("unrelated bytes", 20037, 0x8c6c8c9fu),
     Golden("bytes that only start like a zip", 44, 0xdc23ed8eu),
-    Golden("bytes from a zip", 1012, 0xd6f6f2e4u)
+    Golden("bytes from a zip", 38108, 0x7b43efc1u)
   ).associateBy { it.name }
 
   @Test
@@ -50,17 +53,17 @@ class StructureDetectionTest {
     val packed = mutableSetOf<String>()
     for (pair in StructurePairs.all) {
       val patch = Kiff.createPatch(pair.source, pair.target)
-      // Packing the tree is the one thing a writer has changed since, and only where it makes the
-      // patch smaller. Every other patch is still exactly the one written then, byte for byte, and
-      // a packed one is that patch once its tree is stored again.
-      val stored = if (Kiff.info(patch).treePacked) withStoredTree(patch) else patch
-      if (stored !== patch) {
+      // Packing the tree is one thing a writer has changed since, and only where it makes the
+      // patch smaller. Matching the content lazily is the other, which packs the same content
+      // tighter. Unpacked, every patch is still exactly the one written then.
+      if (Kiff.info(patch).treePacked) {
         packed += pair.name
-        assertTrue(patch.size < stored.size, "${pair.name} was packed for nothing")
+        assertTrue(patch.size < withStoredTree(patch).size, "${pair.name} was packed for nothing")
       }
+      val plain = unpacked(patch)
       val expected = golden.getValue(pair.name)
-      assertEquals(expected.size, stored.size, "size of ${pair.name}")
-      assertEquals(expected.crc32, Crc32.compute(stored), "CRC-32 of ${pair.name}")
+      assertEquals(expected.size, plain.size, "size of ${pair.name}")
+      assertEquals(expected.crc32, Crc32.compute(plain), "CRC-32 of ${pair.name}")
       assertEquals(pair.expected, Kiff.info(patch).patcher, "patcher byte of ${pair.name}")
       assertContentEquals(pair.target, Kiff.applyPatch(pair.source, patch), pair.name)
     }
