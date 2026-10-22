@@ -1,0 +1,96 @@
+name: Kiff Create Patch
+description: >-
+  Create one delta patch that rebuilds a target file from a base file, with a released Kiff CLI.
+author: linroid
+branding:
+  icon: package
+  color: blue
+
+inputs:
+  base:
+    description: Path of the file the patch starts from, relative to the workspace.
+    required: true
+  target:
+    description: Path of the file the patch rebuilds, relative to the workspace.
+    required: true
+  version:
+    description: >-
+      Released Kiff to create the patch with, such as 1.0.0: the oldest Kiff embedded in the apps
+      that will apply the patch, since that Kiff reads it. Defaults to the latest release.
+    required: false
+    default: ''
+  output:
+    description: >-
+      Path to write the patch to, relative to the workspace. Defaults to the target's path with
+      .kiff added.
+    required: false
+    default: ''
+
+outputs:
+  patch:
+    description: Path of the patch, relative to the workspace unless output was absolute.
+    value: ${{ steps.create.outputs.patch }}
+  size:
+    description: Size of the patch in bytes.
+    value: ${{ steps.create.outputs.size }}
+  ratio:
+    description: Size of the patch divided by the size of the target, rounded to four places.
+    value: ${{ steps.create.outputs.ratio }}
+  kiff-version:
+    description: Version of the Kiff that created the patch.
+    value: ${{ steps.create.outputs.kiff-version }}
+
+runs:
+  using: composite
+  steps:
+    # Inputs reach the scripts as environment variables, never spliced into a run line, so a path
+    # cannot become shell.
+    - id: prepare
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/prepare.sh"'
+      env:
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        GITHUB_TOKEN: ${{ github.token }}
+
+    # The release action's installer, with the version always given. A release's executable for
+    # the runner needs nothing else, so Java is only looked for when there is none.
+    - id: native
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/../action/install-kiff.sh" native'
+      env:
+        KIFF_VERSION: ${{ steps.prepare.outputs.version }}
+        KIFF_VERSION_INPUT: version
+
+    - id: java
+      if: steps.native.outputs.kiff == ''
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/../action/check-java.sh"'
+
+    - if: steps.java.outputs.needed == 'true'
+      uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: 17
+
+    # The JVM zip of a release without an executable for the runner.
+    - id: cli
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/../action/install-kiff.sh" jvm'
+      env:
+        KIFF_VERSION: ${{ steps.prepare.outputs.version }}
+        KIFF_VERSION_INPUT: version
+        KIFF_RESOLVED: ${{ steps.native.outputs.version }}
+        KIFF_NATIVE: ${{ steps.native.outputs.kiff }}
+
+    - id: create
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/create.sh"'
+      env:
+        KIFF: ${{ steps.cli.outputs.kiff }}
+        KIFF_USED: ${{ steps.cli.outputs.version }}
+        BASE: ${{ steps.prepare.outputs.base }}
+        TARGET: ${{ steps.prepare.outputs.target }}
+        OUTPUT: ${{ steps.prepare.outputs.output }}
