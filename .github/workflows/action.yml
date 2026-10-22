@@ -55,7 +55,7 @@ jobs:
       - name: Test how the action finds its own release
         run: .github/scripts/test-lib.sh
 
-      - name: Test how the action lists a repository's releases
+      - name: Test how the action finds a repository's releases
         run: .github/scripts/test-plan.sh
 
       - name: Test when a release moves the major tag

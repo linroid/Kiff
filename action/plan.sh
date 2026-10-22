@@ -110,26 +110,55 @@ done <<< "${INPUT_FROM:-}"
 
 work=$(mktemp -d "${RUNNER_TEMP:?}/kiff-release.XXXXXX")
 
-# The API lists drafts only to a token that can write to the repository, which is why the release
-# is looked for in the list rather than fetched by its tag. Now and then the list leaves out
-# releases that are there, so one without a tag the inputs name is fetched again, after a pause,
-# before that tag counts as missing.
-for pause in 2 4 8 ''; do
-  if ! gh api --paginate "repos/$repo/releases?per_page=100" \
-    --jq '.[] | {id, tag: .tag_name, draft, prerelease, assets: [.assets[] | {id, name, size}]}' \
-    > "$work/releases.jsonl"; then
-    fail "Could not list the releases of $repo."
+# What the plan keeps of a release.
+fields='{id, tag: .tag_name, draft, prerelease, assets: [.assets[] | {id, name, size}]}'
+
+# GitHub's list of releases now and then comes back empty for a while, so each release the inputs
+# name is fetched by its tag instead. That finds only a published release: a draft is looked for in
+# the list, which shows drafts only to a token that can write to the repository.
+resolved=()
+unresolved=()
+: > "$work/named.jsonl"
+for named in "$tag" ${froms[@]+"${froms[@]}"}; do
+  path=repos/$repo/releases/tags/$(jq -rn --arg tag "$named" '$tag | @uri')
+  if release=$(gh api "$path" --jq "$fields" 2> "$work/error"); then
+    printf '%s\n' "$release" >> "$work/named.jsonl"
+    resolved+=("$named")
+  elif grep -q '(HTTP 404)' "$work/error"; then
+    unresolved+=("$named")
+  else
+    cat "$work/error" >&2
+    fail "Could not look up the release tagged $named in $repo."
   fi
-  absent=$(jq -rs '
-    [.[].tag] as $listed | [$ARGS.positional[] | select(IN($listed[]) | not)] | join(", ")
-  ' "$work/releases.jsonl" --args "$tag" ${froms[@]+"${froms[@]}"})
-  if [[ -z $absent || -z $pause ]]; then
-    break
-  fi
-  echo "The listing of $repo has $(jq -s length "$work/releases.jsonl") releases and leaves out \
-$absent, so it is fetched again in ${pause}s."
-  sleep "$pause"
 done
+
+# The list is needed for the releases before $tag when from names none, and for a named release
+# that may be a draft. Empty then, it is fetched again for about a minute, each pause jittered so
+# that jobs which started together ask apart.
+: > "$work/listed.jsonl"
+if ((${#froms[@]} == 0 || ${#unresolved[@]} > 0)); then
+  for pause in 2 4 8 16 30 ''; do
+    if ! gh api --paginate "repos/$repo/releases?per_page=100" --jq ".[] | $fields" \
+      > "$work/listed.jsonl"; then
+      fail "Could not list the releases of $repo."
+    fi
+    if [[ -s $work/listed.jsonl || -z $pause ]]; then
+      break
+    fi
+    pause=$((pause * 3 / 4 + RANDOM % (pause / 2 + 1)))
+    echo "GitHub listed no releases of $repo, so the list is fetched again in ${pause}s."
+    sleep "$pause"
+  done
+  if [[ ! -s $work/listed.jsonl ]] && ((${#resolved[@]} > 0)); then
+    fail "GitHub's list of the releases of $repo stayed empty for a minute, though ${resolved[0]} \
+is one of them. Run the action again later."
+  fi
+fi
+
+# A release found by its tag is the one with that tag, whatever drafts the list has with it too.
+jq -c -n --slurpfile named "$work/named.jsonl" --slurpfile listed "$work/listed.jsonl" '
+  [$named[].tag] as $tags | $named[], ($listed[] | select(.tag | IN($tags[]) | not))
+' > "$work/releases.jsonl"
 
 # The release, and the published releases before it in version order, closest first. A tag that
 # reads as a version is only compared with others that do; any other is compared naturally.
