@@ -25,8 +25,8 @@ import kotlin.test.assertTrue
  * vector that stops holding what it was frozen for is noticed.
  *
  * **When one of these fails**, the question is not how to make it pass. It is whether the format
- * changed on purpose. Version 1 is released, so a change to what these bytes mean needs a new
- * version, and every later release still has to read these.
+ * changed on purpose. Kiff has written version-1 patches since 0.1.0, so a change to what these
+ * bytes mean needs a new version, and every later release still has to read these.
  */
 class FormatVectorsTest {
 
@@ -896,6 +896,157 @@ class FormatVectorsTest {
       696f6e5f323920bebebebebebebebebebebebebebea0c79b2a930ec11eb84b117d559f4d7f00
       000000000000000000000000000000000000000000000000000000
       """
+    ),
+    // Bytes shifted by an insertion every few dozen: an instruction stream long and regular enough
+    // that the writer packed the tree, as only a packed tree makes it smaller. COPY, ADD, RUN and
+    // DIFF, all inside it.
+    Vector(
+      name = "binaryShiftsPackedTree",
+      source = """
+      96c8478c1506605feb1c095d00cf44b4e9c7fee0944245d26cc80f06d7cc1796425aaa723eeb
+      e4590c468ff3f1f1cee1ca41ff3344c8eda23746b162a30c0c3b09d6d3c62ee0bad88c9f256a
+      b3604da7ed02dbcb382437406c85b4b795c6184a62be921f79f9ac7f22784f9d76c93b43c275
+      99f1814f41a91f154f51d7e263f44e7d24e5467b63d928810fdef615f453647d36975a74a15a
+      2d64e739ac1baab48ca18c3faba164c17ad28adb9e9c6b9f57436c8d749d0eba194445790ca9
+      99f3c15976cddd73656374696f6e5f34205a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a
+      5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a487dac6c74cbe0c2a6e16f0a532a4c98ed1d7afcaf5b78
+      f7b4668ab04f44d281d4b1a743f65ca506d207d4664044efd897cd952b7a5cc354765286527c
+      230f381858915d60468e9e0cfe98e63373656374696f6e5f3020db1f5bdf566cb9b3053396b3
+      1dd7b4cf87bc5a985396ede96987ab2dfded1e31579971faa9e85a4fa8bf969af216628bd934
+      749590c39bd5f557c41c13c07e60d524097f72d39517e137ae0a34b3544cf467342193988268
+      1035bf15130b4b42c4438c74fe02cfbbf508f4efac9d1a4382ab1ef54893d5cdde3ef30afb9f
+      00ebe89a9a9a9a9ac3c3c3c3c3c3c3c3c3c3c3c3c3c3c3073dfd2c414126f8815d5d5d5d5d5d
+      5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+      5d5d5d5d5d5d5d5d5d5d5d5d5d5d5dade20e270f0ecff6c047be0ba1277fd734a0cc9543fc35
+      b407d761f8104418aa82b743f0de6f625b346cdd34497f3d97746cfec2c4fde09a465ee969db
+      8bacf444837bd8e2cb0e69b7c665426d6a894bcd9e23edc2e4413662e4cad33123aa237c8341
+      740dd02ab23eee84fc83102b1cfe609d70cd582e3257a4c4b62f9d5326186fb5e898d145bbba
+      140e97c97bda2a01f63181af562b3605a0015eb279120de95ff4e3538a5f76cf3f6ce31c700b
+      eaef92bf52285835b2f4eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeea7a7a7a7a7a7a7
+      a7a7a7a7a7a78b590ad561fe37acdca94162b1e6b25d9b43aa4a2c564c10dc5aaa451d011f73
+      656374696f6e5f382073656374696f6e5f313220d70cc8c088c5fed7bd3eca18b830c9c3406b
+      4e3cb39da9e7f7dbfc6a7249279568f276e9422154a5272876212bffa533d9486010c201b001
+      8bf8058af45e13a44a44613629adc3d4fd09b469f2d5ffbd4e810815eda32c7e4651fa1ce5c4
+      2ea1fdcbdd2916d12b0707dd50c1b53d543010aeb782a8420bc1f101801f5bcac1337315908b
+      3ce555696bfc1c0199cf1e7f230bb2987338226c82cd73c24a3861f1edd9133b3b9f77f2879b
+      cfeac38c7f0dc99e8f2cc4358fff404921824a8a80aacc2c2f178a24659b83dcff0c486b5d7b
+      87785343b8c6871ec0e9b6a74fe9f1629c7e13f042b84e33cc124e3502de5b2f95e17d61efff
+      51ed15e61be54729ed072a25ab371b033e4117e70094fb69a61f51540c079a2fe73052d16ea2
+      a66d73656374696f6e5f33302073656374696f6e5f3236201a1a1a1a1a1a1adf4b9e5d85b8ec
+      3c5ee7d94d50652ceb017df8d7a5fd81fdad78f4f414daa2e09951233bcf9186223ce5d5eb86
+      119bb5d7cdd15500ddd3e2906a1d63cc3571a8a854f4
+      """,
+      target = """
+      96c8478c1506605feb1c095d00cf44b4e9c741fee0944245d26cc80f06d7cc1796425aaa7242
+      3eebe4590c468ff3f1f1cee1ca41ff3344c843eda23746b162a30c0c3b09d6d3c62ee0bad844
+      256ab3604da7ed02dbcb382437406c85b4b77a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a95c6184a
+      62be921f79f9ac7f22784f9d76c9463b43c27599f1814f41a91f154f51d7e263f4474e7d24e5
+      467b63d928810fdef615f453647d4836975a74a15a2d64e739ac1baab48ca18c3f49aba164c1
+      7ad28adb9e9c6b9f57436c8d749d7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a0eba194445790ca9
+      99f3c15976cddd7365634b6f6e5f34205a5a5a5a5a5a5a5a5a5a5a5a5a4c5a5a5a5a5a5a5a5a
+      5a5a5a5a5a5a5a5a5a5a4d5a5a5a5a5a487dac6c74cbe0c2a6e16f0a534e2a4c98ed1d7afcaf
+      5b78f7b4668ab04f44d27a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a81d4b1a743f65ca506d207d4
+      664044efd89750cd952b7a5cc354765286527c230f38185891515d60468e9e0cfe98e6337365
+      6374696f6e5f52db1f5bdf566cb9b3053396b31dd7b4cf87bc535a985396ede96987ab2dfded
+      1e31579971fa7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7aa9e85a4fa8bf969af216628bd9347495
+      90c3559bd5f557c41c13c07e60d524097f72d3951756e137ae0a34b3544cf467342193988268
+      103557bf15130b4b42c4438c74fe02cfbbf508f4ef58ac9d1a4382ab1ef54893d5cdde3ef30a
+      fb9f7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7ae89a9a9a9a9ac3c3c3c3c3c3c3c3c3c3c3c35ac3
+      c3c3073dfd2c414126f8815d5d5d5d5d5d415d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d425d
+      5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d435d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5dad7a7a
+      7a7a7a7a7a7a7a7a7a7a7a7a7a7ae20e270f0ecff6c047be0ba1277fd734a0cc459543fc35b4
+      07d761f8104418aa82b743f0de465b346cdd34497f3d97746cfec2c4fde09a46475ee969db8b
+      acf444837bd8e2cb0e69b7c66548426d6a894bcd9e23edc2e4413662e4cad3317a7a7a7a7a7a
+      7a7a7a7a7a7a7a7a7a7a23aa237c8341740dd02ab23eee84fc83102b4a1cfe609d70cd582e32
+      57a4c4b62f9d5326184b6fb5e898d145bbba140e97c97bda2a01f6314c81af562b3605a0015e
+      b279120de95ff4e3534d76cf3f6ce31c700beaef92bf52285835b2f47a7a7a7a7a7a7a7a7a7a
+      7a7a7a7a7a7aeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee4feeeeeea7a7a7a7a7a7a7a7a7a7
+      a7a7a78b59500ad561fe37acdca94162b1e6b25d9b43aa4a512c564c10dc5aaa451d011f7365
+      6374696f6e525f382073656374696f6e5f313220d70cc8c07a7a7a7a7a7a7a7a7a7a7a7a7a7a
+      7a7a88c5fed7bd3eca18b830c9c3406b4e3cb39d54f7dbfc6a7249279568f276e9422154a527
+      285576212bffa533d9486010c201b0018bf8058a56f45e13a44a44613629adc3d4fd09b469f2
+      d557ffbd4e810815eda32c7e4651fa1ce5c42ea17a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7afdcb
+      dd2916d12b0707dd50c1b53d543010ae59b782a8420bc1f101801f5bcac1337315908b5a3ce5
+      55696bfc1c0199cf1e7f230bb29873384182cd73c24a3861f1edd9133b3b9f77f2879b42cfea
+      c38c7f0dc99e8f2cc4358fff404921827a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a4a8a80aacc2c
+      2f178a24659b83dcff0c486b445d7b87785343b8c6871ec0e9b6a74fe9f162459c7e13f042b8
+      4e33cc124e3502de5b2f95e1467d61efff51ed15e61be54729ed072a25ab37471b033e4117e7
+      0094fb69a61f51540c079a2f7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a52d16ea2a66d73656374
+      696f6e5f3330207349656374696f6e5f3236201a1a1a1a1a1a1adf4a4b9e5d85b8ec3c5ee7d9
+      4d50652ceb017df84bd7a5fd81fdad78f4f414daa2e09951233bcf4c9186223ce5d5eb86119b
+      b5d7cdd15500ddd37a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7ae2906a1d63cc3571a8a854f44e
+      """,
+      patch = """
+      4b494646010103b009c1ad0f15a30be51226409302d201d10100d10134464000060660006060
+      0000000000000000006000000000000000000600000060000000000000000000000000000000
+      0600000006000000000000000060000000064000006000000050000000000000000600000000
+      0000000000000000000000000000000000000000000000000000000006000000000000000000
+      0000000060666055055555500050000000000000000030030200203300000000000000000000
+      00000eae2ef1cb4e4d842d822705bc851f154c66c2bdc07989a57388a835f6b83c8d157fe429
+      d91e9358aee44a5d87804142434446474849d706fff1d5ec3a000000000000000000000000f2
+      0000000000000000000000005a5a5a5a5a5a4d4e5051525355565758970000bcca40d1eb001b
+      2e7724000000000000e4000000000000000000000000000000000000e5000000000000000000
+      000000000000000000e60000000000005d5d5d5d5d5d5d5d5d5d5dad454647484a4b4c4d6100
+      0000b9000000000000000000000000e4cef7000000000000000000000000b25d9b43aa4a5152
+      54555657595a414244454647494a4b4ce2906a1d63cc3571a8a854f44e
+      """
+    ),
+    // zipTextLines with its tree packed: TEXT inside one. Packing makes a tree this small larger,
+    // which is no reason to refuse it.
+    Vector(
+      name = "zipTextLinesPackedTree",
+      source = notesSource,
+      target = notesTarget,
+      patch = """
+      4b494646010203ab031bb76e31ab030c425a4b34c3014f004f33346600660600000006600000
+      0000000000000500000000000000000000000000000000000006000000000000060000000000
+      0000000000000000000000000060606000000000000000000000000000000000000006006000
+      0000050060600000000000060000000000060000000050500000000050005005000000050000
+      005000000000000000000000000000000000000000000000000000000000000000000000000e
+      9828209cbcbb6abd37fdc7e73d627345b03a0d499ef4cb83edfca1220580504b030414000000
+      000021435555c9e0aed53701000037010000090000006e6f7465732e7478746368616e676564
+      0a141db3b500000000000000000000000000000000000000000000000000000000
+      """
+    ),
+    // dexColumns with its tree packed: COLUMNS inside one.
+    Vector(
+      name = "dexColumnsPackedTree",
+      source = dexSource,
+      target = dexTarget,
+      patch = """
+      4b494646010203b4135dc6ebbdb413cd3c46dd51da01890d02c5013456560600066000006600
+      0000060060006006006600600000000000000000060000000000000606006000060000060000
+      0060000006000060000000000000000060600000006000000660000600000000000000000660
+      0000606600000060006000000600600000000000006000000006600660000000006000000060
+      6000006600000000000000000000000000000000001000000000000000000000000000000000
+      000c1606e550670ccaf1db92a1098b7efaf0f3a508cd43e2ecba5859a847fd4480528956c6d1
+      23c377ae202a9eb9f4e72d5aa0c3d203e0360660000606000000006000000000000600000000
+      0000600000000000006000600600000006000050000500000000000505550000005000500400
+      0050005000050000000000000000000000050000000000000000000000000005000000000000
+      0000000000000000000000000000000000500005000000000000000000000055500000000000
+      5000000000000000500200200000220000000000000000000000000000037faedc8b1d7c73bd
+      d29f9b81678002588225976a5bbdd2fae44245b4863b0a80
+      """
+    ),
+    // The same without region checksums: flags 0x02 alone.
+    Vector(
+      name = "dexColumnsPackedTreeNoChecksums",
+      source = dexSource,
+      target = dexTarget,
+      patch = """
+      4b494646010202b4135dc6ebbdb413cd3c46dd3dc701890d02c5013346450600065000005600
+      0000060000000006006600000000000000000000000000000000000006006000000000000000
+      0060000000000060000000000000000050500000006000000000000600000000000000000000
+      0000606000000060005000000000600000000000000000000000500500000000000000000000
+      5000005500000000000000000000000000000000001000000000000000000000000000000000
+      000f71093704d53e70bb92afbf7116af662d2b643803a6164b4f321b1c1e7fce082840a83606
+      6000060600000000600000000000060000000000006000000000000060006006000000060000
+      5000050000000000050555000000500050040000500050000500000000000000000000000500
+      0000000000000000000000000500000000000000000000000000000000000000000000005000
+      0500000000000000000000005550000000000050000000000000005002002000002200000000
+      00000000000000000000037faedc8b1d7c73bdd29f9b81678002588225976a5bbdd2fae44245
+      b4863b0a80
+      """
     )
   )
 
@@ -944,8 +1095,51 @@ class FormatVectorsTest {
       "content encodings"
     )
     assertEquals(PatcherId.entries.map { it.code }.toSet(), seen.patchers, "patchers")
-    assertEquals(setOf(0, PatchFormat.FLAG_REGION_CHECKSUMS), seen.flags, "flags")
+    assertEquals(
+      setOf(0, CHECKSUMS, PACKED_TREE, CHECKSUMS or PACKED_TREE),
+      seen.flags,
+      "flags"
+    )
     assertTrue(seen.negativeOffset, "no vector moves the source cursor backwards")
+  }
+
+  @Test
+  fun thePackedTreesCoverEveryEncodingTheyPack() {
+    // A packed tree is the same tree once unpacked, but a reader that unpacked it wrongly would
+    // only show it on the encodings a vector puts inside one.
+    val seen = Coverage()
+    for (vector in vectors) seen.walk(bytes(vector.patch), bytes(vector.target))
+    assertEquals(RegionEncoding.entries.map { it.code }.toSet(), seen.packedRegions, "regions")
+    assertEquals(
+      setOf(DeltaOp.END, DeltaOp.ADD, DeltaOp.COPY, DeltaOp.RUN, DeltaOp.DIFF),
+      seen.packedDeltaOps,
+      "delta opcodes"
+    )
+    assertEquals(
+      setOf(TEXT_END, TEXT_EQUAL, TEXT_DELETE, TEXT_INSERT),
+      seen.packedTextOps,
+      "text opcodes"
+    )
+  }
+
+  @Test
+  fun aPackedTreeIsTheStoredOneUnpacked() {
+    val byName = vectors.associateBy { it.name }
+    for (vector in vectors.filter { "PackedTree" in it.name }) {
+      val patch = bytes(vector.patch)
+      val stored = withStoredTree(patch)
+      val plain = byName[vector.name.replace("PackedTree", "")]
+      if (plain != null) {
+        // Packed from a vector already frozen, so unpacking has to give back exactly that one.
+        assertContentEquals(bytes(plain.patch), stored, "'${vector.name}' unpacked")
+      } else {
+        // Packed by the writer, which only does so where that is strictly smaller.
+        assertTrue(patch.size < stored.size, "'${vector.name}' is no smaller packed")
+        assertContentEquals(bytes(vector.target), Kiff.applyPatch(bytes(vector.source), stored))
+      }
+      assertTrue(Kiff.info(patch).treePacked, "'${vector.name}' does not say its tree is packed")
+      assertTrue(!Kiff.info(stored).treePacked, "'${vector.name}' unpacked still says packed")
+    }
   }
 
   @Test
@@ -989,11 +1183,17 @@ class FormatVectorsTest {
     val contentEncodings = mutableSetOf<Int>()
     val patchers = mutableSetOf<Int>()
     val flags = mutableSetOf<Int>()
+    val packedRegions = mutableSetOf<Int>()
+    val packedDeltaOps = mutableSetOf<Int>()
+    val packedTextOps = mutableSetOf<Int>()
     var negativeOffset = false
     var checksums = 0
 
     /** Where in the target the next region starts. */
     private var at = 0L
+
+    /** Whether the tree being walked was packed. */
+    private var packed = false
 
     fun walk(patch: ByteArray, target: ByteArray) {
       val reader = ByteReader(patch, MAGIC_BYTES)
@@ -1005,12 +1205,16 @@ class FormatVectorsTest {
       reader.readUInt32()
       reader.readVarLong() // target size
       reader.readUInt32()
-      reader.readVarInt() // tree size
+      val treeLength = reader.readVarInt()
+      packed = flags and PACKED_TREE != 0
+      val storedTreeLength = if (packed) reader.readVarInt() else treeLength
       reader.readVarInt() // content size
       contentEncodings += reader.readByte()
       reader.readVarInt() // stored size
+      val storedTree = reader.readBytes(storedTreeLength)
+      val tree = if (packed) LzHuffman.decompress(storedTree, treeLength) else storedTree
       at = 0
-      node(reader, target, flags and PatchFormat.FLAG_REGION_CHECKSUMS != 0, inColumns = false)
+      node(ByteReader(tree), target, flags and CHECKSUMS != 0, inColumns = false)
     }
 
     private fun node(
@@ -1022,6 +1226,7 @@ class FormatVectorsTest {
       val length = tree.readVarLong()
       val encoding = tree.readByte()
       regions += encoding
+      if (packed) packedRegions += encoding
       val leaf = encoding != RegionEncoding.COMPOSITE.code
       if (checksummed && leaf && !inColumns) {
         val expected = Crc32.compute(target, at.toInt(), (at + length).toInt())
@@ -1037,6 +1242,7 @@ class FormatVectorsTest {
           do {
             val op = (tree.readVarLong() and DeltaOp.MASK).toInt()
             deltaOps += op
+            if (packed) packedDeltaOps += op
             when (op) {
               DeltaOp.COPY, DeltaOp.DIFF -> if (tree.readSignedVarLong() < 0) negativeOffset = true
               DeltaOp.RUN -> tree.readByte()
@@ -1051,6 +1257,7 @@ class FormatVectorsTest {
           do {
             val op = tree.readByte()
             textOps += op
+            if (packed) packedTextOps += op
             if (op != TEXT_END) tree.readVarLong()
           } while (op != TEXT_END)
         }
@@ -1077,6 +1284,8 @@ class FormatVectorsTest {
 
   private companion object {
     const val MAGIC_BYTES = 4
+    const val CHECKSUMS = PatchFormat.FLAG_REGION_CHECKSUMS
+    const val PACKED_TREE = PatchFormat.FLAG_PACKED_TREE
     const val TEXT_END = 0
     const val TEXT_EQUAL = 1
     const val TEXT_DELETE = 2

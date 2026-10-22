@@ -2,9 +2,9 @@
 
 A patch turns one file into another, byte for byte. This describes what is in one.
 
-Version 1 is frozen as of Kiff 0.1.0, the first release. Patches written by it exist, and every
-later release still reads them; [Versions and flags](#versions-and-flags) says what that leaves
-room for.
+Version 1 is final as of Kiff 1.0.0. Kiff 0.1.0 and 0.2.0, released before it, wrote version-1
+patches too, and every later release still reads them; [Versions and flags](#versions-and-flags)
+says what changed in version 1 since, and what is left room for.
 
 This document is the specification: a reader built from it alone applies every version-1 patch.
 The frozen vectors in `FormatVectorsTest` are its conformance tests. A format that lives only in
@@ -43,13 +43,14 @@ else, including a file the writer took apart with a container format of its own.
 any other value too, so a version-1 patch carries one of these three, and a reader refuses the
 rest.
 
-`flags` is a bit set. One bit is defined:
+`flags` is a bit set. Two bits are defined:
 
 | bit | meaning |
 | --- | --- |
 | `0x01` | every region that produces target bytes carries a CRC-32 of them |
+| `0x02` | the region tree is packed with content encoding 2: see [Payload](#payload) |
 
-The other seven bits are reserved and must be zero. **A reader must refuse a flag it does not
+The other six bits are reserved and must be zero. **A reader must refuse a flag it does not
 recognise.** Flags change how the payload is laid out, so carrying on would produce bytes rather
 than an error, and bytes that are wrong are worse than a failure that is loud.
 
@@ -66,7 +67,7 @@ The version byte says which reader can apply a patch, and it is the only thing t
 of version N applies every version-N patch exactly as this document describes, and refuses any
 version it does not implement.
 
-Once a version is released, the set of patches valid under it is fixed. Anything a reader of that
+Once a version is final, the set of patches valid under it is fixed. Anything a reader of that
 version would refuse, or would read differently, takes a new version: a new flag bit, region
 encoding, content encoding, delta or text opcode, patcher code, a new or moved field, or a looser
 limit such as a deeper tree or a longer length. A change in how a writer chooses among what the
@@ -75,7 +76,16 @@ bytes. The magic and the version byte keep their place in every version, so any 
 which version a patch needs.
 
 Flags are options a writer picks for one patch, among those every reader of its version
-understands. New flags are defined only together with a new version.
+understands. From 1.0.0 on, new flags are defined only together with a new version.
+
+Version 1 is final as of Kiff 1.0.0, and it grew once before that. Kiff 0.1.0 and 0.2.0 came out
+before the format was final, and wrote version-1 patches with flags `0x01` or none. Flag `0x02`,
+the packed tree, was defined in version 1 after them, and nothing else changed: every patch those
+two wrote means what it always did, and every later release reads it. A reader must refuse a flag
+it does not recognise, so 0.1.0 and 0.2.0 refuse a patch that carries `0x02`, from its header
+alone, before reading anything of its payload. A writer sets `0x02` only where it makes a patch
+smaller, so a patch that gains nothing from it is exactly the patch those releases wrote, and
+remains one they read.
 
 A writer writes the lowest version that can express the patch, so a patch that uses nothing new
 stays readable by older readers. That matters most where a patch updates the software that applies
@@ -84,13 +94,27 @@ it: the reader is the one in the release being replaced.
 ## Payload
 
 ```
-varint  tree size
+varint  tree size, unpacked
+varint  tree size as stored     only when flags & 0x02
 varint  content size, unpacked
 byte    content encoding
 varint  content size as stored
-bytes   region tree
-bytes   content
+bytes   region tree, as stored
+bytes   content, as stored
 ```
+
+Without flag `0x02`, the tree is stored as it is, and its stored size is its size, so the second
+field is not there. With it, the stored tree is one LZ77 + Huffman stream of its own, exactly as
+[content encoding 2](#the-lz77--huffman-stream) describes, which unpacks to the tree size; the tree
+is then read from the unpacked bytes as it would be from stored ones, and is held to every rule a
+stored tree is. The flag is the tree's encoding, so there is no encoding byte for it, and the tree
+is packed apart from the content rather than together with it: the two read nothing alike, and one
+Huffman tree for both would fit neither.
+
+A tree is small beside the content for most patches. It is not for text, whose line scripts and
+instructions can be most of a patch: on a pair of 110 MiB R8 mapping files, 3.4 MiB of a 4.8 MiB
+patch. A writer packs the tree only where that makes the patch strictly smaller, counting the
+second size field, and only where the tree is no longer than the target.
 
 | encoding | code | |
 | --- | --- | --- |
@@ -210,8 +234,9 @@ the gaps between those entries barely move.
 
 ## The LZ77 + Huffman stream
 
-Content encoding 2 packs the whole content stream as one block. Bits are read most significant
-first within each byte, extra bits included, and the last byte is padded with zero bits.
+Content encoding 2 packs the whole content stream as one block, and flag `0x02` packs the region
+tree the same way, as a block of its own. Bits are read most significant first within each byte,
+extra bits included, and the last byte is padded with zero bits.
 
 1. 289 code lengths for the literal and length alphabet, then 40 for the distance alphabet, each
    four bits, so 1,316 bits in all. A length is 0 to 15, and 0 means the symbol is not used.
@@ -220,7 +245,8 @@ first within each byte, extra bits included, and the last byte is padded with ze
    One that leaves codes unassigned is allowed, and reading an unassigned code is refused.
 3. Then symbols from the literal and length alphabet, until the end:
    - `0` to `255` is that byte;
-   - `256` is the end, and by then the stream has produced exactly the declared content size;
+   - `256` is the end, and by then the stream has produced exactly the size declared for it, the
+     content's or the tree's;
    - `257 + i` is a match whose length is `lengthBase[i]` plus `lengthExtra[i]` extra bits. A
      distance symbol `j` follows, for a distance of `distanceBase[j]` plus `distanceExtra[j]` extra
      bits. The distance may not reach back past the start, and the match copies one byte at a time,
@@ -263,6 +289,14 @@ that new content is what the stream carries. Regions consume the stream strictly
 reader could unpack it as it goes instead, holding only the last 1 MiB, which is as far back as a
 match reaches; nothing in the format stands in the way.
 
+A packed tree is the third. Kiff's reader unpacks it whole before the first region too, and holds
+it beside the patch until the restore is done, so it adds the unpacked tree size to what a restore
+needs: never more than the target, which is as long as a reader lets a packed tree be, and in
+practice a few percent of it. Between two 110 MiB R8 mapping files the unpacked tree is 3.4 MiB,
+and a restore's peak memory rose by 4 MiB; between two 72 MiB release APKs it is 224 KiB, which did
+not show. The tree is read strictly in order as well, so it could be unpacked as it goes, in the
+same 1 MiB window.
+
 ## What a reader must refuse
 
 Not a list of nice-to-haves. Each of these is a way for a malformed patch to produce bytes instead
@@ -272,8 +306,8 @@ of an error, or to carry bytes that nothing accounts for, which is where corrupt
 - a flag bit it does not recognise
 - a patcher code, region encoding, content encoding, delta opcode or text opcode it does not know
 - a varint wider than 64 bits, or a negative value where a size, count or length belongs
-- a region, a source range, the tree or the content longer than 2,147,483,647 bytes: a larger
-  target is a composite of regions that each fit
+- a region, a source range, the tree or the content longer than 2,147,483,647 bytes, unpacked or
+  as stored: a larger target is a composite of regions that each fit
 - a tree nested deeper than 16
 - a region that runs past the end of the target, a composite whose children do not add up to it, or
   a tree whose root does not cover the declared target, refused before anything is written
@@ -284,27 +318,32 @@ of an error, or to carry bytes that nothing accounts for, which is where corrupt
 - a block that ends anywhere but its declared length: the tree, a `DELTA` region's instructions, or
   a `TEXT` region's edits
 - content longer than the target, which no patch can use and which names its own allocation
-- content longer than its stored bytes can unpack to: exactly their own length when stored, and for
-  LZ77 + Huffman at most 4,119 bytes - the longest match - for every twelve bits after the code
-  lengths and the end symbol, which is what that match's length symbol, ten extra bits and distance
-  symbol take at the least
+- a packed tree longer than the target once unpacked: a stored tree may be, since a line script that
+  deletes can run longer than what it keeps, but a writer stores such a tree rather than pack it, so
+  that what a reader unpacks never exceeds the target it was told to expect
+- content, or a packed tree, longer than its stored bytes can unpack to: exactly their own length
+  when stored, and for LZ77 + Huffman at most 4,119 bytes - the longest match - for every twelve
+  bits after the code lengths and the end symbol, which is what that match's length symbol, ten
+  extra bits and distance symbol take at the least
 - content the tree does not use up, or any byte after the stored content
-- an LZ77 + Huffman stream with anything after its end symbol, a set bit in the padding of its last
-  byte included, or any stored byte at all for no content
+- an LZ77 + Huffman stream, of content or of a tree, that over-subscribes its code space, reads a
+  code no length assigns, ends mid-symbol, unpacks to anything but its declared size, or has
+  anything after its end symbol, a set bit in the padding of its last byte included, or any stored
+  byte at all for nothing
 - a region whose checksum does not match what it produced
 - a restored target whose checksum does not match the header
 
 Kiff 0.1.0, the first release, still read code 1 and let trailing and unused bytes pass. No
 released Kiff writes either, so these rules refuse no patch Kiff has written; 0.1.0 is only more
-lenient than the format.
+lenient than the format. Kiff 0.1.0 and 0.2.0 also refuse flag `0x02`, which is newer than them.
 
 One bound a reader cannot derive: the target size is declared in the header, and nothing
 corroborates it until the restore is done. A reader returning the result as an array allocates that
-much up front; restoring into a `RestoreTarget` does not, but the unpacked content and a `COLUMNS`
-region can each be as large as the target, and a patch can still name them. What this reader
-refuses keeps every allocation within the declared target size, or the source's own size for the
-range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do not control, check
-`Kiff.info(patch).targetSize` against what you are expecting before applying it.
+much up front; restoring into a `RestoreTarget` does not, but the unpacked content, a packed tree
+and a `COLUMNS` region can each be as large as the target, and a patch can still name them. What
+this reader refuses keeps every allocation within the declared target size, or the source's own size
+for the range a `TEXT` or `COLUMNS` region reads. So for a patch from somewhere you do not control,
+check `Kiff.info(patch).targetSize` against what you are expecting before applying it.
 
 Those bounds hold region by region. Each `TEXT` or `COLUMNS` region reads its source range afresh,
 and nothing limits how many regions name the same range, so the reading a restore does is bounded
@@ -321,3 +360,5 @@ would be refusing what a writer is entitled to write.
 - a composite with no children, and a region of no bytes
 - a `TEXT` script that stops before the end of its source range: the rest is not copied
 - flags `0`, so a patch with no region checksums at all
+- a packed tree that is no smaller than it would be stored, or a tree stored that packing would
+  have made smaller

@@ -15,9 +15,10 @@ import com.linroid.kiff.text.TextRegion
  * The part of a patch after the header: a region tree plus the one literal stream its leaves share.
  *
  * ```
- * varint tree size    varint literal size (unpacked)
- * byte   literal flag varint stored size
- * bytes  region tree
+ * varint tree size (unpacked)   [varint tree size as stored, when the tree is packed]
+ * varint literal size (unpacked)
+ * byte   literal flag           varint stored size
+ * bytes  region tree, packed when that makes the patch smaller
  * bytes  literals, packed when that is smaller
  * ```
  *
@@ -39,8 +40,9 @@ import com.linroid.kiff.text.TextRegion
  * Applying one holds neither file. The source is addressed through a [SeekableSource] and the
  * target is written out as it is produced, which is what lets a device with far less memory than
  * the machine that built the patch apply it. What is held is the patch, its content stream unpacked
- * whole, and what a single region needs at once - so a patch whose target is mostly new content
- * costs about its target in memory, since that content is what the stream carries.
+ * whole, its tree unpacked whole when it was packed, and what a single region needs at once - so a
+ * patch whose target is mostly new content costs about its target in memory, since that content is
+ * what the stream carries.
  */
 internal object PatchPayload {
 
@@ -54,42 +56,77 @@ internal object PatchPayload {
   const val CONTENT_STORED = 0
   const val CONTENT_LZ_HUFFMAN = 2
 
-  fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): ByteArray {
+  /** A payload, and whether its tree is packed, which the header's flags have to say. */
+  class Written(val bytes: ByteArray, val treePacked: Boolean)
+
+  /**
+   * Writes [root] and its content as a payload, packing the tree only where that makes the patch
+   * strictly smaller.
+   *
+   * Where it does not, the payload is exactly the one a writer without packed trees would have
+   * written, so a patch that gains nothing from the flag never carries it, and stays readable by
+   * the Kiff releases that predate it.
+   */
+  fun write(root: RegionNode, literals: ByteArray, target: ByteArray?): Written {
     val tree = ByteWriter(256)
     writeRegionTree(tree, root, target?.let { TargetWalk(it) })
     val treeBytes = tree.toByteArray()
+    val packedTree = packTree(treeBytes, root.targetLength)
 
     val packed = if (literals.isEmpty()) literals else LzHuffman.compress(literals)
     val compressed = packed.size < literals.size
     val stored = if (compressed) packed else literals
+    val storedTree = packedTree ?: treeBytes
 
-    val out = ByteWriter(treeBytes.size + stored.size + 24)
+    val out = ByteWriter(storedTree.size + stored.size + 32)
     out.writeVarInt(treeBytes.size)
+    if (packedTree != null) out.writeVarInt(packedTree.size)
     out.writeVarInt(literals.size)
     out.writeByte(if (compressed) CONTENT_LZ_HUFFMAN else CONTENT_STORED)
     out.writeVarInt(stored.size)
-    out.writeBytes(treeBytes)
+    out.writeBytes(storedTree)
     out.writeBytes(stored)
-    return out.toByteArray()
+    return Written(out.toByteArray(), treePacked = packedTree != null)
   }
 
-  /** Restores the target into [out], answering the checksum of everything written. */
+  /**
+   * [tree] packed, or null where that would not make the patch smaller: the packed form costs a
+   * varint for its stored size on top of its own bytes. A tree longer than the target is never
+   * packed, because a reader refuses one - see [apply].
+   */
+  private fun packTree(tree: ByteArray, targetSize: Long): ByteArray? {
+    if (tree.size > targetSize) return null
+    val packed = LzHuffman.compress(tree)
+    return packed.takeIf { it.size + varSize(it.size.toLong()) < tree.size }
+  }
+
+  /**
+   * Restores the target into [out], answering the checksum of everything written.
+   *
+   * [checksums] and [treePacked] are what the header's flags say about the payload.
+   */
   fun apply(
     source: SeekableSource,
     patch: ByteArray,
     from: Int,
     targetSize: Long,
     checksums: Boolean,
-    out: RestoreTarget
+    out: RestoreTarget,
+    treePacked: Boolean = false
   ): UInt {
     val container = ByteReader(patch, from)
     val treeLength = container.readVarInt()
+    val storedTreeLength = if (treePacked) container.readVarInt() else treeLength
     val literalLength = container.readVarInt()
     val literalFlag = container.readByte()
     val storedLength = container.readVarInt()
     // The tree is read through a window of exactly its declared size, so no region can read on into
     // the content, and anything the root leaves unread is refused once it has been applied.
-    val tree = container.window(treeLength)
+    val tree = if (treePacked) {
+      unpackTree(container.window(storedTreeLength), treeLength, targetSize)
+    } else {
+      container.window(treeLength)
+    }
 
     // The root of the tree says how much target it describes, and that has to be the target the
     // header declared. A patch whose two sizes disagree is refused here, before anything is
@@ -150,6 +187,31 @@ internal object PatchPayload {
       )
     }
     return checked.wholeChecksum()
+  }
+
+  /**
+   * The packed tree in [stored], unpacked to the [treeLength] bytes the payload declares.
+   *
+   * The same bounds hold as for the content, for the same reason: the unpacked size is the patch's
+   * own word, and it is allocated whole. A tree is not bounded by its target the way content is -
+   * a line script that deletes can run longer than what it keeps - but one that is packed has to
+   * be, which keeps everything a reader allocates within the target the header declares. A writer
+   * that would pack a longer tree writes it as it is instead.
+   */
+  private fun unpackTree(stored: ByteReader, treeLength: Int, targetSize: Long): ByteReader {
+    if (treeLength > targetSize) {
+      throw KiffException.InvalidPatch(
+        "Patch declares a packed region tree of $treeLength bytes for a target of $targetSize"
+      )
+    }
+    val storedLength = stored.remaining
+    if (treeLength > LzHuffman.maxUnpackedSize(storedLength)) {
+      throw KiffException.InvalidPatch(
+        "Patch declares a region tree of $treeLength bytes for $storedLength stored bytes"
+      )
+    }
+    val bytes = stored.readBytes(storedLength)
+    return ByteReader(LzHuffman.decompress(bytes, treeLength, "Region tree"))
   }
 
   /**
