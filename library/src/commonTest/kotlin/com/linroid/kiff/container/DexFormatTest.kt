@@ -141,25 +141,12 @@ class DexFormatTest {
   fun anIdTableIsReadAsColumnsWhenThatIsSmaller() {
     // A table of offsets where an entry was inserted early: every later offset shifts, so read as
     // they lie the two builds share nothing, and the table would be carried whole.
-    fun table(count: Int, from: Int): ByteArray {
-      val out = ByteArray(count * 4)
-      var value = from
-      for (row in 0 until count) {
-        for (i in 0 until 4) out[row * 4 + i] = ((value shr (8 * i)) and 0xFF).toByte()
-        value += 11 + (row % 7)
-      }
-      return out
-    }
-    val source = TestZipBuilder().entry(
+    fun dexWith(table: ByteArray) = TestZipBuilder().entry(
       "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 500)).section(0x2001, structuredBytes(3_000, 1))
-        .build()
+      TestDexBuilder().section(0x0001, table).section(0x2001, structuredBytes(3_000, 1)).build()
     ).build()
-    val target = TestZipBuilder().entry(
-      "classes.dex",
-      TestDexBuilder().section(0x0001, table(400, 564)).section(0x2001, structuredBytes(3_000, 1))
-        .build()
-    ).build()
+    val source = dexWith(stringIdTable(400))
+    val target = dexWith(stringIdTable(400, insertAt = 20))
 
     assertRestores(asZip(), source, target)
     val table = asZip().explain(source, target).allRegions.first { it.name == "string_ids" }
